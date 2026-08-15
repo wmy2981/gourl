@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/wmy2981/gourl/internal/api"
 	"github.com/wmy2981/gourl/internal/config"
@@ -44,6 +45,11 @@ func main() {
 	if err := ctr.Ping(context.Background()); err != nil {
 		log.Printf("redis unavailable at %s: %v (clicks will not be counted)", redisAddr, err)
 	}
+
+	// Flush buffered click counts to SQLite every 30s.
+	flushCtx, flushCancel := context.WithCancel(context.Background())
+	defer flushCancel()
+	go counter.NewFlusher(st, ctr, 30*time.Second).Run(flushCtx)
 
 	addr := ":" + envOr("PORT", "8080")
 	log.Printf("gourl %s listening on %s", version.Version, addr)
