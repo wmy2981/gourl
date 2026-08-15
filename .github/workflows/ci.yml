@@ -70,11 +70,6 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      # Unique port per run so parallel CI runs never share an e2e server.
-      - name: Assign unique e2e port
-        id: port
-        run: echo "port=$(( 20000 + (10#${GITHUB_RUN_ID: -4} % 40000) ))" >> "$GITHUB_OUTPUT"
-
       - uses: actions/setup-go@v5
         with:
           go-version: '1.26'
@@ -108,8 +103,8 @@ jobs:
         working-directory: frontend
         run: npx playwright install --with-deps chromium
 
+      # Unique port per run so parallel CI runs never share an e2e server
+      # (bash arithmetic on the run id, no workflow expressions involved).
       - name: End-to-end tests
         working-directory: frontend
-        env:
-          E2E_PORT: ${{ steps.port.outputs.port }}
-        run: npm run e2e
+        run: E2E_PORT=$(( 20000 + (10#${GITHUB_RUN_ID: -4} % 40000) )) npm run e2e
