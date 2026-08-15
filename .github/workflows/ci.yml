@@ -22,6 +22,7 @@ jobs:
 
       - name: Sync brand icon from single source
         run: |
+          mkdir -p frontend/src/assets internal/webui
           cp assets/favicon.svg frontend/src/assets/icon.svg
           cp assets/favicon.svg internal/webui/icon.svg
 
@@ -87,6 +88,7 @@ jobs:
 
       - name: Sync brand icon from single source
         run: |
+          mkdir -p frontend/src/assets internal/webui
           cp assets/favicon.svg frontend/src/assets/icon.svg
           cp assets/favicon.svg internal/webui/icon.svg
 
