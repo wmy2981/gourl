@@ -1,0 +1,2 @@
+# Normalize line endings to LF (matters for scripts and builds in Linux containers)
+* text=auto eol=lf
