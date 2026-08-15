@@ -23,8 +23,11 @@ export default defineConfig({
   build: {
     rollupOptions: {
       output: {
-        manualChunks: {
-          charts: ['recharts'],
+        // rolldown (vite 8) accepts manualChunks as a function only.
+        manualChunks(id: string) {
+          if (id.includes('/recharts/') || id.includes('/d3-') || id.includes('/victory-vendor/')) {
+            return 'charts'
+          }
         },
       },
     },
