@@ -16,10 +16,12 @@
 - **自定义站点** — 服务名称、标题、关键词、header/footer、上传图标（SVG/PNG）
 - **中英文双语** — 自动检测浏览器语言，页内可手动切换
 - **二维码、CSV 导出、批量导入**
+- **API 文档** — `/docs/` 交互式 Swagger UI
+- **结构化日志** — slog 4 级（debug/info/warning/error），文本或 JSON 输出
 
 ## 技术栈
 
-Go（标准库 `net/http`）· SQLite（[modernc](https://modernc.org/sqlite)，无 CGO）·
+Go（标准库 `net/http` + `log/slog`）· SQLite（[modernc](https://modernc.org/sqlite)，无 CGO）·
 Redis · React 19 + Vite + Tailwind CSS 4 + shadcn 风格组件
 
 ## 快速开始（Docker）
@@ -48,9 +50,16 @@ ADMIN_PASSWORD=change-me docker compose up -d
 | `CONFIG_PATH` | `config.yaml` | 业务配置（站点信息、基址等） |
 | `ASSETS_DIR` | `data/assets` | 上传图标存储 |
 | `TZ` | 容器默认 | 每日统计切日与过期时间按此时区解释 |
+| `LOG_LEVEL` | `info` | `debug` / `info` / `warning` / `error` |
+| `LOG_FORMAT` | `text` | `json` 结构化输出（日志走 stderr） |
 
 业务配置在 `config.yaml`（见 `config.yaml.example`）：服务名称/标题/关键词/描述/
 header/footer、随机短码位数、主 + 附加基址、额外保留字、自定义图标。
+
+## API 文档
+
+访问 http://localhost:8080/docs/ —— 覆盖全部端点的交互式 Swagger UI，
+随单个二进制内置（`/docs/openapi.yaml` 为原始 OpenAPI 3.0 规范）。
 
 ## API
 

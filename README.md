@@ -17,10 +17,12 @@ plus Redis — that's all it takes to run your own short links.
 - **Customization** — site name, title, keywords, header/footer, uploaded icon (SVG/PNG)
 - **i18n** — English and Chinese, auto-detected with a manual switcher
 - **QR codes, CSV export, batch import**
+- **API documentation** — interactive Swagger UI at `/docs/`
+- **Structured logging** — slog with 4 levels (debug/info/warning/error), text or JSON
 
 ## Stack
 
-Go (stdlib `net/http`) · SQLite ([modernc](https://modernc.org/sqlite), no CGO) ·
+Go (stdlib `net/http`, `log/slog`) · SQLite ([modernc](https://modernc.org/sqlite), no CGO) ·
 Redis · React 19 + Vite + Tailwind CSS 4 + shadcn-style components
 
 ## Quick start (Docker)
@@ -50,10 +52,18 @@ Images are built and published on GitHub Actions; pull tags like
 | `CONFIG_PATH` | `config.yaml` | Business config (site info, base URLs, …) |
 | `ASSETS_DIR` | `data/assets` | Uploaded icon storage |
 | `TZ` | container default | Daily click buckets and expiry are interpreted in it |
+| `LOG_LEVEL` | `info` | `debug` / `info` / `warning` / `error` |
+| `LOG_FORMAT` | `text` | `json` for structured output (logs go to stderr) |
 
 Business settings live in `config.yaml` (see `config.yaml.example`): site
 name/title/keywords/description/header/footer, random code length, primary +
 extra base URLs, extra reserved codes, and the custom icon.
+
+## API documentation
+
+Open http://localhost:8080/docs/ — an interactive Swagger UI covering every
+endpoint, served from the single binary (`/docs/openapi.yaml` is the raw
+OpenAPI 3.0 spec).
 
 ## API
 
