@@ -68,7 +68,7 @@ func TestRedirectCountsClick(t *testing.T) {
 
 func TestRedirectUABlockedNotCounted(t *testing.T) {
 	s, mr := newTestServer(t)
-	if err := s.store.CreateUABlock(context.Background(), "Googlebot", s.now()); err != nil {
+	if _, err := s.store.CreateUABlock(context.Background(), "Googlebot", s.now()); err != nil {
 		t.Fatal(err)
 	}
 	createLink(t, s, "abc", "https://example.com/target")

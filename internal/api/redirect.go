@@ -68,12 +68,12 @@ func (s *Server) uaBlocked(r *http.Request) (bool, error) {
 	if ua == "" {
 		return false, nil
 	}
-	patterns, err := s.store.ListUABlocks(r.Context())
+	blocks, err := s.store.ListUABlocks(r.Context())
 	if err != nil {
 		return false, err
 	}
-	for _, p := range patterns {
-		if strings.Contains(ua, strings.ToLower(p)) {
+	for _, b := range blocks {
+		if strings.Contains(ua, strings.ToLower(b.Pattern)) {
 			return true, nil
 		}
 	}

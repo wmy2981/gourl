@@ -1,6 +1,6 @@
 # Go build artifacts
 /gourl
-/gourl.exe
+*.exe
 *.test
 coverage.out
 
@@ -18,3 +18,8 @@ config.yaml
 .vscode/
 .DS_Store
 Thumbs.db
+
+# Agent
+.claude/
+.agents/
+CLAUDE.local.md

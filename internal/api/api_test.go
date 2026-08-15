@@ -38,6 +38,7 @@ func newTestServer(t *testing.T) (*Server, *miniredis.Miniredis) {
 	srv := NewServer(st, cfgMgr, counter.NewFromClient(rdb))
 	srv.now = func() int64 { return 1700000000 }
 	srv.admin = newAdminAuth("test-password", "test-secret")
+	srv.assetsDir = t.TempDir()
 	if testSession == nil {
 		tok, err := srv.admin.issueToken()
 		if err != nil {

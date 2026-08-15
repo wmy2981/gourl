@@ -63,6 +63,9 @@ func Open(path string) (*Store, error) {
 // Close closes the database.
 func (s *Store) Close() error { return s.db.Close() }
 
+// Ping verifies database connectivity.
+func (s *Store) Ping(ctx context.Context) error { return s.db.PingContext(ctx) }
+
 // migrations is an ordered list of schema migrations; index i applies after
 // version i.
 var migrations = []string{

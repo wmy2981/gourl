@@ -67,6 +67,18 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/links/{code...}", s.requireAuth(s.getLink))
 	mux.HandleFunc("PATCH /api/v1/links/{code...}", s.requireAuth(s.updateLink))
 	mux.HandleFunc("DELETE /api/v1/links/{code...}", s.requireAuth(s.deleteLink))
+	mux.HandleFunc("GET /api/v1/tokens", s.requireAuth(s.listTokens))
+	mux.HandleFunc("POST /api/v1/tokens", s.requireAuth(s.createToken))
+	mux.HandleFunc("DELETE /api/v1/tokens/{id}", s.requireAuth(s.deleteToken))
+	mux.HandleFunc("GET /api/v1/ua-blocks", s.requireAuth(s.listUABlocks))
+	mux.HandleFunc("POST /api/v1/ua-blocks", s.requireAuth(s.createUABlock))
+	mux.HandleFunc("DELETE /api/v1/ua-blocks/{id}", s.requireAuth(s.deleteUABlock))
+	mux.HandleFunc("GET /api/v1/config", s.requireAuth(s.getConfig))
+	mux.HandleFunc("PUT /api/v1/config", s.requireAuth(s.updateConfig))
+	mux.HandleFunc("POST /api/v1/icon", s.requireAuth(s.uploadIcon))
+	mux.HandleFunc("DELETE /api/v1/icon", s.requireAuth(s.deleteIcon))
+	mux.HandleFunc("GET /api/v1/dashboard", s.requireAuth(s.dashboard))
+	mux.Handle("GET /assets/", http.StripPrefix("/assets/", http.FileServer(http.Dir(s.assetsDir))))
 	mux.HandleFunc("GET /{code...}", s.redirect)
 	return mux
 }

@@ -1,0 +1,29 @@
+package api
+
+import (
+	"encoding/json"
+	"net/http"
+
+	"github.com/wmy2981/gourl/internal/config"
+)
+
+// getConfig handles GET /api/v1/config.
+func (s *Server) getConfig(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, s.cfg.Get())
+}
+
+// updateConfig handles PUT /api/v1/config. The body is the full config;
+// it is validated, written back atomically to config.yaml and hot-swapped
+// in memory.
+func (s *Server) updateConfig(w http.ResponseWriter, r *http.Request) {
+	var cfg config.Config
+	if err := json.NewDecoder(r.Body).Decode(&cfg); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_request", "invalid JSON body")
+		return
+	}
+	if err := s.cfg.Update(&cfg); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_config", err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, s.cfg.Get())
+}

@@ -20,22 +20,22 @@ import (
 
 // Site holds single-language site information.
 type Site struct {
-	Name        string `yaml:"name"`
-	Title       string `yaml:"title"`
-	Keywords    string `yaml:"keywords"`
-	Description string `yaml:"description"`
-	Header      string `yaml:"header"`
-	Footer      string `yaml:"footer"`
+	Name        string `yaml:"name" json:"name"`
+	Title       string `yaml:"title" json:"title"`
+	Keywords    string `yaml:"keywords" json:"keywords"`
+	Description string `yaml:"description" json:"description"`
+	Header      string `yaml:"header" json:"header"`
+	Footer      string `yaml:"footer" json:"footer"`
 }
 
 // Config is the YAML business configuration.
 type Config struct {
-	Site            Site     `yaml:"site"`
-	ShortCodeLength int      `yaml:"short_code_length"`
-	BaseURL         string   `yaml:"base_url"`
-	ExtraBaseURLs   []string `yaml:"extra_base_urls"`
-	ReservedCodes   []string `yaml:"reserved_codes"`
-	Icon            string   `yaml:"icon"`
+	Site            Site     `yaml:"site" json:"site"`
+	ShortCodeLength int      `yaml:"short_code_length" json:"short_code_length"`
+	BaseURL         string   `yaml:"base_url" json:"base_url"`
+	ExtraBaseURLs   []string `yaml:"extra_base_urls" json:"extra_base_urls"`
+	ReservedCodes   []string `yaml:"reserved_codes" json:"reserved_codes"`
+	Icon            string   `yaml:"icon" json:"icon"`
 }
 
 // Default returns a usable default configuration.

@@ -5,35 +5,47 @@ import (
 	"fmt"
 )
 
+// UABlock is a UA block pattern record.
+type UABlock struct {
+	ID        int64
+	Pattern   string
+	CreatedAt int64
+}
+
 // ListUABlocks returns all UA block patterns, oldest first.
-func (s *Store) ListUABlocks(ctx context.Context) ([]string, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT pattern FROM ua_blocks ORDER BY id`)
+func (s *Store) ListUABlocks(ctx context.Context) ([]UABlock, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT id, pattern, created_at FROM ua_blocks ORDER BY id`)
 	if err != nil {
 		return nil, fmt.Errorf("list ua blocks: %w", err)
 	}
 	defer rows.Close()
-	var patterns []string
+	var blocks []UABlock
 	for rows.Next() {
-		var p string
-		if err := rows.Scan(&p); err != nil {
+		var b UABlock
+		if err := rows.Scan(&b.ID, &b.Pattern, &b.CreatedAt); err != nil {
 			return nil, fmt.Errorf("scan ua block: %w", err)
 		}
-		patterns = append(patterns, p)
+		blocks = append(blocks, b)
 	}
-	return patterns, rows.Err()
+	return blocks, rows.Err()
 }
 
-// CreateUABlock adds a pattern. Returns ErrTaken on duplicates.
-func (s *Store) CreateUABlock(ctx context.Context, pattern string, now int64) error {
-	_, err := s.db.ExecContext(ctx,
+// CreateUABlock adds a pattern, returning its id. Returns ErrTaken on
+// duplicates.
+func (s *Store) CreateUABlock(ctx context.Context, pattern string, now int64) (int64, error) {
+	res, err := s.db.ExecContext(ctx,
 		`INSERT INTO ua_blocks (pattern, created_at) VALUES (?, ?)`, pattern, now)
 	if isConstraint(err) {
-		return ErrTaken
+		return 0, ErrTaken
 	}
 	if err != nil {
-		return fmt.Errorf("create ua block: %w", err)
+		return 0, fmt.Errorf("create ua block: %w", err)
 	}
-	return nil
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	return id, nil
 }
 
 // DeleteUABlock removes a pattern by id. Returns ErrNotFound if absent.
