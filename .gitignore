@@ -1,0 +1,20 @@
+# Go build artifacts
+/gourl
+/gourl.exe
+*.test
+coverage.out
+
+# Node / frontend
+node_modules/
+frontend/dist/
+web/dist/
+
+# Runtime data (SQLite, uploaded icons)
+data/
+config.yaml
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
