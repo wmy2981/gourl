@@ -6,9 +6,8 @@ on:
   pull_request:
     branches: [main, dev]
 
-concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+# No concurrency group: every push runs its own full CI, and a newer push
+# never cancels an older run.
 
 jobs:
   go-test:

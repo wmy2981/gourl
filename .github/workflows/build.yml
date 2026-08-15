@@ -11,9 +11,8 @@ on:
     types: [completed]
     branches: [main]
 
-concurrency:
-  group: build-${{ github.ref }}
-  cancel-in-progress: true
+# No concurrency group: every push builds its own image, and a newer push
+# never cancels an older build.
 
 env:
   IMAGE: ghcr.io/wmy2981/gourl
