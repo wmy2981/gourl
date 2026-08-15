@@ -4,15 +4,12 @@ import { useTranslation } from 'react-i18next'
 import { LayoutDashboard, Link2, LogOut, Menu, Moon, Settings, Sun, X } from 'lucide-react'
 import { api } from '../lib/api'
 import { setLanguage } from '../lib/i18n'
+// Single source of truth for the brand icon (also embedded server-side and
+// referenced by the READMEs).
+import iconUrl from '../assets/icon.svg'
 
 function AppIcon({ size = 28 }: { size?: number }) {
-  return (
-    <svg viewBox="0 0 24 24" width={size} height={size} aria-hidden>
-      <rect x="1" y="1" width="22" height="22" rx="6.5" fill="#7c3aed" />
-      <circle cx="11" cy="12" r="5.2" fill="none" stroke="#fff" strokeWidth="1.9" />
-      <path d="M15.5 9.6 19 12l-3.5 2.4z" fill="#fff" />
-    </svg>
-  )
+  return <img src={iconUrl} width={size} height={size} alt="" aria-hidden />
 }
 
 // Theme persisted on <html class="dark">.

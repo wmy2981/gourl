@@ -27,6 +27,7 @@ jobs:
           npm run build
           mkdir -p ../internal/webui
           cp -r dist ../internal/webui/dist
+          cp src/assets/icon.svg ../internal/webui/icon.svg
 
       - name: Go vet
         run: go vet ./...
@@ -86,6 +87,7 @@ jobs:
           npm run build
           mkdir -p ../internal/webui
           cp -r dist ../internal/webui/dist
+          cp src/assets/icon.svg ../internal/webui/icon.svg
 
       - name: Install Playwright Chromium
         working-directory: frontend

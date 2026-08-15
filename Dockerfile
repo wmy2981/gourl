@@ -25,16 +25,21 @@ RUN CGO_ENABLED=0 go build -trimpath \
 
 # ---------- runtime ----------
 FROM alpine:3.21
-RUN adduser -D -u 10001 gourl
+# redis-server for single-container deployments (embedded Redis on
+# 127.0.0.1:6379 unless REDIS_ADDR points elsewhere).
+RUN apk add --no-cache redis && adduser -D -u 10001 gourl
 USER gourl
 WORKDIR /app
 COPY --from=build /gourl /usr/local/bin/gourl
 
-# Mount points: SQLite database + uploaded icons (data/), business config.
+# Mount points: SQLite database + uploaded icons + embedded Redis rdb (data/),
+# business config.
 VOLUME ["/app/data", "/app/config.yaml"]
 
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD wget -qO- http://127.0.0.1:8080/api/v1/health >/dev/null 2>&1 || exit 1
 
-ENTRYPOINT ["gourl"]
+# entrypoint.sh: start the embedded Redis unless REDIS_ADDR is set, then run gourl.
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+ENTRYPOINT ["docker-entrypoint.sh"]

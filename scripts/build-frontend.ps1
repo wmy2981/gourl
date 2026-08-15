@@ -9,4 +9,6 @@ npm run build
 $dist = "$PSScriptRoot\..\internal\webui\dist"
 if (Test-Path $dist) { Remove-Item $dist -Recurse -Force }
 Copy-Item -Recurse "dist" "$dist"
+# The brand icon lives in the frontend source; keep the embedded copy in sync.
+Copy-Item "src\assets\icon.svg" "$PSScriptRoot\..\internal\webui\icon.svg" -Force
 Write-Host "frontend artifacts copied to internal/webui/dist"
