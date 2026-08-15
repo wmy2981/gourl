@@ -82,6 +82,18 @@ func TestValidateEmptyNameFallsBack(t *testing.T) {
 	}
 }
 
+func TestGetNormalizesNilSlices(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	m, err := NewManager(path) // defaults: no base urls, no reserved codes
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := m.Get()
+	if cfg.ExtraBaseURLs == nil || cfg.ReservedCodes == nil {
+		t.Fatalf("slice fields must be empty arrays, got %#v / %#v", cfg.ExtraBaseURLs, cfg.ReservedCodes)
+	}
+}
+
 func TestManagerUpdateWritesBackAndHotSwaps(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.yaml")
 	if err := os.WriteFile(path, []byte(""), 0o644); err != nil {

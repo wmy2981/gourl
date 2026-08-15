@@ -126,13 +126,21 @@ func NewManager(path string) (*Manager, error) {
 	return &Manager{cfg: cfg, path: path}, nil
 }
 
-// Get returns a copy of the current config.
+// Get returns a copy of the current config. Slice fields are normalized to
+// empty (not nil) slices so JSON never emits null — the frontend relies on
+// them being arrays.
 func (m *Manager) Get() *Config {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	cp := *m.cfg
 	cp.ExtraBaseURLs = append([]string(nil), m.cfg.ExtraBaseURLs...)
 	cp.ReservedCodes = append([]string(nil), m.cfg.ReservedCodes...)
+	if cp.ExtraBaseURLs == nil {
+		cp.ExtraBaseURLs = []string{}
+	}
+	if cp.ReservedCodes == nil {
+		cp.ReservedCodes = []string{}
+	}
 	return &cp
 }
 

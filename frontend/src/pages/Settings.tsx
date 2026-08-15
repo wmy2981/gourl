@@ -74,28 +74,28 @@ export default function Settings() {
           <h2 className="mb-4 text-sm font-medium text-muted">{t('settings.site')}</h2>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
-              <Label>{t('settings.siteName')}</Label>
-              <Input value={form.site.name} onChange={(e) => setSite('name', e.target.value)} />
+              <Label htmlFor='cfg-site-name'>{t('settings.siteName')}</Label>
+              <Input id='cfg-site-name' value={form.site.name} onChange={(e) => setSite('name', e.target.value)} />
             </div>
             <div>
-              <Label>{t('settings.siteTitle')}</Label>
-              <Input value={form.site.title} onChange={(e) => setSite('title', e.target.value)} />
+              <Label htmlFor='cfg-site-title'>{t('settings.siteTitle')}</Label>
+              <Input id='cfg-site-title' value={form.site.title} onChange={(e) => setSite('title', e.target.value)} />
             </div>
             <div>
-              <Label>{t('settings.keywords')}</Label>
-              <Input value={form.site.keywords} onChange={(e) => setSite('keywords', e.target.value)} />
+              <Label htmlFor='cfg-keywords'>{t('settings.keywords')}</Label>
+              <Input id='cfg-keywords' value={form.site.keywords} onChange={(e) => setSite('keywords', e.target.value)} />
             </div>
             <div>
-              <Label>{t('settings.description')}</Label>
-              <Input value={form.site.description} onChange={(e) => setSite('description', e.target.value)} />
+              <Label htmlFor='cfg-description'>{t('settings.description')}</Label>
+              <Input id='cfg-description' value={form.site.description} onChange={(e) => setSite('description', e.target.value)} />
             </div>
             <div>
-              <Label>{t('settings.header')}</Label>
-              <Textarea rows={2} value={form.site.header} onChange={(e) => setSite('header', e.target.value)} />
+              <Label htmlFor='cfg-header'>{t('settings.header')}</Label>
+              <Textarea id='cfg-header' rows={2} value={form.site.header} onChange={(e) => setSite('header', e.target.value)} />
             </div>
             <div>
-              <Label>{t('settings.footer')}</Label>
-              <Textarea rows={2} value={form.site.footer} onChange={(e) => setSite('footer', e.target.value)} />
+              <Label htmlFor='cfg-footer'>{t('settings.footer')}</Label>
+              <Textarea id='cfg-footer' rows={2} value={form.site.footer} onChange={(e) => setSite('footer', e.target.value)} />
             </div>
           </div>
         </Card>
@@ -105,8 +105,9 @@ export default function Settings() {
           <h2 className="mb-4 text-sm font-medium text-muted">{t('settings.behavior')}</h2>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
-              <Label>{t('settings.shortCodeLength')}</Label>
+              <Label htmlFor='cfg-code-length'>{t('settings.shortCodeLength')}</Label>
               <Input
+                id='cfg-code-length'
                 type="number"
                 min={4}
                 max={32}
@@ -115,8 +116,8 @@ export default function Settings() {
               />
             </div>
             <div>
-              <Label>{t('settings.baseUrl')}</Label>
-              <Input value={form.base_url} onChange={(e) => set('base_url', e.target.value)} placeholder="https://s.example.com" />
+              <Label htmlFor='cfg-base-url'>{t('settings.baseUrl')}</Label>
+              <Input id='cfg-base-url' value={form.base_url} onChange={(e) => set('base_url', e.target.value)} placeholder="https://s.example.com" />
               <p className="mt-1 text-xs text-muted">{t('settings.baseUrlHint')}</p>
             </div>
             <div className="sm:col-span-2">
@@ -146,8 +147,8 @@ export default function Settings() {
               <p className="mt-1 text-xs text-muted">{t('settings.extraBaseUrlsHint')}</p>
             </div>
             <div className="sm:col-span-2">
-              <Label>{t('settings.reservedCodes')}</Label>
-              <Textarea rows={3} value={reservedText} onChange={(e) => setReservedText(e.target.value)} />
+              <Label htmlFor='cfg-reserved'>{t('settings.reservedCodes')}</Label>
+              <Textarea id='cfg-reserved' rows={3} value={reservedText} onChange={(e) => setReservedText(e.target.value)} />
               <p className="mt-1 text-xs text-muted">{t('settings.reservedCodesHint')}</p>
             </div>
           </div>
@@ -256,7 +257,7 @@ function UABlockSection({
           <p className="py-2 text-sm text-muted">{t('common.never')}</p>
         )}
         <div className="flex gap-2">
-          <Input value={uaPattern} onChange={(e) => setUaPattern(e.target.value)} placeholder="curl" />
+          <Input value={uaPattern} onChange={(e) => setUaPattern(e.target.value)} placeholder="curl" aria-label="UA pattern" />
           <Button variant="outline" onClick={add} disabled={!uaPattern.trim()}>
             {t('settings.addUaBlock')}
           </Button>

@@ -9,8 +9,10 @@ test.beforeEach(async ({ page, request }) => {
 test('creates a custom-code link and shows full short urls', async ({ page }) => {
   await createLinkUi(page, 'https://example.com/very/long/path', 'e2e-custom')
   await expect(page.getByText('e2e-custom', { exact: true })).toBeVisible()
-  // The short URL is derived from the request host (no base_url configured).
-  await expect(page.getByText('http://127.0.0.1:8099/e2e-custom').first()).toBeVisible()
+  // The short URL is derived from the request host (no base_url configured);
+  // its origin matches the page's, whatever port the run was assigned.
+  const origin = new URL(page.url()).origin
+  await expect(page.getByText(`${origin}/e2e-custom`).first()).toBeVisible()
 })
 
 test('creates a multi-level code', async ({ page }) => {

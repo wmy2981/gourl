@@ -33,20 +33,21 @@ FROM alpine:3.21
 # redis-server for single-container deployments (embedded Redis on
 # 127.0.0.1:6379 unless REDIS_ADDR points elsewhere).
 RUN apk add --no-cache redis && adduser -D -u 10001 gourl
+# entrypoint.sh: start the embedded Redis unless REDIS_ADDR is set, then run
+# gourl. chmod runs as root (before USER) because the binary dir is root-owned
+# and git mode bits are unreliable across platforms.
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 USER gourl
 WORKDIR /app
 COPY --from=build /gourl /usr/local/bin/gourl
 
 # Mount points: SQLite database + uploaded icons + embedded Redis rdb (data/),
-# business config.
-VOLUME ["/app/data", "/app/config.yaml"]
+# business config directory.
+VOLUME ["/app/data", "/app/config"]
 
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD wget -qO- http://127.0.0.1:8080/api/v1/health >/dev/null 2>&1 || exit 1
 
-# entrypoint.sh: start the embedded Redis unless REDIS_ADDR is set, then run gourl.
-# chmod as a build step: git mode bits are unreliable across platforms.
-COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
-RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
