@@ -103,8 +103,6 @@ jobs:
         working-directory: frontend
         run: npx playwright install --with-deps chromium
 
-      # Unique port per run so parallel CI runs never share an e2e server
-      # (bash arithmetic on the run id, no workflow expressions involved).
       - name: End-to-end tests
         working-directory: frontend
-        run: E2E_PORT=$(( 20000 + (10#${GITHUB_RUN_ID: -4} % 40000) )) npm run e2e
+        run: npm run e2e

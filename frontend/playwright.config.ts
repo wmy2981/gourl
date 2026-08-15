@@ -5,8 +5,14 @@ import { defineConfig } from '@playwright/test'
 // stopped automatically by Playwright.
 //
 // E2E_PORT isolates parallel CI runs: each run gets a unique port so two
-// concurrent e2e jobs never share (and pollute) the same server.
-const port = process.env.E2E_PORT ?? '8099'
+// concurrent e2e jobs never share (and pollute) the same server. On GitHub
+// Actions the run id (injected as GITHUB_RUN_ID) picks a port in [20000,
+// 60000); locally the fixed 8099 is kept.
+const port =
+  process.env.E2E_PORT ??
+  (process.env.GITHUB_RUN_ID
+    ? String(20000 + (Number(process.env.GITHUB_RUN_ID.slice(-4)) % 40000))
+    : '8099')
 
 export default defineConfig({
   testDir: './e2e',
