@@ -14,8 +14,8 @@ test('creates a custom-code link and shows full short urls', async ({ page }) =>
 })
 
 test('creates a multi-level code', async ({ page }) => {
-  await createLinkUi(page, 'https://example.com/deep', 'docs/guide')
-  await expect(page.getByText('docs/guide')).toBeVisible()
+  await createLinkUi(page, 'https://example.com/deep', 'guide/part1')
+  await expect(page.getByText('guide/part1')).toBeVisible()
 })
 
 test('rejects a reserved code with a friendly error', async ({ page }) => {
