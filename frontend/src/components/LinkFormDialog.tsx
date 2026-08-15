@@ -69,12 +69,19 @@ export default function LinkFormDialog({
     <Dialog open={open} onClose={onClose} title={link ? t('form.editTitle') : t('form.createTitle')}>
       <form onSubmit={submit} className="flex flex-col gap-4">
         <div>
-          <Label>{t('form.url')}</Label>
-          <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder={t('form.urlPlaceholder')} required />
+          <Label htmlFor="link-url">{t('form.url')}</Label>
+          <Input
+            id="link-url"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            placeholder={t('form.urlPlaceholder')}
+            required
+          />
         </div>
         <div>
-          <Label>{t('form.code')}</Label>
+          <Label htmlFor="link-code">{t('form.code')}</Label>
           <Input
+            id="link-code"
             value={code}
             onChange={(e) => setCode(e.target.value)}
             placeholder={t('form.codePlaceholder')}
@@ -82,8 +89,9 @@ export default function LinkFormDialog({
           />
         </div>
         <div>
-          <Label>{t('form.expiresAt')}</Label>
+          <Label htmlFor="link-expires">{t('form.expiresAt')}</Label>
           <Input
+            id="link-expires"
             type="number"
             min={0}
             value={expiresAt}
