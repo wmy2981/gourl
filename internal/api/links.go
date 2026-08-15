@@ -3,7 +3,7 @@ package api
 import (
 	"encoding/json"
 	"errors"
-	"log"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -246,7 +246,7 @@ func (s *Server) attachMeta(r *http.Request, link *store.Link) {
 	}
 	title, desc, err := s.fetcher.Fetch(r.Context(), link.URL)
 	if err != nil {
-		log.Printf("fetch meta for %s: %v", link.URL, err)
+		slog.Debug("fetch meta failed, leaving empty", "url", link.URL, "error", err)
 		return
 	}
 	link.Title = title

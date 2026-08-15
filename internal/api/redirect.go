@@ -2,7 +2,7 @@ package api
 
 import (
 	"errors"
-	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -29,7 +29,7 @@ func (s *Server) redirect(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if blocked, err := s.uaBlocked(r); err != nil {
-		log.Printf("ua block check failed: %v", err)
+		slog.Warn("ua block check failed", "code", code, "error", err)
 	} else if blocked {
 		// Blocked UAs get a bare 403 and are never counted.
 		w.WriteHeader(http.StatusForbidden)
@@ -55,7 +55,7 @@ func (s *Server) redirect(w http.ResponseWriter, r *http.Request) {
 	// Best-effort counting: a Redis outage must not break redirects.
 	date := counter.Date(time.Unix(now, 0))
 	if err := s.counter.Incr(r.Context(), code, date); err != nil {
-		log.Printf("count click %s: %v", code, err)
+		slog.Warn("count click failed", "code", code, "error", err)
 	}
 
 	http.Redirect(w, r, link.URL, http.StatusFound)

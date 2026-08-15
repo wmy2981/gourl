@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -11,6 +11,7 @@ import (
 	"github.com/wmy2981/gourl/internal/api"
 	"github.com/wmy2981/gourl/internal/config"
 	"github.com/wmy2981/gourl/internal/counter"
+	"github.com/wmy2981/gourl/internal/logx"
 	"github.com/wmy2981/gourl/internal/store"
 	"github.com/wmy2981/gourl/internal/version"
 )
@@ -23,27 +24,33 @@ func envOr(key, def string) string {
 }
 
 func main() {
-	cfg, err := config.NewManager(envOr("CONFIG_PATH", "config.yaml"))
+	logx.Init()
+
+	cfgPath := envOr("CONFIG_PATH", "config.yaml")
+	cfg, err := config.NewManager(cfgPath)
 	if err != nil {
-		log.Fatalf("config: %v", err)
+		slog.Error("config load failed", "path", cfgPath, "error", err)
+		os.Exit(1)
 	}
 
 	dbPath := envOr("DB_PATH", "data/gourl.db")
 	if dir := filepath.Dir(dbPath); dir != "" && dir != "." {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
-			log.Fatalf("create data dir: %v", err)
+			slog.Error("create data dir failed", "dir", dir, "error", err)
+			os.Exit(1)
 		}
 	}
 	st, err := store.Open(dbPath)
 	if err != nil {
-		log.Fatalf("store: %v", err)
+		slog.Error("store open failed", "path", dbPath, "error", err)
+		os.Exit(1)
 	}
 	defer st.Close()
 
 	redisAddr := envOr("REDIS_ADDR", "localhost:6379")
 	ctr := counter.New(redisAddr)
 	if err := ctr.Ping(context.Background()); err != nil {
-		log.Printf("redis unavailable at %s: %v (clicks will not be counted)", redisAddr, err)
+		slog.Warn("redis unavailable; clicks will not be counted", "addr", redisAddr, "error", err)
 	}
 
 	// Flush buffered click counts to SQLite every 30s.
@@ -52,8 +59,16 @@ func main() {
 	go counter.NewFlusher(st, ctr, 30*time.Second).Run(flushCtx)
 
 	addr := ":" + envOr("PORT", "8080")
-	log.Printf("gourl %s listening on %s", version.Version, addr)
+	slog.Info("gourl started",
+		"version", version.Version,
+		"addr", addr,
+		"config", cfgPath,
+		"db", dbPath,
+		"redis", redisAddr,
+		"auth_enabled", os.Getenv("ADMIN_PASSWORD") != "",
+	)
 	if err := http.ListenAndServe(addr, api.NewServer(st, cfg, ctr).Handler()); err != nil {
-		log.Fatal(err)
+		slog.Error("http server failed", "error", err)
+		os.Exit(1)
 	}
 }

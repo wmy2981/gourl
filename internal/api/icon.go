@@ -3,7 +3,7 @@ package api
 import (
 	"errors"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -68,7 +68,7 @@ func (s *Server) uploadIcon(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.removeStoredIconExcept(ext); err != nil {
-		log.Printf("remove stale icons: %v", err)
+		slog.Warn("remove stale icons failed", "error", err)
 	}
 
 	cfg := s.cfg.Get()

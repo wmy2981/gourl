@@ -3,7 +3,7 @@ package counter
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -38,7 +38,7 @@ func (f *Flusher) Run(ctx context.Context) {
 			return
 		case <-ticker.C:
 			if err := f.FlushOnce(ctx); err != nil {
-				log.Printf("flush counters: %v", err)
+				slog.Error("flush counters failed", "error", err)
 			}
 		}
 	}
@@ -89,7 +89,7 @@ func (f *Flusher) addBack(ctx context.Context, vals map[string]int64) {
 		}
 		if err := f.counter.AddBack(ctx, key, v); err != nil {
 			// Both paths failed; the clicks are lost. Log loudly.
-			log.Printf("flush: failed to add back %s (+%d): %v", key, v, err)
+			slog.Error("clicks lost: failed to add back counter", "key", key, "value", v, "error", err)
 		}
 	}
 }

@@ -5,7 +5,7 @@ package main
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"time"
@@ -16,6 +16,7 @@ import (
 	"github.com/wmy2981/gourl/internal/api"
 	"github.com/wmy2981/gourl/internal/config"
 	"github.com/wmy2981/gourl/internal/counter"
+	"github.com/wmy2981/gourl/internal/logx"
 	"github.com/wmy2981/gourl/internal/store"
 )
 
@@ -26,6 +27,9 @@ const (
 )
 
 func main() {
+	logx.Init()
+	_ = os.Setenv("LOG_LEVEL", "warning") // keep e2e output readable
+
 	port := os.Getenv("E2E_PORT")
 	if port == "" {
 		port = "8099"
@@ -33,17 +37,20 @@ func main() {
 
 	cfg, err := config.NewManager(os.Getenv("E2E_CONFIG"))
 	if err != nil {
-		log.Fatalf("config: %v", err)
+		slog.Error("config load failed", "error", err)
+		os.Exit(1)
 	}
 	st, err := store.Open(":memory:")
 	if err != nil {
-		log.Fatalf("store: %v", err)
+		slog.Error("store open failed", "error", err)
+		os.Exit(1)
 	}
 	defer st.Close()
 
 	mr := miniredis.NewMiniRedis()
 	if err := mr.Start(); err != nil {
-		log.Fatalf("miniredis: %v", err)
+		slog.Error("miniredis start failed", "error", err)
+		os.Exit(1)
 	}
 	defer mr.Close()
 	ctr := counter.NewFromClient(redis.NewClient(&redis.Options{Addr: mr.Addr()}))
@@ -53,7 +60,8 @@ func main() {
 	_ = os.Setenv("SESSION_SECRET", sessionSecret)
 	assetsDir, err := os.MkdirTemp("", "gourl-e2e-assets-")
 	if err != nil {
-		log.Fatal(err)
+		slog.Error("assets dir failed", "error", err)
+		os.Exit(1)
 	}
 	_ = os.Setenv("ASSETS_DIR", assetsDir)
 	defer os.RemoveAll(assetsDir)
@@ -64,8 +72,9 @@ func main() {
 	go counter.NewFlusher(st, ctr, flushInterval).Run(flushCtx)
 
 	addr := "127.0.0.1:" + port
-	log.Printf("e2e server listening on http://%s (admin password: %s)", addr, adminPassword)
+	slog.Info("e2e server listening", "addr", "http://"+addr, "admin_password", adminPassword)
 	if err := http.ListenAndServe(addr, api.NewServer(st, cfg, ctr).Handler()); err != nil {
-		log.Fatal(err)
+		slog.Error("http server failed", "error", err)
+		os.Exit(1)
 	}
 }
