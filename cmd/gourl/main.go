@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"os"
@@ -8,6 +9,7 @@ import (
 
 	"github.com/wmy2981/gourl/internal/api"
 	"github.com/wmy2981/gourl/internal/config"
+	"github.com/wmy2981/gourl/internal/counter"
 	"github.com/wmy2981/gourl/internal/store"
 	"github.com/wmy2981/gourl/internal/version"
 )
@@ -37,9 +39,15 @@ func main() {
 	}
 	defer st.Close()
 
+	redisAddr := envOr("REDIS_ADDR", "localhost:6379")
+	ctr := counter.New(redisAddr)
+	if err := ctr.Ping(context.Background()); err != nil {
+		log.Printf("redis unavailable at %s: %v (clicks will not be counted)", redisAddr, err)
+	}
+
 	addr := ":" + envOr("PORT", "8080")
 	log.Printf("gourl %s listening on %s", version.Version, addr)
-	if err := http.ListenAndServe(addr, api.NewServer(st, cfg).Handler()); err != nil {
+	if err := http.ListenAndServe(addr, api.NewServer(st, cfg, ctr).Handler()); err != nil {
 		log.Fatal(err)
 	}
 }

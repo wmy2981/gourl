@@ -9,11 +9,15 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/alicebob/miniredis/v2"
+	"github.com/redis/go-redis/v9"
+
 	"github.com/wmy2981/gourl/internal/config"
+	"github.com/wmy2981/gourl/internal/counter"
 	"github.com/wmy2981/gourl/internal/store"
 )
 
-func newTestServer(t *testing.T) *Server {
+func newTestServer(t *testing.T) (*Server, *miniredis.Miniredis) {
 	t.Helper()
 	st, err := store.Open(":memory:")
 	if err != nil {
@@ -25,9 +29,14 @@ func newTestServer(t *testing.T) *Server {
 	if err != nil {
 		t.Fatalf("config: %v", err)
 	}
-	srv := NewServer(st, cfgMgr)
+
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	t.Cleanup(func() { rdb.Close() })
+
+	srv := NewServer(st, cfgMgr, counter.NewFromClient(rdb))
 	srv.now = func() int64 { return 1700000000 }
-	return srv
+	return srv, mr
 }
 
 func do(t *testing.T, s *Server, method, path string, body any) *httptest.ResponseRecorder {
@@ -59,7 +68,7 @@ func decodeError(t *testing.T, rec *httptest.ResponseRecorder) string {
 }
 
 func TestCreateAndGetLink(t *testing.T) {
-	s := newTestServer(t)
+	s, _ := newTestServer(t)
 	rec := do(t, s, http.MethodPost, "/api/v1/links", map[string]any{
 		"url": "https://example.com/very/long/path",
 		"code": "abc",
@@ -82,7 +91,7 @@ func TestCreateAndGetLink(t *testing.T) {
 }
 
 func TestCreateWithRandomCode(t *testing.T) {
-	s := newTestServer(t)
+	s, _ := newTestServer(t)
 	rec := do(t, s, http.MethodPost, "/api/v1/links", map[string]any{"url": "https://example.com/x"})
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("status = %d, body %s", rec.Code, rec.Body.String())
@@ -97,7 +106,7 @@ func TestCreateWithRandomCode(t *testing.T) {
 }
 
 func TestCreateMultiLevelCode(t *testing.T) {
-	s := newTestServer(t)
+	s, _ := newTestServer(t)
 	rec := do(t, s, http.MethodPost, "/api/v1/links", map[string]any{
 		"url":  "https://example.com/deep",
 		"code": "link1/link2",
@@ -113,7 +122,7 @@ func TestCreateMultiLevelCode(t *testing.T) {
 }
 
 func TestCreateRejectsInvalidInputs(t *testing.T) {
-	s := newTestServer(t)
+	s, _ := newTestServer(t)
 	cases := []struct {
 		name string
 		body map[string]any
@@ -151,7 +160,7 @@ func TestCreateRejectsInvalidInputs(t *testing.T) {
 }
 
 func TestCreateDuplicateCode(t *testing.T) {
-	s := newTestServer(t)
+	s, _ := newTestServer(t)
 	body := map[string]any{"url": "https://example.com/x", "code": "dup"}
 	if rec := do(t, s, http.MethodPost, "/api/v1/links", body); rec.Code != http.StatusCreated {
 		t.Fatalf("first create: %d", rec.Code)
@@ -163,7 +172,7 @@ func TestCreateDuplicateCode(t *testing.T) {
 }
 
 func TestUpdateLink(t *testing.T) {
-	s := newTestServer(t)
+	s, _ := newTestServer(t)
 	do(t, s, http.MethodPost, "/api/v1/links", map[string]any{"url": "https://old.com/x", "code": "abc"})
 
 	rec := do(t, s, http.MethodPatch, "/api/v1/links/abc", map[string]any{
@@ -184,7 +193,7 @@ func TestUpdateLink(t *testing.T) {
 }
 
 func TestUpdateLinkCode(t *testing.T) {
-	s := newTestServer(t)
+	s, _ := newTestServer(t)
 	do(t, s, http.MethodPost, "/api/v1/links", map[string]any{"url": "https://e.com/x", "code": "old"})
 
 	rec := do(t, s, http.MethodPatch, "/api/v1/links/old", map[string]any{"code": "new"})
@@ -207,7 +216,7 @@ func TestUpdateLinkCode(t *testing.T) {
 }
 
 func TestDeleteLink(t *testing.T) {
-	s := newTestServer(t)
+	s, _ := newTestServer(t)
 	do(t, s, http.MethodPost, "/api/v1/links", map[string]any{"url": "https://e.com/x", "code": "abc"})
 	if rec := do(t, s, http.MethodDelete, "/api/v1/links/abc", nil); rec.Code != http.StatusNoContent {
 		t.Fatalf("delete status = %d", rec.Code)
@@ -221,7 +230,7 @@ func TestDeleteLink(t *testing.T) {
 }
 
 func TestListLinks(t *testing.T) {
-	s := newTestServer(t)
+	s, _ := newTestServer(t)
 	for _, code := range []string{"aaa", "bbb", "ccc"} {
 		do(t, s, http.MethodPost, "/api/v1/links", map[string]any{
 			"url":  "https://example.com/" + code,
@@ -261,7 +270,7 @@ func TestListLinks(t *testing.T) {
 }
 
 func TestNotFoundAndReservedPrefix(t *testing.T) {
-	s := newTestServer(t)
+	s, _ := newTestServer(t)
 	// GET /api/v1/links/anything-unknown → 404
 	if rec := do(t, s, http.MethodGet, "/api/v1/links/nope", nil); rec.Code != http.StatusNotFound {
 		t.Errorf("missing link status = %d", rec.Code)

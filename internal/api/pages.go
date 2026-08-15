@@ -1,0 +1,109 @@
+package api
+
+import (
+	"html/template"
+	"net/http"
+	"strings"
+
+	"github.com/wmy2981/gourl/internal/store"
+)
+
+// pageTmpl renders the public error pages (expired / not found). Site header
+// and footer come from the admin-configured site info and are trusted HTML.
+var pageTmpl = template.Must(template.New("page").Parse(`<!DOCTYPE html>
+<html lang="{{.Lang}}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{.SiteTitle}}</title>
+<meta name="description" content="{{.SiteDescription}}">
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+         background: #f5f5f7; color: #1d1d1f; margin: 0; min-height: 100vh;
+         display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; }
+  .page { background: rgba(255,255,255,0.65); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px);
+          border-radius: 20px; padding: 48px 40px; max-width: 480px; width: 100%;
+          text-align: center; box-shadow: 0 8px 40px rgba(0,0,0,0.08); }
+  h1 { font-size: 26px; font-weight: 600; margin: 0 0 12px; letter-spacing: -0.02em; }
+  p { color: #6e6e73; line-height: 1.6; margin: 0; font-size: 15px; }
+  .code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px;
+          color: #86868b; margin-top: 16px; }
+  .site-header, .site-footer { margin: 12px 0; font-size: 13px; color: #6e6e73; }
+  @media (prefers-color-scheme: dark) {
+    body { background: #1d1d1f; color: #f5f5f7; }
+    .page { background: rgba(28,28,30,0.7); box-shadow: 0 8px 40px rgba(0,0,0,0.4); }
+    p, .code, .site-header, .site-footer { color: #a1a1a6; }
+  }
+  @media (max-width: 480px) { .page { padding: 32px 20px; } h1 { font-size: 22px; } }
+</style>
+</head>
+<body>
+<div class="site-header">{{.Header}}</div>
+<main class="page">
+  <h1>{{.Heading}}</h1>
+  <p>{{.Message}}</p>
+  {{if .Detail}}<p class="code">{{.Detail}}</p>{{end}}
+</main>
+<div class="site-footer">{{.Footer}}</div>
+</body>
+</html>`))
+
+type pageData struct {
+	Lang            string
+	SiteTitle       string
+	SiteDescription string
+	Heading         string
+	Message         string
+	Detail          string
+	Header          template.HTML
+	Footer          template.HTML
+}
+
+// langOf resolves the request language: explicit ?lang= wins, then
+// Accept-Language, defaulting to English.
+func langOf(r *http.Request) string {
+	if l := r.URL.Query().Get("lang"); l == "zh" || l == "en" {
+		return l
+	}
+	if strings.HasPrefix(strings.ToLower(r.Header.Get("Accept-Language")), "zh") {
+		return "zh"
+	}
+	return "en"
+}
+
+func (s *Server) renderExpired(w http.ResponseWriter, r *http.Request, link *store.Link) {
+	cfg := s.cfg.Get()
+	lang := langOf(r)
+	heading, message := "This link has expired", "This short link is past its expiration date and is no longer available."
+	if lang == "zh" {
+		heading, message = "链接已过期", "该短链接已超过有效期，无法继续访问。"
+	}
+	s.renderPage(w, http.StatusOK, lang, heading, message, link.Code, cfg.Site.Title, cfg.Site.Description, cfg.Site.Header, cfg.Site.Footer)
+}
+
+func (s *Server) renderNotFound(w http.ResponseWriter, r *http.Request) {
+	cfg := s.cfg.Get()
+	lang := langOf(r)
+	heading, message := "Page not found", "The short link you visited does not exist or has been removed."
+	if lang == "zh" {
+		heading, message = "页面不存在", "您访问的短链接不存在或已被删除。"
+	}
+	s.renderPage(w, http.StatusNotFound, lang, heading, message, "", cfg.Site.Title, cfg.Site.Description, cfg.Site.Header, cfg.Site.Footer)
+}
+
+// renderPage renders the page template from the live site config.
+func (s *Server) renderPage(w http.ResponseWriter, status int, lang, heading, message, detail, title, description, header, footer string) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(status)
+	_ = pageTmpl.Execute(w, pageData{
+		Lang:            lang,
+		SiteTitle:       title,
+		SiteDescription: description,
+		Heading:         heading,
+		Message:         message,
+		Detail:          detail,
+		Header:          template.HTML(header),
+		Footer:          template.HTML(footer),
+	})
+}

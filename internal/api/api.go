@@ -6,22 +6,26 @@ import (
 	"net/http"
 
 	"github.com/wmy2981/gourl/internal/config"
+	"github.com/wmy2981/gourl/internal/counter"
 	"github.com/wmy2981/gourl/internal/store"
 )
 
-// Server wires handlers to the store and the live configuration.
+// Server wires handlers to the store, the live configuration and the Redis
+// click counter.
 type Server struct {
-	store *store.Store
-	cfg   *config.Manager
-	now   func() int64 // injectable clock for tests
+	store   *store.Store
+	cfg     *config.Manager
+	counter *counter.Counter
+	now     func() int64 // injectable clock for tests
 }
 
 // NewServer creates a Server.
-func NewServer(st *store.Store, cfg *config.Manager) *Server {
-	return &Server{store: st, cfg: cfg, now: func() int64 { return timeNow() }}
+func NewServer(st *store.Store, cfg *config.Manager, ctr *counter.Counter) *Server {
+	return &Server{store: st, cfg: cfg, counter: ctr, now: func() int64 { return timeNow() }}
 }
 
-// Handler returns the root HTTP handler.
+// Handler returns the root HTTP handler. Explicit routes (api, admin, ...)
+// always win over the short-code wildcard.
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v1/links", s.listLinks)
@@ -29,6 +33,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/links/{code...}", s.getLink)
 	mux.HandleFunc("PATCH /api/v1/links/{code...}", s.updateLink)
 	mux.HandleFunc("DELETE /api/v1/links/{code...}", s.deleteLink)
+	mux.HandleFunc("GET /{code...}", s.redirect)
 	return mux
 }
 
