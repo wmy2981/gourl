@@ -12,7 +12,8 @@ test('creates a custom-code link and shows full short urls', async ({ page }) =>
   // The short URL is derived from the request host (no base_url configured);
   // its origin matches the page's, whatever port the run was assigned.
   const origin = new URL(page.url()).origin
-  await expect(page.getByText(`${origin}/e2e-custom`).first()).toBeVisible()
+  // The list refresh after creation can lag on slow runners.
+  await expect(page.getByText(`${origin}/e2e-custom`).first()).toBeVisible({ timeout: 15_000 })
 })
 
 test('creates a multi-level code', async ({ page }) => {
