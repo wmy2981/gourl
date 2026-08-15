@@ -2,6 +2,10 @@
 
 > 简体中文 | [English](README.md)
 
+<p align="left">
+  <img src="assets/icon.svg" width="72" height="72" alt="gourl" />
+</p>
+
 轻量自托管短链接服务。单个 Go 二进制（内嵌前端）+ Redis，即可运行你自己的短链接。
 
 ## 功能

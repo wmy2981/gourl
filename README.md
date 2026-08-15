@@ -2,6 +2,10 @@
 
 > [中文文档](README.zh-CN.md) | English
 
+<p align="left">
+  <img src="assets/icon.svg" width="72" height="72" alt="gourl" />
+</p>
+
 Lightweight self-hosted URL shortener. A single Go binary (frontend embedded)
 plus Redis — that's all it takes to run your own short links.
 
