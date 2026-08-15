@@ -86,6 +86,8 @@ export function Dialog({
       onMouseDown={(e) => e.target === e.currentTarget && onClose()}
     >
       <div
+        role="dialog"
+        aria-modal="true"
         className={`glass w-full ${wide ? 'max-w-2xl' : 'max-w-md'} max-h-[85vh] overflow-y-auto p-6`}
       >
         <div className="mb-4 flex items-center justify-between">

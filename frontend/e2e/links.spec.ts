@@ -19,6 +19,7 @@ test('creates a multi-level code', async ({ page }) => {
 })
 
 test('rejects a reserved code with a friendly error', async ({ page }) => {
+  await page.goto('/admin/links')
   await page.getByRole('button', { name: /new link/i }).click()
   await page.getByLabel('Destination URL').fill('https://example.com/x')
   await page.getByLabel(/Short code/).fill('api')
@@ -33,6 +34,7 @@ test('rejects a duplicate code', async ({ page, request }) => {
 })
 
 test('batch imports links and reports per-item results', async ({ page }) => {
+  await page.goto('/admin/links')
   await page.getByRole('button', { name: /import/i }).click()
   await page.getByRole('textbox').fill(
     '[{"url": "https://example.com/b1", "code": "e2e-b1"}, {"url": "https://example.com/b2", "code": "e2e-b2"}]',
@@ -64,7 +66,8 @@ test('searches and filters links', async ({ page, request }) => {
 test('deletes a link', async ({ page, request }) => {
   await createLinkApi(request, { url: 'https://example.com/gone', code: 'e2e-gone' })
   await page.goto('/admin/links')
-  await page.getByRole('button', { name: /delete/i }).first().click()
-  await page.getByRole('button', { name: /^Delete$/ }).click()
+  // Row action (title="Delete"), then the confirmation inside the dialog.
+  await page.getByRole('button', { name: 'Delete' }).first().click()
+  await page.getByRole('dialog').getByRole('button', { name: 'Delete' }).click()
   await expect(page.getByText('e2e-gone', { exact: true })).not.toBeVisible()
 })
