@@ -274,7 +274,7 @@ func (s *Store) ListLinks(ctx context.Context, opts ListOptions) ([]Link, int, e
 	}
 
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT `+linkColumns+` FROM links`+where+` ORDER BY `+sortCol+` `+order+` LIMIT ? OFFSET ?`,
+		`SELECT `+linkColumns+` FROM links`+where+` ORDER BY `+sortCol+` `+order+`, rowid `+order+` LIMIT ? OFFSET ?`,
 		append(args, opts.PageSize, (opts.Page-1)*opts.PageSize)...)
 	if err != nil {
 		return nil, 0, fmt.Errorf("list links: %w", err)
