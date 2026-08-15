@@ -5,6 +5,8 @@ FROM node:22-alpine AS frontend
 WORKDIR /app
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci --no-audit --no-fund
+# vite.config.ts reads ../VERSION (injected into the footer + title).
+COPY VERSION ./
 COPY frontend/ ./
 RUN npm run build
 
