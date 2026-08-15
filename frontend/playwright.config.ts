@@ -13,6 +13,9 @@ const port =
   (process.env.GITHUB_RUN_ID
     ? String(20000 + (Number(process.env.GITHUB_RUN_ID.slice(-4)) % 40000))
     : '8099')
+// cmd/e2e listens on E2E_PORT from its own environment; the derived port must
+// be visible to the webServer child process (and to `go run ../cmd/e2e`).
+process.env.E2E_PORT = port
 
 export default defineConfig({
   testDir: './e2e',
