@@ -1,0 +1,27 @@
+# gourl frontend — Project Conventions
+
+Subdirectory instructions for the React SPA admin console. Root-level conventions (commits, branch model, versioning) live in the repository-root `CLAUDE.md` and apply here too.
+
+## Commands
+
+- Install: `npm ci` (use the lockfile, never `npm install` for CI parity)
+- Type check: `npm run typecheck` (`tsc -b`, strict mode, noUnusedLocals)
+- Unit tests: `npm run test` (vitest, jsdom) — only `src/**/*.{test,spec}.{ts,tsx}` is collected; `e2e/` specs are Playwright's, never vitest's
+- Build: `npm run build` (tsc + vite; recharts is chunked via `manualChunks` as a **function** — rolldown/vite 8 rejects the object form)
+- E2E: `npm run e2e` (Playwright). The webServer auto-starts `go run ../cmd/e2e` (in-memory SQLite + miniredis, admin password `e2e-password`) — no external services needed. `npm run e2e:headed` for a visible browser
+
+## Gotchas
+
+- **Icon single source**: the brand icon lives at the repo root `assets/favicon.svg`. `src/assets/icon.svg` is a **gitignored generated copy** (imported by `Layout.tsx`); never edit it — change the root source and re-copy (`cp ../../assets/favicon.svg src/assets/icon.svg`). CI and `scripts/build-frontend.ps1` regenerate it
+- **Version injection**: `vite.config.ts` reads the repo-root `VERSION` file (`../VERSION`) into `__APP_VERSION__` — used in the footer and login page. The Docker build copies VERSION to `/VERSION` (filesystem root) because `../VERSION` resolves there from `/app`
+- **E2E data is shared**: all specs hit the same webServer process (single in-memory DB) and run serially (`workers: 1`). Tests must not depend on list ordering beyond the newest-first default
+- **Playwright assertions**: `getByText` collides when both the code cell and the full short-URL line contain the same text — use `{ exact: true }` for short-code assertions, and scope dialog buttons via `getByRole('dialog')`
+- **Admin routes**: `/admin/*` is served by the Go binary's SPA fallback (not vite dev in CI builds). New system path prefixes must be added to `internal/shortcode` reserved codes (e.g. `docs`, `api`) so short codes can never shadow them
+- **`/assets/` prefix is shared**: uploaded custom icons (`custom-icon.*`, served first) and vite build artifacts both live under `/assets/` server-side
+
+## Design
+
+- UI accent is **amber** on graphite neutrals (Apple-style glassmorphism); never default blue-purple gradients. The **brand icon is purple** — distinct from the UI accent
+- Follow the frontend-design skill's two-pass process (token system first, then implementation) for UI work
+- All copy is bilingual via `react-i18next`; `src/locales/en.json` and `zh.json` must keep identical key sets (enforced by a vitest test)
+- Forms must associate `<Label htmlFor>` with input `id` — accessibility and Playwright's `getByLabel` depend on it
