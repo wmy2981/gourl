@@ -8,14 +8,14 @@ test.beforeEach(async ({ page, request }) => {
 
 test('creates a custom-code link and shows full short urls', async ({ page }) => {
   await createLinkUi(page, 'https://example.com/very/long/path', 'e2e-custom')
-  await expect(page.getByText('e2e-custom')).toBeVisible()
+  await expect(page.getByText('e2e-custom', { exact: true })).toBeVisible()
   // The short URL is derived from the request host (no base_url configured).
   await expect(page.getByText('http://127.0.0.1:8099/e2e-custom').first()).toBeVisible()
 })
 
 test('creates a multi-level code', async ({ page }) => {
   await createLinkUi(page, 'https://example.com/deep', 'guide/part1')
-  await expect(page.getByText('guide/part1')).toBeVisible()
+  await expect(page.getByText('guide/part1', { exact: true })).toBeVisible()
 })
 
 test('rejects a reserved code with a friendly error', async ({ page }) => {
@@ -39,8 +39,8 @@ test('batch imports links and reports per-item results', async ({ page }) => {
   )
   await page.getByRole('button', { name: /^Create$/ }).click()
   await expect(page.getByText('Created 2, failed 0')).toBeVisible()
-  await expect(page.getByText('e2e-b1')).toBeVisible()
-  await expect(page.getByText('e2e-b2')).toBeVisible()
+  await expect(page.getByText('e2e-b1', { exact: true })).toBeVisible()
+  await expect(page.getByText('e2e-b2', { exact: true })).toBeVisible()
 })
 
 test('edits a link title', async ({ page, request }) => {
@@ -57,8 +57,8 @@ test('searches and filters links', async ({ page, request }) => {
   await createLinkApi(request, { url: 'https://example.com/other', code: 'other-code' })
   await page.goto('/admin/links')
   await page.getByPlaceholder(/search/i).fill('find-me')
-  await expect(page.getByText('find-me')).toBeVisible()
-  await expect(page.getByText('other-code')).not.toBeVisible()
+  await expect(page.getByText('find-me', { exact: true })).toBeVisible()
+  await expect(page.getByText('other-code', { exact: true })).not.toBeVisible()
 })
 
 test('deletes a link', async ({ page, request }) => {
@@ -66,5 +66,5 @@ test('deletes a link', async ({ page, request }) => {
   await page.goto('/admin/links')
   await page.getByRole('button', { name: /delete/i }).first().click()
   await page.getByRole('button', { name: /^Delete$/ }).click()
-  await expect(page.getByText('e2e-gone')).not.toBeVisible()
+  await expect(page.getByText('e2e-gone', { exact: true })).not.toBeVisible()
 })
