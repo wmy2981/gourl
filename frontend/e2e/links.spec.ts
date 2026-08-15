@@ -36,7 +36,7 @@ test('rejects a duplicate code', async ({ page, request }) => {
 test('batch imports links and reports per-item results', async ({ page }) => {
   await page.goto('/admin/links')
   await page.getByRole('button', { name: /import/i }).click()
-  await page.getByRole('textbox').fill(
+  await page.getByRole('dialog').getByRole('textbox').fill(
     '[{"url": "https://example.com/b1", "code": "e2e-b1"}, {"url": "https://example.com/b2", "code": "e2e-b2"}]',
   )
   await page.getByRole('button', { name: /^Create$/ }).click()
@@ -68,6 +68,9 @@ test('deletes a link', async ({ page, request }) => {
   await page.goto('/admin/links')
   // Row action (title="Delete"), then the confirmation inside the dialog.
   await page.getByRole('button', { name: 'Delete' }).first().click()
-  await page.getByRole('dialog').getByRole('button', { name: 'Delete' }).click()
-  await expect(page.getByText('e2e-gone', { exact: true })).not.toBeVisible()
+  const dialog = page.getByRole('dialog')
+  await dialog.getByRole('button', { name: 'Delete' }).click()
+  // The dialog closes after the delete succeeds; the row disappears.
+  await expect(dialog).not.toBeVisible()
+  await expect(page.getByRole('row').getByText('e2e-gone', { exact: true })).not.toBeVisible()
 })

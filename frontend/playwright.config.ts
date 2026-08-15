@@ -3,6 +3,11 @@ import { defineConfig } from '@playwright/test'
 // End-to-end tests run against cmd/e2e (in-memory SQLite + miniredis), so
 // no external Redis or database is required. The server is started and
 // stopped automatically by Playwright.
+//
+// E2E_PORT isolates parallel CI runs: each run gets a unique port so two
+// concurrent e2e jobs never share (and pollute) the same server.
+const port = process.env.E2E_PORT ?? '8099'
+
 export default defineConfig({
   testDir: './e2e',
   timeout: 30_000,
@@ -10,13 +15,13 @@ export default defineConfig({
   workers: 1,
   reporter: [['list']],
   use: {
-    baseURL: 'http://127.0.0.1:8099',
+    baseURL: `http://127.0.0.1:${port}`,
     locale: 'en-US',
     trace: 'retain-on-failure',
   },
   webServer: {
     command: 'go run ../cmd/e2e',
-    url: 'http://127.0.0.1:8099/api/v1/health',
+    url: `http://127.0.0.1:${port}/api/v1/health`,
     reuseExistingServer: true,
     timeout: 30_000,
   },
