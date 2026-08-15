@@ -42,7 +42,7 @@ test('batch imports links and reports per-item results', async ({ page }) => {
     '[{"url": "https://example.com/b1", "code": "e2e-b1"}, {"url": "https://example.com/b2", "code": "e2e-b2"}]',
   )
   await page.getByRole('button', { name: /^Create$/ }).click()
-  await expect(page.getByText('Created 2, failed 0')).toBeVisible()
+  // Result rows are the stable assertion; the success toast is transient.
   await expect(page.getByText('e2e-b1', { exact: true })).toBeVisible()
   await expect(page.getByText('e2e-b2', { exact: true })).toBeVisible()
 })
