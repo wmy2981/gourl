@@ -11,6 +11,12 @@ import (
 	"github.com/wmy2981/gourl/internal/webui"
 )
 
+// openAPISpec serves the embedded OpenAPI specification for the swagger UI.
+func (s *Server) openAPISpec(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/yaml; charset=utf-8")
+	_, _ = w.Write(webui.OpenAPISpec())
+}
+
 // favicon serves the configured custom icon if uploaded, else the built-in
 // default brand icon.
 func (s *Server) favicon(w http.ResponseWriter, r *http.Request) {

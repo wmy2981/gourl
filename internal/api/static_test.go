@@ -59,6 +59,23 @@ func TestFaviconServesDefaultAndCustom(t *testing.T) {
 	}
 }
 
+// TestSwaggerUIServed verifies the API documentation page and its spec.
+func TestSwaggerUIServed(t *testing.T) {
+	s, _ := newTestServer(t)
+	rec := get(t, s, "/docs/", nil)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "swagger-ui") {
+		t.Fatalf("/docs/ status = %d, want swagger ui html", rec.Code)
+	}
+	rec = get(t, s, "/docs/openapi.yaml", nil)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "openapi: 3.0") {
+		t.Fatalf("/docs/openapi.yaml status = %d, want spec", rec.Code)
+	}
+	rec = get(t, s, "/docs/swagger-ui-bundle.js", nil)
+	if rec.Code != http.StatusOK {
+		t.Errorf("swagger bundle status = %d, want 200", rec.Code)
+	}
+}
+
 // TestCustomIconTakesPrecedenceOverEmbedded confirms uploaded icons keep
 // their /assets/custom-icon.* route.
 func TestCustomIconTakesPrecedenceOverEmbedded(t *testing.T) {

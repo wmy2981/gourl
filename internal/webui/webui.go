@@ -11,6 +11,11 @@ import (
 //go:embed all:dist
 var dist embed.FS
 
+//go:embed all:swaggerui
+//go:embed openapi.yaml
+//go:embed icon.svg
+var assets embed.FS
+
 //go:embed icon.svg
 var defaultIcon []byte
 
@@ -26,3 +31,24 @@ func Dist() fs.FS {
 
 // DefaultIcon returns the built-in brand icon (SVG bytes).
 func DefaultIcon() []byte { return defaultIcon }
+
+// Docs returns the embedded swagger-ui assets filesystem (index.html,
+// swagger-ui-bundle.js, ...).
+func Docs() fs.FS {
+	sub, err := fs.Sub(assets, "swaggerui")
+	if err != nil {
+		// The embed path is static; failure is a build-time error.
+		panic(err)
+	}
+	return sub
+}
+
+// OpenAPISpec returns the embedded OpenAPI 3.0 specification (YAML bytes).
+func OpenAPISpec() []byte {
+	data, err := assets.ReadFile("openapi.yaml")
+	if err != nil {
+		// The embed path is static; failure is a build-time error.
+		panic(err)
+	}
+	return data
+}

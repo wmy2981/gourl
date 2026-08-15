@@ -24,7 +24,7 @@ const MaxLength = 64
 var builtinReserved = []string{
 	"api", "admin", "expired", "health", "assets", "favicon",
 	"export", "login", "logout", "config", "icon", "dashboard",
-	"links", "tokens", "ua-blocks", "settings", "static",
+	"links", "tokens", "ua-blocks", "settings", "static", "docs",
 }
 
 var errNotEnoughEntropy = errors.New("crypto/rand failure")

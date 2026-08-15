@@ -49,13 +49,13 @@ func TestIsReservedBuiltin(t *testing.T) {
 		}
 	}
 	// First segment only.
-	for _, code := range []string{"api/v1/links", "ADMIN/foo"} {
+	for _, code := range []string{"api/v1/links", "ADMIN/foo", "docs/readme"} {
 		if !IsReserved(code, nil) {
 			t.Errorf("%q should be reserved via first segment", code)
 		}
 	}
 	// Normal codes are fine.
-	for _, code := range []string{"abc", "a1b2c3", "my-link", "docs/readme", "link1/link2"} {
+	for _, code := range []string{"abc", "a1b2c3", "my-link", "link1/link2"} {
 		if IsReserved(code, nil) {
 			t.Errorf("%q should not be reserved", code)
 		}

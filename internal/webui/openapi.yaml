@@ -1,0 +1,345 @@
+openapi: 3.0.3
+info:
+  title: gourl API
+  description: |
+    Lightweight self-hosted URL shortener API.
+
+    Admin endpoints accept either a session cookie (from
+    `POST /api/v1/auth/login`) or `Authorization: Bearer <token>` (tokens are
+    created in Settings). The redirect route `GET /{code}` is public.
+  version: "0.1.0"
+servers:
+  - url: /api/v1
+tags:
+  - name: health
+    description: Public service status
+  - name: auth
+    description: Admin session
+  - name: links
+    description: Short link management
+  - name: ua-blocks
+    description: Blocked User-Agent patterns
+  - name: tokens
+    description: API tokens
+  - name: config
+    description: Site configuration
+  - name: dashboard
+    description: Aggregate statistics
+paths:
+  /health:
+    get:
+      tags: [health]
+      summary: Service health and identity
+      security: []
+      responses:
+        "200":
+          description: Healthy — includes name, version, uptime and dependency probes
+        "503":
+          description: A dependency (redis/sqlite) is unavailable
+  /auth/login:
+    post:
+      tags: [auth]
+      summary: Login with the admin password, sets a session cookie
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [password]
+              properties:
+                password: { type: string }
+      responses:
+        "200": { description: Session cookie set }
+        "401": { description: Invalid password }
+        "403": { description: Authentication not configured }
+  /auth/logout:
+    post:
+      tags: [auth]
+      summary: Clear the session cookie
+      security: []
+      responses:
+        "200": { description: Signed out }
+  /links:
+    get:
+      tags: [links]
+      summary: List links (paginated, searchable, sortable)
+      parameters:
+        - { name: page, in: query, schema: { type: integer, default: 1 } }
+        - { name: page_size, in: query, schema: { type: integer, default: 20, maximum: 100 } }
+        - { name: q, in: query, schema: { type: string }, description: Match on code/url/title }
+        - { name: sort, in: query, schema: { type: string, enum: [created_at, clicks, code] } }
+        - { name: order, in: query, schema: { type: string, enum: [asc, desc] } }
+      responses:
+        "200":
+          description: Link list with total count
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  links: { type: array, items: { $ref: "#/components/schemas/Link" } }
+                  total: { type: integer }
+                  page: { type: integer }
+                  page_size: { type: integer }
+    post:
+      tags: [links]
+      summary: Create a link (auto-fetches title/description)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url]
+              properties:
+                url: { type: string, description: "Absolute http(s) URL" }
+                code: { type: string, description: "Optional custom code, may contain / (≤5 levels); empty = random" }
+                expires_at: { type: integer, description: "Unix seconds, 0 = never" }
+      responses:
+        "201": { description: Created, returns the link with full short URLs }
+        "400": { description: Invalid url/code or reserved code }
+        "409": { description: Code already in use }
+  /links/batch:
+    post:
+      tags: [links]
+      summary: Batch import links (≤500 per call, per-item results)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items: { $ref: "#/components/schemas/CreateLink" }
+      responses:
+        "201":
+          description: Per-item results with created/failed counts
+  /links/{code}:
+    parameters:
+      - { name: code, in: path, required: true, schema: { type: string }, description: "Short code (may contain /)" }
+    get:
+      tags: [links]
+      summary: Get a link
+      responses:
+        "200": { description: Link }
+        "404": { description: Not found }
+    patch:
+      tags: [links]
+      summary: Update a link (url change re-fetches title unless overridden)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                code: { type: string }
+                url: { type: string }
+                title: { type: string }
+                description: { type: string }
+                expires_at: { type: integer }
+      responses:
+        "200": { description: Updated link }
+        "404": { description: Not found }
+        "409": { description: New code already in use }
+    delete:
+      tags: [links]
+      summary: Delete a link and its daily click records
+      responses:
+        "204": { description: Deleted }
+        "404": { description: Not found }
+  /links/{code}/stats:
+    get:
+      tags: [links]
+      summary: Total and daily click counts for a link
+      responses:
+        "200":
+          description: Stats
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code: { type: string }
+                  click_count: { type: integer }
+                  daily:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        date: { type: string, example: "2026-08-15" }
+                        count: { type: integer }
+  /export.csv:
+    get:
+      tags: [links]
+      summary: Export all links as CSV (UTF-8 with BOM)
+      responses:
+        "200":
+          description: CSV attachment
+          content:
+            text/csv: { schema: { type: string } }
+  /ua-blocks:
+    get:
+      tags: [ua-blocks]
+      summary: List blocked User-Agent patterns
+      responses:
+        "200": { description: List }
+    post:
+      tags: [ua-blocks]
+      summary: Add a block pattern (case-insensitive substring match)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [pattern]
+              properties:
+                pattern: { type: string }
+      responses:
+        "201": { description: Created }
+        "409": { description: Pattern already exists }
+  /ua-blocks/{id}:
+    delete:
+      tags: [ua-blocks]
+      summary: Remove a block pattern
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        "204": { description: Deleted }
+        "404": { description: Not found }
+  /tokens:
+    get:
+      tags: [tokens]
+      summary: List API tokens (preview only — full token never returned)
+      responses:
+        "200": { description: Token list }
+    post:
+      tags: [tokens]
+      summary: Create an API token (full value returned exactly once)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                note: { type: string }
+      responses:
+        "201": { description: Token created with full value }
+  /tokens/{id}:
+    delete:
+      tags: [tokens]
+      summary: Revoke a token
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        "204": { description: Revoked }
+        "404": { description: Not found }
+  /config:
+    get:
+      tags: [config]
+      summary: Get the full site configuration
+      responses:
+        "200": { description: Config, schema: { $ref: "#/components/schemas/Config" } }
+    put:
+      tags: [config]
+      summary: Update the configuration (validated, written back to config.yaml, hot-applied)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Config" }
+      responses:
+        "200": { description: Updated config }
+        "400": { description: Invalid config }
+  /icon:
+    post:
+      tags: [config]
+      summary: Upload a custom icon (multipart field "icon", SVG/PNG ≤1 MiB)
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                icon: { type: string, format: binary }
+      responses:
+        "200": { description: Uploaded, config icon updated }
+        "400": { description: Wrong type or too large }
+    delete:
+      tags: [config]
+      summary: Reset to the built-in default icon
+      responses:
+        "200": { description: Reset }
+  /dashboard:
+    get:
+      tags: [dashboard]
+      summary: Aggregate metrics and the last 14 days of clicks
+      responses:
+        "200":
+          description: Dashboard data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  links_total: { type: integer }
+                  clicks_total: { type: integer }
+                  clicks_today: { type: integer }
+                  daily:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        date: { type: string }
+                        count: { type: integer }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+  schemas:
+    Link:
+      type: object
+      properties:
+        code: { type: string }
+        url: { type: string }
+        title: { type: string }
+        description: { type: string }
+        expires_at: { type: integer }
+        click_count: { type: integer }
+        created_at: { type: integer }
+        updated_at: { type: integer }
+        urls:
+          type: array
+          description: Full short URLs (primary + extra base URLs)
+          items: { type: string }
+    CreateLink:
+      type: object
+      required: [url]
+      properties:
+        url: { type: string }
+        code: { type: string }
+        expires_at: { type: integer }
+    Config:
+      type: object
+      properties:
+        site:
+          type: object
+          properties:
+            name: { type: string }
+            title: { type: string }
+            keywords: { type: string }
+            description: { type: string }
+            header: { type: string }
+            footer: { type: string }
+        short_code_length: { type: integer, minimum: 4, maximum: 32 }
+        base_url: { type: string }
+        extra_base_urls: { type: array, items: { type: string } }
+        reserved_codes: { type: array, items: { type: string } }
+        icon: { type: string }
+security:
+  - bearerAuth: []

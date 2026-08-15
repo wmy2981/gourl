@@ -13,6 +13,7 @@ import (
 	"github.com/wmy2981/gourl/internal/counter"
 	"github.com/wmy2981/gourl/internal/fetcher"
 	"github.com/wmy2981/gourl/internal/store"
+	"github.com/wmy2981/gourl/internal/webui"
 )
 
 // TitleFetcher retrieves a page's title and description.
@@ -83,6 +84,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/dashboard", s.requireAuth(s.dashboard))
 	mux.Handle("GET /assets/", s.assetsHandler())
 	mux.HandleFunc("GET /favicon.svg", s.favicon)
+	mux.Handle("GET /docs/", http.StripPrefix("/docs/", http.FileServer(http.FS(webui.Docs()))))
+	mux.HandleFunc("GET /docs/openapi.yaml", s.openAPISpec)
 	mux.HandleFunc("GET /admin", s.spaIndex)
 	mux.HandleFunc("GET /admin/{path...}", s.spaIndex)
 	mux.HandleFunc("GET /{code...}", s.redirect)
