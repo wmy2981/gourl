@@ -11,6 +11,23 @@ import (
 	"github.com/wmy2981/gourl/internal/webui"
 )
 
+// favicon serves the configured custom icon if uploaded, else the built-in
+// default brand icon.
+func (s *Server) favicon(w http.ResponseWriter, r *http.Request) {
+	if cfg := s.cfg.Get(); cfg.Icon != "" {
+		if f, err := os.Open(filepath.Join(s.assetsDir, cfg.Icon)); err == nil {
+			defer f.Close()
+			if info, err := f.Stat(); err == nil {
+				http.ServeContent(w, r, cfg.Icon, info.ModTime(), f)
+				return
+			}
+		}
+	}
+	w.Header().Set("Content-Type", "image/svg+xml")
+	w.Header().Set("Cache-Control", "public, max-age=3600")
+	_, _ = w.Write(webui.DefaultIcon())
+}
+
 // spaIndex serves the SPA shell for /admin and every nested admin route.
 func (s *Server) spaIndex(w http.ResponseWriter, r *http.Request) {
 	index, err := webui.Dist().Open("index.html")

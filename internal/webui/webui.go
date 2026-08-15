@@ -11,6 +11,9 @@ import (
 //go:embed all:dist
 var dist embed.FS
 
+//go:embed icon.svg
+var defaultIcon []byte
+
 // Dist returns the embedded frontend filesystem rooted at the dist contents.
 func Dist() fs.FS {
 	sub, err := fs.Sub(dist, "dist")
@@ -20,3 +23,6 @@ func Dist() fs.FS {
 	}
 	return sub
 }
+
+// DefaultIcon returns the built-in brand icon (SVG bytes).
+func DefaultIcon() []byte { return defaultIcon }

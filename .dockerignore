@@ -1,0 +1,16 @@
+.git
+.gitignore
+.gitattributes
+.github
+data
+config.yaml
+frontend/node_modules
+frontend/dist
+frontend/test-results
+frontend/playwright-report
+frontend/tsconfig.tsbuildinfo
+internal/webui/dist
+docs
+*.md
+!.dockerignore
+!Dockerfile

@@ -39,6 +39,26 @@ func TestSPAAssetsAreServed(t *testing.T) {
 	}
 }
 
+// TestFaviconServesDefaultAndCustom confirms /favicon.svg serves the
+// built-in icon, switching to the uploaded one once configured.
+func TestFaviconServesDefaultAndCustom(t *testing.T) {
+	s, _ := newTestServer(t)
+	rec := get(t, s, "/favicon.svg", nil)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "<svg") {
+		t.Fatalf("default favicon: status %d body %q", rec.Code, rec.Body.String())
+	}
+
+	// After an upload the custom icon wins.
+	rec = uploadIconRequest(t, s, "custom-icon.svg", "<svg xmlns='http://www.w3.org/2000/svg'><text>custom</text></svg>")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("upload: %d", rec.Code)
+	}
+	rec = get(t, s, "/favicon.svg", nil)
+	if !strings.Contains(rec.Body.String(), "custom") {
+		t.Errorf("custom favicon not served: %q", rec.Body.String())
+	}
+}
+
 // TestCustomIconTakesPrecedenceOverEmbedded confirms uploaded icons keep
 // their /assets/custom-icon.* route.
 func TestCustomIconTakesPrecedenceOverEmbedded(t *testing.T) {

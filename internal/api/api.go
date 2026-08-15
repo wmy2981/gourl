@@ -81,6 +81,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("DELETE /api/v1/icon", s.requireAuth(s.deleteIcon))
 	mux.HandleFunc("GET /api/v1/dashboard", s.requireAuth(s.dashboard))
 	mux.Handle("GET /assets/", s.assetsHandler())
+	mux.HandleFunc("GET /favicon.svg", s.favicon)
 	mux.HandleFunc("GET /admin", s.spaIndex)
 	mux.HandleFunc("GET /admin/{path...}", s.spaIndex)
 	mux.HandleFunc("GET /{code...}", s.redirect)
