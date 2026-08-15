@@ -12,7 +12,7 @@ The full design is in [DESIGN.md](DESIGN.md) (Chinese). **It is the single sourc
 - Test: `go test ./...` (Go tests use miniredis, no real Redis needed)
 - Vet: `go vet ./...`
 - Frontend: `cd frontend && npm ci && npm run typecheck && npm run test`
-- E2E: `cd frontend && npm run e2e` (auto-starts cmd/e2e server: in-memory SQLite + miniredis)
+- E2E: `cd frontend && npm run e2e` (auto-starts cmd/e2e server: in-memory SQLite + miniredis). Port: local `8099`, CI derives a unique one per run from `GITHUB_RUN_ID`. **The e2e server serves the embedded frontend — rebuild `scripts/build-frontend.ps1` after frontend changes before running e2e**
 
 ## Git Workflow
 
@@ -32,4 +32,4 @@ The full design is in [DESIGN.md](DESIGN.md) (Chinese). **It is the single sourc
 - Reserved short-code prefixes (`api`, `admin`, `docs`, …) live in `internal/shortcode`; new system routes must be added there
 - Follow the frontend-design skill's two-pass process for UI work. UI accent is amber (never default blue-purple gradients); the **brand icon is purple** (user-specified) — the two are distinct
 - **Icon single source**: the brand icon exists only at `assets/favicon.svg`. `scripts/build-frontend.ps1` and CI copy it to `frontend/src/assets/icon.svg` (vite import) and `internal/webui/icon.svg` (go:embed) — both are gitignored generated copies. Never edit the copies directly
-- Deployment is a **single container**: the image embeds Redis (entrypoint starts it on 127.0.0.1:6379 unless `REDIS_ADDR` points elsewhere); `docker-compose.yml` uses a `./data` bind mount and loads a sibling `.env`
+- Deployment is a **single container**: the image embeds Redis (entrypoint starts it on 127.0.0.1:6379 unless `REDIS_ADDR` points elsewhere); `docker-compose.yml` binds `./data` and `./config` (directory mounts only — a file mount for a missing file becomes a directory) and loads a sibling `.env`. `GOURL_IMAGE` overrides the image tag (`:dev` for pre-releases; `:latest` exists only after a main release)

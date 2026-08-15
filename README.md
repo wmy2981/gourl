@@ -31,18 +31,28 @@ Redis · React 19 + Vite + Tailwind CSS 4 + shadcn-style components
 
 ## Quick start (Docker)
 
-```bash
-# 1. Create your config (optional — defaults work out of the box)
-cp config.yaml.example config.yaml
+Single container — the image embeds a Redis instance, so one `compose up`
+is the whole deployment.
 
-# 2. Set the admin password and start
-ADMIN_PASSWORD=change-me docker compose up -d
+```bash
+# 1. Config directory (optional — defaults work without it):
+#    copy config.yaml.example to config/config.yaml and adjust as needed.
+
+# 2. Create the .env file next to docker-compose.yml:
+echo 'ADMIN_PASSWORD=change-me' > .env
+echo "SESSION_SECRET=$(openssl rand -hex 32)" >> .env
+
+# 3. Start
+docker compose up -d
 ```
 
 Open http://localhost:8080 — you'll be redirected to the admin console.
-Images are built and published on GitHub Actions; pull tags like
-`ghcr.io/wmy2981/gourl:latest` (releases) or `:dev` (pre-releases) from
-[GHCR](https://github.com/wmy2981/gourl/pkgs/container/gourl).
+Data (SQLite, uploaded icons, embedded Redis rdb) persists in `./data`,
+config in `./config` (the settings page writes back to it).
+
+Images are built and published by GitHub Actions on [GHCR](https://github.com/wmy2981/gourl/pkgs/container/gourl):
+`ghcr.io/wmy2981/gourl:latest` (releases, main branch) or `:dev` (pre-releases).
+To deploy a pre-release: `GOURL_IMAGE=ghcr.io/wmy2981/gourl:dev docker compose up -d`.
 
 ## Configuration
 

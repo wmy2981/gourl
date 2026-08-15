@@ -2,7 +2,9 @@ services:
   # Single-container deployment: the image embeds a Redis instance that
   # starts automatically unless REDIS_ADDR points elsewhere.
   app:
-    image: ghcr.io/wmy2981/gourl:latest
+    # Override with GOURL_IMAGE=ghcr.io/wmy2981/gourl:dev to deploy a
+    # pre-release build; latest only exists after a main release.
+    image: ${GOURL_IMAGE:-ghcr.io/wmy2981/gourl:latest}
     build: .
     ports:
       - "8080:8080"

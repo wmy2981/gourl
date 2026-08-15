@@ -30,17 +30,26 @@ Redis · React 19 + Vite + Tailwind CSS 4 + shadcn 风格组件
 
 ## 快速开始（Docker）
 
-```bash
-# 1. 创建配置文件（可选，默认值可直接运行）
-cp config.yaml.example config.yaml
+单容器部署——镜像内置 Redis 实例，一次 `compose up` 即完成整套部署。
 
-# 2. 设置管理员密码并启动
-ADMIN_PASSWORD=change-me docker compose up -d
+```bash
+# 1. 配置目录（可选，默认值可直接运行）：
+#    将 config.yaml.example 复制为 config/config.yaml 并按需调整。
+
+# 2. 在 docker-compose.yml 同级创建 .env：
+echo 'ADMIN_PASSWORD=change-me' > .env
+echo "SESSION_SECRET=$(openssl rand -hex 32)" >> .env
+
+# 3. 启动
+docker compose up -d
 ```
 
-访问 http://localhost:8080 会自动跳转管理后台。镜像由 GitHub Actions 构建发布，
-从 [GHCR](https://github.com/wmy2981/gourl/pkgs/container/gourl) 拉取
-`ghcr.io/wmy2981/gourl:latest`（正式版）或 `:dev`（预发行）。
+访问 http://localhost:8080 会自动跳转管理后台。数据（SQLite、上传图标、
+内置 Redis 的 rdb）持久化在 `./data`，配置在 `./config`（设置页会写回其中）。
+
+镜像由 GitHub Actions 构建发布到 [GHCR](https://github.com/wmy2981/gourl/pkgs/container/gourl)：
+`ghcr.io/wmy2981/gourl:latest`（正式版，main 分支）或 `:dev`（预发行）。
+部署预发行版：`GOURL_IMAGE=ghcr.io/wmy2981/gourl:dev docker compose up -d`。
 
 ## 配置
 

@@ -11,7 +11,7 @@ Subdirectory instructions for the Go backend packages. Root-level conventions (c
 
 ## Package map (what lives where)
 
-- `config` — YAML business config; `Manager.Update` writes back atomically and hot-swaps (settings page uses it). Add new config fields with both `yaml` and `json` tags
+- `config` — YAML business config; `Manager.Update` writes back atomically and hot-swaps (settings page uses it). Add new config fields with both `yaml` and `json` tags. **`Get()` normalizes slice fields to empty (not nil) slices — JSON must never emit `null` arrays (the frontend crashed on `null.join()` once)**
 - `store` — SQLite (modernc.org/sqlite, **no CGO**). Schema migrations are the ordered `migrations` slice; add new tables there, never raw DDL
 - `counter` — Redis click buffer + 30s `Flusher` (GETDEL → ApplyCounts → INCRBY add-back on failure). Keys: `counter:{code}` / `counter:{code}:{date}`
 - `shortcode` — base62 random codes, multi-level validation, **`builtinReserved` prefixes** (`api`, `admin`, `docs`, …). New system routes MUST be added here or short codes can shadow them
@@ -25,7 +25,7 @@ Subdirectory instructions for the Go backend packages. Root-level conventions (c
 - `api` tests use `newTestServer(t)`: miniredis + `:memory:` store + mock fetcher (`errNoFetch`) + shared `testSession` cookie attached by `do()`. Requests without auth use `doWith(..., nil, "")`
 - The `now` clock is injectable (`srv.now = ...`) — tests pin timestamps, so list ordering tests rely on `ORDER BY ... , rowid` tie-breaking
 - Redis keys are asserted through the miniredis handle returned by `newTestServer`
-- E2E server (`cmd/e2e`) reuses the same packages with miniredis + in-memory SQLite; keep its admin password `e2e-password` stable (Playwright specs hardcode it)
+- E2E server (`cmd/e2e`) reuses the same packages with miniredis + in-memory SQLite; keep its admin password `e2e-password` stable (Playwright specs hardcode it). Its config path must be a **writable temp file** (an empty `CONFIG_PATH` breaks the settings-page write-back and makes PUT /config fail)
 
 ## Gotchas
 

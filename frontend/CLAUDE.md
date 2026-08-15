@@ -9,6 +9,12 @@ Subdirectory instructions for the React SPA admin console. Root-level convention
 - Unit tests: `npm run test` (vitest, jsdom) — only `src/**/*.{test,spec}.{ts,tsx}` is collected; `e2e/` specs are Playwright's, never vitest's
 - Build: `npm run build` (tsc + vite; recharts is chunked via `manualChunks` as a **function** — rolldown/vite 8 rejects the object form)
 - E2E: `npm run e2e` (Playwright). The webServer auto-starts `go run ../cmd/e2e` (in-memory SQLite + miniredis, admin password `e2e-password`) — no external services needed. `npm run e2e:headed` for a visible browser
+- E2E gotchas learned the hard way:
+  - The e2e server serves the **embedded build** — after any `src/` change, run `powershell -File scripts/build-frontend.ps1` (repo root) first or tests run stale UI
+  - `request` fixtures **follow redirects by default** — for 302 assertions pass `{ maxRedirects: 0 }` or you get the external target's status
+  - Visibility assertions after list mutations need a generous timeout (15s) — the SPA refetch lags on slow runners; avoid asserting transient toasts
+  - Codes like `expired`/`docs` are reserved — never use them as test fixtures
+  - All specs share one server (in-memory DB) and run with `workers: 1`; per-run ports isolate parallel CI runs
 
 ## Gotchas
 
