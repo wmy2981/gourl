@@ -41,9 +41,10 @@ func (s *Server) listLinks(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "internal_error", "failed to list links")
 		return
 	}
+	cfg := s.cfg.Get()
 	out := make([]linkJSON, 0, len(links))
 	for i := range links {
-		out = append(out, toLinkJSON(&links[i]))
+		out = append(out, toLinkJSON(&links[i], fullURLs(cfg, r, links[i].Code)))
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"links":     out,
@@ -114,7 +115,7 @@ func (s *Server) createLink(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "internal_error", "failed to create link")
 		return
 	}
-	writeJSON(w, http.StatusCreated, toLinkJSON(link))
+	writeJSON(w, http.StatusCreated, toLinkJSON(link, fullURLs(cfg, r, code)))
 }
 
 // getLink handles GET /api/v1/links/{code}.
@@ -128,7 +129,7 @@ func (s *Server) getLink(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "internal_error", "failed to get link")
 		return
 	}
-	writeJSON(w, http.StatusOK, toLinkJSON(link))
+	writeJSON(w, http.StatusOK, toLinkJSON(link, fullURLs(s.cfg.Get(), r, link.Code)))
 }
 
 // updateLinkRequest is the PATCH /api/v1/links/{code} body. Pointer fields
@@ -216,7 +217,7 @@ func (s *Server) updateLink(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "internal_error", "failed to update link")
 		return
 	}
-	writeJSON(w, http.StatusOK, toLinkJSON(link))
+	writeJSON(w, http.StatusOK, toLinkJSON(link, fullURLs(cfg, r, link.Code)))
 }
 
 // deleteLink handles DELETE /api/v1/links/{code}.

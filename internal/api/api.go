@@ -64,9 +64,11 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/health", s.health)
 	mux.HandleFunc("GET /api/v1/links", s.requireAuth(s.listLinks))
 	mux.HandleFunc("POST /api/v1/links", s.requireAuth(s.createLink))
+	mux.HandleFunc("POST /api/v1/links/batch", s.requireAuth(s.batchCreate))
 	mux.HandleFunc("GET /api/v1/links/{code...}", s.requireAuth(s.getLink))
 	mux.HandleFunc("PATCH /api/v1/links/{code...}", s.requireAuth(s.updateLink))
 	mux.HandleFunc("DELETE /api/v1/links/{code...}", s.requireAuth(s.deleteLink))
+	mux.HandleFunc("GET /api/v1/export.csv", s.requireAuth(s.exportCSV))
 	mux.HandleFunc("GET /api/v1/tokens", s.requireAuth(s.listTokens))
 	mux.HandleFunc("POST /api/v1/tokens", s.requireAuth(s.createToken))
 	mux.HandleFunc("DELETE /api/v1/tokens/{id}", s.requireAuth(s.deleteToken))
@@ -108,17 +110,18 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 
 // linkJSON is the wire representation of a link.
 type linkJSON struct {
-	Code        string `json:"code"`
-	URL         string `json:"url"`
-	Title       string `json:"title"`
-	Description string `json:"description"`
-	ExpiresAt   int64  `json:"expires_at"`
-	ClickCount  int64  `json:"click_count"`
-	CreatedAt   int64  `json:"created_at"`
-	UpdatedAt   int64  `json:"updated_at"`
+	Code        string   `json:"code"`
+	URL         string   `json:"url"`
+	Title       string   `json:"title"`
+	Description string   `json:"description"`
+	ExpiresAt   int64    `json:"expires_at"`
+	ClickCount  int64    `json:"click_count"`
+	CreatedAt   int64    `json:"created_at"`
+	UpdatedAt   int64    `json:"updated_at"`
+	URLs        []string `json:"urls"`
 }
 
-func toLinkJSON(l *store.Link) linkJSON {
+func toLinkJSON(l *store.Link, urls []string) linkJSON {
 	return linkJSON{
 		Code:        l.Code,
 		URL:         l.URL,
@@ -128,5 +131,6 @@ func toLinkJSON(l *store.Link) linkJSON {
 		ClickCount:  l.ClickCount,
 		CreatedAt:   l.CreatedAt,
 		UpdatedAt:   l.UpdatedAt,
+		URLs:        urls,
 	}
 }

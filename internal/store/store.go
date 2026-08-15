@@ -295,6 +295,26 @@ func (s *Store) ListLinks(ctx context.Context, opts ListOptions) ([]Link, int, e
 	return links, total, rows.Err()
 }
 
+// ListAllLinks returns every link, newest first (no pagination; used by
+// exports).
+func (s *Store) ListAllLinks(ctx context.Context) ([]Link, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT `+linkColumns+` FROM links ORDER BY created_at DESC, rowid DESC`)
+	if err != nil {
+		return nil, fmt.Errorf("list all links: %w", err)
+	}
+	defer rows.Close()
+	var links []Link
+	for rows.Next() {
+		l, err := scanLink(rows)
+		if err != nil {
+			return nil, fmt.Errorf("scan link: %w", err)
+		}
+		links = append(links, *l)
+	}
+	return links, rows.Err()
+}
+
 // isConstraint reports whether err is a SQLite uniqueness constraint violation
 // (primary key or unique index).
 func isConstraint(err error) bool {
