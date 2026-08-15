@@ -2,6 +2,7 @@ package api
 
 import (
 	"io"
+	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -28,7 +29,13 @@ func (s *Server) spaIndex(w http.ResponseWriter, r *http.Request) {
 // frontend build artifacts under /assets/. The two name spaces never
 // collide: uploaded names are fixed, build artifacts are hashed.
 func (s *Server) assetsHandler() http.Handler {
-	embedded := http.StripPrefix("/assets/", http.FileServer(http.FS(webui.Dist())))
+	// The embedded FS has the build output at its root (index.html,
+	// assets/...); serve the assets/ subtree from it.
+	assetsFS, err := fs.Sub(webui.Dist(), "assets")
+	if err != nil {
+		panic(err) // static embed layout; build-time invariant
+	}
+	embedded := http.StripPrefix("/assets/", http.FileServer(http.FS(assetsFS)))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		name := strings.TrimPrefix(r.URL.Path, "/assets/")
 		if name == "" {
