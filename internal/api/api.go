@@ -80,7 +80,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/v1/icon", s.requireAuth(s.uploadIcon))
 	mux.HandleFunc("DELETE /api/v1/icon", s.requireAuth(s.deleteIcon))
 	mux.HandleFunc("GET /api/v1/dashboard", s.requireAuth(s.dashboard))
-	mux.Handle("GET /assets/", http.StripPrefix("/assets/", http.FileServer(http.Dir(s.assetsDir))))
+	mux.Handle("GET /assets/", s.assetsHandler())
+	mux.HandleFunc("GET /admin", s.spaIndex)
+	mux.HandleFunc("GET /admin/{path...}", s.spaIndex)
 	mux.HandleFunc("GET /{code...}", s.redirect)
 	return mux
 }

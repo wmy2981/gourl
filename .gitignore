@@ -7,7 +7,7 @@ coverage.out
 # Node / frontend
 node_modules/
 frontend/dist/
-web/dist/
+internal/webui/dist/
 
 # Runtime data (SQLite, uploaded icons)
 data/

@@ -127,11 +127,16 @@ func TestRedirectNotFound(t *testing.T) {
 
 func TestRedirectReservedPrefixWins(t *testing.T) {
 	s, _ := newTestServer(t)
-	for _, path := range []string{"/api/anything", "/expired", "/admin/x", "/health"} {
+	for _, path := range []string{"/api/anything", "/expired", "/health"} {
 		rec := get(t, s, path, nil)
 		if rec.Code != http.StatusNotFound {
 			t.Errorf("%s status = %d, want 404 (reserved prefix)", path, rec.Code)
 		}
+	}
+	// /admin serves the SPA shell instead of being shadowed by short codes.
+	rec := get(t, s, "/admin/x", nil)
+	if rec.Code != http.StatusOK || !strings.Contains(strings.ToLower(rec.Body.String()), "<!doctype html>") {
+		t.Errorf("/admin/x status = %d, want SPA index", rec.Code)
 	}
 }
 
