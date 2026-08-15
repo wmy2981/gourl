@@ -7,21 +7,10 @@ import { setLanguage } from '../lib/i18n'
 
 function AppIcon({ size = 28 }: { size?: number }) {
   return (
-    <svg viewBox="0 0 64 64" width={size} height={size} aria-hidden>
-      <rect width="64" height="64" rx="14" fill="url(#gourl-g)" />
-      <path
-        d="M26 38 a6 6 0 0 1 0-12 l4-4 M38 26 a6 6 0 0 1 0 12 l-4 4"
-        stroke="#fff"
-        strokeWidth="5"
-        strokeLinecap="round"
-        fill="none"
-      />
-      <defs>
-        <linearGradient id="gourl-g" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#f59e0b" />
-          <stop offset="1" stopColor="#b45309" />
-        </linearGradient>
-      </defs>
+    <svg viewBox="0 0 24 24" width={size} height={size} aria-hidden>
+      <rect x="1" y="1" width="22" height="22" rx="6.5" fill="#7c3aed" />
+      <circle cx="11" cy="12" r="5.2" fill="none" stroke="#fff" strokeWidth="1.9" />
+      <path d="M15.5 9.6 19 12l-3.5 2.4z" fill="#fff" />
     </svg>
   )
 }
