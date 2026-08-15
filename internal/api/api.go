@@ -2,26 +2,40 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 
 	"github.com/wmy2981/gourl/internal/config"
 	"github.com/wmy2981/gourl/internal/counter"
+	"github.com/wmy2981/gourl/internal/fetcher"
 	"github.com/wmy2981/gourl/internal/store"
 )
 
-// Server wires handlers to the store, the live configuration and the Redis
-// click counter.
+// TitleFetcher retrieves a page's title and description.
+type TitleFetcher interface {
+	Fetch(ctx context.Context, rawURL string) (title, description string, err error)
+}
+
+// Server wires handlers to the store, the live configuration, the Redis
+// click counter and the title fetcher.
 type Server struct {
 	store   *store.Store
 	cfg     *config.Manager
 	counter *counter.Counter
+	fetcher TitleFetcher
 	now     func() int64 // injectable clock for tests
 }
 
 // NewServer creates a Server.
 func NewServer(st *store.Store, cfg *config.Manager, ctr *counter.Counter) *Server {
-	return &Server{store: st, cfg: cfg, counter: ctr, now: func() int64 { return timeNow() }}
+	return &Server{
+		store:   st,
+		cfg:     cfg,
+		counter: ctr,
+		fetcher: fetcher.New(fetcher.Options{}),
+		now:     func() int64 { return timeNow() },
+	}
 }
 
 // Handler returns the root HTTP handler. Explicit routes (api, admin, ...)

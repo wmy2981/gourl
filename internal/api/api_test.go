@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -36,8 +37,13 @@ func newTestServer(t *testing.T) (*Server, *miniredis.Miniredis) {
 
 	srv := NewServer(st, cfgMgr, counter.NewFromClient(rdb))
 	srv.now = func() int64 { return 1700000000 }
+	// Tests must never hit the network: default to a fetcher that fails
+	// quietly, matching the "no title available" path.
+	srv.fetcher = &mockFetcher{err: errNoFetch}
 	return srv, mr
 }
+
+var errNoFetch = errors.New("no network in tests")
 
 func do(t *testing.T, s *Server, method, path string, body any) *httptest.ResponseRecorder {
 	t.Helper()

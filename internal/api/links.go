@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -103,6 +104,8 @@ func (s *Server) createLink(w http.ResponseWriter, r *http.Request) {
 		CreatedAt: now,
 		UpdatedAt: now,
 	}
+	// Auto-fetch the title/description; a fetch failure never blocks creation.
+	s.attachMeta(r, link)
 	if err := s.store.CreateLink(r.Context(), link); err != nil {
 		if errors.Is(err, store.ErrTaken) {
 			writeError(w, http.StatusConflict, "code_taken", "code is already in use")
@@ -163,6 +166,11 @@ func (s *Server) updateLink(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		link.URL = *req.URL
+		// Changing the URL re-fetches the title/description, unless the
+		// caller overrides them explicitly in the same request.
+		if req.Title == nil && req.Description == nil {
+			s.attachMeta(r, link)
+		}
 	}
 	if req.Title != nil {
 		link.Title = *req.Title
@@ -227,3 +235,19 @@ func (s *Server) deleteLink(w http.ResponseWriter, r *http.Request) {
 // pathCode normalizes a multi-level code captured by {code...}: the wildcard
 // preserves leading slashes, strip them for DB lookups.
 func pathCode(code string) string { return strings.TrimPrefix(code, "/") }
+
+// attachMeta fetches title/description for the link's URL and stores them.
+// Fetch failures are logged and leave the meta empty; they never fail the
+// surrounding operation.
+func (s *Server) attachMeta(r *http.Request, link *store.Link) {
+	if s.fetcher == nil {
+		return
+	}
+	title, desc, err := s.fetcher.Fetch(r.Context(), link.URL)
+	if err != nil {
+		log.Printf("fetch meta for %s: %v", link.URL, err)
+		return
+	}
+	link.Title = title
+	link.Description = desc
+}
