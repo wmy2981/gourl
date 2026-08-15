@@ -35,9 +35,22 @@ func main() {
 		port = "8099"
 	}
 
-	cfg, err := config.NewManager(os.Getenv("E2E_CONFIG"))
+	// The config must live at a writable path: the settings page PUTs config
+	// changes back to it, and an empty path breaks the atomic write-back.
+	cfgPath := os.Getenv("E2E_CONFIG")
+	if cfgPath == "" {
+		tmp, err := os.CreateTemp("", "gourl-e2e-config-*.yaml")
+		if err != nil {
+			slog.Error("config temp file failed", "error", err)
+			os.Exit(1)
+		}
+		cfgPath = tmp.Name()
+		tmp.Close()
+		defer os.Remove(cfgPath)
+	}
+	cfg, err := config.NewManager(cfgPath)
 	if err != nil {
-		slog.Error("config load failed", "error", err)
+		slog.Error("config load failed", "path", cfgPath, "error", err)
 		os.Exit(1)
 	}
 	st, err := store.Open(":memory:")

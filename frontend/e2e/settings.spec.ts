@@ -24,7 +24,7 @@ test('saves site info and the change takes effect immediately', async ({ page, r
 test('adds and removes a blocked user agent', async ({ page }) => {
   await page.goto('/admin/settings')
   await page.getByPlaceholder('curl').fill('E2ESpyBot')
-  await page.getByRole('button', { name: 'Add' }).click()
+  await page.getByRole('button', { name: 'Add', exact: true }).click()
   await expect(page.getByText('E2ESpyBot')).toBeVisible()
 })
 
