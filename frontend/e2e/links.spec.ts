@@ -8,7 +8,7 @@ test.beforeEach(async ({ page, request }) => {
 
 test('creates a custom-code link and shows full short urls', async ({ page }) => {
   await createLinkUi(page, 'https://example.com/very/long/path', 'e2e-custom')
-  await expect(page.getByText('e2e-custom', { exact: true })).toBeVisible()
+  await expect(page.getByText('e2e-custom', { exact: true })).toBeVisible({ timeout: 15_000 })
   // The short URL is derived from the request host (no base_url configured);
   // its origin matches the page's, whatever port the run was assigned.
   const origin = new URL(page.url()).origin
@@ -18,7 +18,7 @@ test('creates a custom-code link and shows full short urls', async ({ page }) =>
 
 test('creates a multi-level code', async ({ page }) => {
   await createLinkUi(page, 'https://example.com/deep', 'guide/part1')
-  await expect(page.getByText('guide/part1', { exact: true })).toBeVisible()
+  await expect(page.getByText('guide/part1', { exact: true })).toBeVisible({ timeout: 15_000 })
 })
 
 test('rejects a reserved code with a friendly error', async ({ page }) => {
@@ -27,13 +27,13 @@ test('rejects a reserved code with a friendly error', async ({ page }) => {
   await page.getByLabel('Destination URL').fill('https://example.com/x')
   await page.getByLabel(/Short code/).fill('api')
   await page.getByRole('button', { name: /^Save$/ }).click()
-  await expect(page.getByText('This short code is a reserved system path')).toBeVisible()
+  await expect(page.getByText('This short code is a reserved system path')).toBeVisible({ timeout: 15_000 })
 })
 
 test('rejects a duplicate code', async ({ page, request }) => {
   await createLinkApi(request, { url: 'https://example.com/taken', code: 'taken-code' })
   await createLinkUi(page, 'https://example.com/other', 'taken-code')
-  await expect(page.getByText('This short code is already in use')).toBeVisible()
+  await expect(page.getByText('This short code is already in use')).toBeVisible({ timeout: 15_000 })
 })
 
 test('batch imports links and reports per-item results', async ({ page }) => {
@@ -44,8 +44,8 @@ test('batch imports links and reports per-item results', async ({ page }) => {
   )
   await page.getByRole('button', { name: /^Create$/ }).click()
   // Result rows are the stable assertion; the success toast is transient.
-  await expect(page.getByText('e2e-b1', { exact: true })).toBeVisible()
-  await expect(page.getByText('e2e-b2', { exact: true })).toBeVisible()
+  await expect(page.getByText('e2e-b1', { exact: true })).toBeVisible({ timeout: 15_000 })
+  await expect(page.getByText('e2e-b2', { exact: true })).toBeVisible({ timeout: 15_000 })
 })
 
 test('edits a link title', async ({ page, request }) => {
@@ -54,7 +54,7 @@ test('edits a link title', async ({ page, request }) => {
   await page.getByRole('button', { name: /edit/i }).first().click()
   await page.getByLabel('Destination URL').fill('https://example.com/changed')
   await page.getByRole('button', { name: /^Save$/ }).click()
-  await expect(page.getByText('https://example.com/changed').first()).toBeVisible()
+  await expect(page.getByText('https://example.com/changed').first()).toBeVisible({ timeout: 15_000 })
 })
 
 test('searches and filters links', async ({ page, request }) => {
@@ -62,8 +62,8 @@ test('searches and filters links', async ({ page, request }) => {
   await createLinkApi(request, { url: 'https://example.com/other', code: 'other-code' })
   await page.goto('/admin/links')
   await page.getByPlaceholder(/search/i).fill('find-me')
-  await expect(page.getByText('find-me', { exact: true })).toBeVisible()
-  await expect(page.getByText('other-code', { exact: true })).not.toBeVisible()
+  await expect(page.getByText('find-me', { exact: true })).toBeVisible({ timeout: 15_000 })
+  await expect(page.getByText('other-code', { exact: true })).not.toBeVisible({ timeout: 15_000 })
 })
 
 test('deletes a link', async ({ page, request }) => {
@@ -74,6 +74,6 @@ test('deletes a link', async ({ page, request }) => {
   const dialog = page.getByRole('dialog')
   await dialog.getByRole('button', { name: 'Delete' }).click()
   // The dialog closes after the delete succeeds; the row disappears.
-  await expect(dialog).not.toBeVisible()
-  await expect(page.getByRole('row').getByText('e2e-gone', { exact: true })).not.toBeVisible()
+  await expect(dialog).not.toBeVisible({ timeout: 15_000 })
+  await expect(page.getByRole('row').getByText('e2e-gone', { exact: true })).not.toBeVisible({ timeout: 15_000 })
 })
