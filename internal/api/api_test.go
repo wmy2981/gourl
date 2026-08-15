@@ -37,6 +37,14 @@ func newTestServer(t *testing.T) (*Server, *miniredis.Miniredis) {
 
 	srv := NewServer(st, cfgMgr, counter.NewFromClient(rdb))
 	srv.now = func() int64 { return 1700000000 }
+	srv.admin = newAdminAuth("test-password", "test-secret")
+	if testSession == nil {
+		tok, err := srv.admin.issueToken()
+		if err != nil {
+			t.Fatalf("issue test session: %v", err)
+		}
+		testSession = &http.Cookie{Name: sessionCookie, Value: tok}
+	}
 	// Tests must never hit the network: default to a fetcher that fails
 	// quietly, matching the "no title available" path.
 	srv.fetcher = &mockFetcher{err: errNoFetch}
@@ -45,20 +53,30 @@ func newTestServer(t *testing.T) (*Server, *miniredis.Miniredis) {
 
 var errNoFetch = errors.New("no network in tests")
 
+// testSession is a valid session cookie shared by all test servers (they
+// share the same test admin credentials), attached by do().
+var testSession *http.Cookie
+
+// bodyReader marshals a test body into a reader.
+func bodyReader(t *testing.T, body any) *bytes.Reader {
+	t.Helper()
+	if body == nil {
+		return bytes.NewReader(nil)
+	}
+	data, err := json.Marshal(body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return bytes.NewReader(data)
+}
+
 func do(t *testing.T, s *Server, method, path string, body any) *httptest.ResponseRecorder {
 	t.Helper()
-	var rd *bytes.Reader
-	if body != nil {
-		data, err := json.Marshal(body)
-		if err != nil {
-			t.Fatal(err)
-		}
-		rd = bytes.NewReader(data)
-	} else {
-		rd = bytes.NewReader(nil)
-	}
-	req := httptest.NewRequest(method, path, rd)
+	req := httptest.NewRequest(method, path, bodyReader(t, body))
 	req.Header.Set("Content-Type", "application/json")
+	if testSession != nil {
+		req.AddCookie(testSession)
+	}
 	rec := httptest.NewRecorder()
 	s.Handler().ServeHTTP(rec, req)
 	return rec
@@ -158,6 +176,9 @@ func TestCreateRejectsInvalidInputs(t *testing.T) {
 	// malformed JSON can't be marshaled by do(); send it raw.
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/links", strings.NewReader("{not json"))
 	req.Header.Set("Content-Type", "application/json")
+	if testSession != nil {
+		req.AddCookie(testSession)
+	}
 	rec := httptest.NewRecorder()
 	s.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusBadRequest || decodeError(t, rec) != "invalid_request" {

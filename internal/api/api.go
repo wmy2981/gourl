@@ -5,6 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"os"
+	"time"
 
 	"github.com/wmy2981/gourl/internal/config"
 	"github.com/wmy2981/gourl/internal/counter"
@@ -17,24 +19,39 @@ type TitleFetcher interface {
 	Fetch(ctx context.Context, rawURL string) (title, description string, err error)
 }
 
+// envOr returns the environment variable or a default.
+func envOr(key, def string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return def
+}
+
 // Server wires handlers to the store, the live configuration, the Redis
 // click counter and the title fetcher.
 type Server struct {
-	store   *store.Store
-	cfg     *config.Manager
-	counter *counter.Counter
-	fetcher TitleFetcher
-	now     func() int64 // injectable clock for tests
+	store     *store.Store
+	cfg       *config.Manager
+	counter   *counter.Counter
+	fetcher   TitleFetcher
+	admin     *adminAuth
+	assetsDir string
+	startTime time.Time
+	now       func() int64 // injectable clock for tests
 }
 
-// NewServer creates a Server.
+// NewServer creates a Server. Auth settings and the assets directory come
+// from the environment.
 func NewServer(st *store.Store, cfg *config.Manager, ctr *counter.Counter) *Server {
 	return &Server{
-		store:   st,
-		cfg:     cfg,
-		counter: ctr,
-		fetcher: fetcher.New(fetcher.Options{}),
-		now:     func() int64 { return timeNow() },
+		store:     st,
+		cfg:       cfg,
+		counter:   ctr,
+		fetcher:   fetcher.New(fetcher.Options{}),
+		admin:     newAdminAuth(os.Getenv("ADMIN_PASSWORD"), os.Getenv("SESSION_SECRET")),
+		assetsDir: envOr("ASSETS_DIR", "data/assets"),
+		startTime: time.Now(),
+		now:       func() int64 { return timeNow() },
 	}
 }
 
@@ -42,11 +59,14 @@ func NewServer(st *store.Store, cfg *config.Manager, ctr *counter.Counter) *Serv
 // always win over the short-code wildcard.
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /api/v1/links", s.listLinks)
-	mux.HandleFunc("POST /api/v1/links", s.createLink)
-	mux.HandleFunc("GET /api/v1/links/{code...}", s.getLink)
-	mux.HandleFunc("PATCH /api/v1/links/{code...}", s.updateLink)
-	mux.HandleFunc("DELETE /api/v1/links/{code...}", s.deleteLink)
+	mux.HandleFunc("POST /api/v1/auth/login", s.login)
+	mux.HandleFunc("POST /api/v1/auth/logout", s.logout)
+	mux.HandleFunc("GET /api/v1/health", s.health)
+	mux.HandleFunc("GET /api/v1/links", s.requireAuth(s.listLinks))
+	mux.HandleFunc("POST /api/v1/links", s.requireAuth(s.createLink))
+	mux.HandleFunc("GET /api/v1/links/{code...}", s.requireAuth(s.getLink))
+	mux.HandleFunc("PATCH /api/v1/links/{code...}", s.requireAuth(s.updateLink))
+	mux.HandleFunc("DELETE /api/v1/links/{code...}", s.requireAuth(s.deleteLink))
 	mux.HandleFunc("GET /{code...}", s.redirect)
 	return mux
 }
