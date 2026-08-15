@@ -1,0 +1,79 @@
+name: Build Docker Image
+
+# main 的镜像在 Release workflow 成功之后构建（workflow_run），确保构建时
+# checkout 到含新版本号的 release commit（push 并行触发会导致镜像版本号滞后）；
+# dev 分支的预发行/跳过由 push 直接构建 dev 镜像。
+on:
+  push:
+    branches: [dev]
+  workflow_run:
+    workflows: ["Release"]
+    types: [completed]
+    branches: [main]
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  IMAGE: ghcr.io/wmy2981/gourl
+
+jobs:
+  build-push:
+    runs-on: ubuntu-latest
+    # workflow_run 触发时仅在 Release 成功后才构建
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # workflow_run 时 checkout 到 Release 工作流的 head（含新版本号的提交）
+          ref: ${{ github.event.workflow_run.head_sha || github.ref }}
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set image tags
+        id: set-tag
+        run: |
+          VERSION=$(cat VERSION)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "sha7=${GITHUB_SHA:0:7}" >> "$GITHUB_OUTPUT"
+          {
+            echo "tags<<EOF"
+            if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+              # 正式版：latest + 当前版本号标签
+              echo "${{ env.IMAGE }}:v${VERSION}"
+              echo "${{ env.IMAGE }}:latest"
+            elif [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              # dev 上正式版号 = 即将在 main 发正式版，只推 dev 标签避免版本标签被抢占
+              echo "${{ env.IMAGE }}:dev"
+            else
+              # dev 预发行：dev + 当前版本号标签
+              echo "${{ env.IMAGE }}:v${VERSION}"
+              echo "${{ env.IMAGE }}:dev"
+            fi
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64, linux/arm64
+          push: true
+          tags: |
+            ${{ steps.set-tag.outputs.tags }}
+            ${{ env.IMAGE }}:${{ steps.set-tag.outputs.sha7 }}

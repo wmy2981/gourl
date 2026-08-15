@@ -1,0 +1,48 @@
+name: Release
+
+# 版本号不再自动生成：以根目录 VERSION 文件的版本为准（手动维护）。
+# main 分支推送 → 正式版发行（版本前进，无变化/倒退报错）；
+# dev 分支推送 → 预发行号前进时发预发行，正式版号前进时跳过（即将发正式版）；
+# 无变化跳过，倒退报错。发行说明范围：最后一个正式版 tag 到 HEAD。
+# 规则见 .github/scripts/release_check.py。
+on:
+  push:
+    branches: [main, dev]
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Check version and build release notes
+        id: check
+        run: python .github/scripts/release_check.py "${{ github.ref_name }}"
+
+      - name: Tag and publish
+        if: steps.check.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          git tag "v${{ steps.check.outputs.version }}"
+          git push origin "v${{ steps.check.outputs.version }}"
+          args=()
+          if [ "${{ steps.check.outputs.is_prerelease }}" = "true" ]; then
+            args+=(--prerelease)
+          fi
+          gh release create "v${{ steps.check.outputs.version }}" \
+            --title "v${{ steps.check.outputs.version }}" \
+            --notes-file .release-notes.md "${args[@]}"
