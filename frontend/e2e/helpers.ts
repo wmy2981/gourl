@@ -39,8 +39,9 @@ export async function createLinkApi(
   return (await res.json()) as Link
 }
 
-// Create a link through the UI form.
+// Create a link through the UI form (navigates to the links page first).
 export async function createLinkUi(page: Page, url: string, code?: string) {
+  await page.goto('/admin/links')
   await page.getByRole('button', { name: /new link/i }).click()
   await page.getByLabel('Destination URL').fill(url)
   if (code) {

@@ -185,7 +185,8 @@ def main() -> None:
         if last is None:
             action = "release"
         elif cur == last:
-            fail(f"版本号无变化：{version} 与已发版 tag v{fmt(last)} 相同")
+            # 版本无变化：不发版，成功退出（推送 main 不要求必须发版）
+            action = "skip"
         elif cur < last:
             fail(f"版本号倒退：{version} < 已发版 v{fmt(last)}")
         else:
