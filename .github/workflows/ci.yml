@@ -20,6 +20,11 @@ jobs:
           go-version: '1.26'
           cache: true
 
+      - name: Sync brand icon from single source
+        run: |
+          cp assets/favicon.svg frontend/src/assets/icon.svg
+          cp assets/favicon.svg internal/webui/icon.svg
+
       - name: Build frontend into embed location
         working-directory: frontend
         run: |
@@ -27,7 +32,6 @@ jobs:
           npm run build
           mkdir -p ../internal/webui
           cp -r dist ../internal/webui/dist
-          cp src/assets/icon.svg ../internal/webui/icon.svg
 
       - name: Go vet
         run: go vet ./...
@@ -81,13 +85,17 @@ jobs:
         working-directory: frontend
         run: npm ci --no-audit --no-fund
 
+      - name: Sync brand icon from single source
+        run: |
+          cp assets/favicon.svg frontend/src/assets/icon.svg
+          cp assets/favicon.svg internal/webui/icon.svg
+
       - name: Build frontend into embed location
         working-directory: frontend
         run: |
           npm run build
           mkdir -p ../internal/webui
           cp -r dist ../internal/webui/dist
-          cp src/assets/icon.svg ../internal/webui/icon.svg
 
       - name: Install Playwright Chromium
         working-directory: frontend

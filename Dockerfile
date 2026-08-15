@@ -9,6 +9,9 @@ RUN npm ci --no-audit --no-fund
 # which lands on the filesystem root.
 COPY VERSION /VERSION
 COPY frontend/ ./
+# Brand icon: single source of truth is assets/favicon.svg; the frontend
+# imports it from src/assets/icon.svg (generated location).
+COPY assets/favicon.svg ./src/assets/icon.svg
 RUN npm run build
 
 # ---------- go build ----------
@@ -19,6 +22,8 @@ RUN go mod download
 COPY . .
 # Frontend artifacts land in the embed location (relative to the webui package).
 COPY --from=frontend /app/dist ./internal/webui/dist
+# Brand icon for the Go embed (generated location, single source assets/favicon.svg).
+COPY assets/favicon.svg ./internal/webui/icon.svg
 RUN CGO_ENABLED=0 go build -trimpath \
     -ldflags "-s -w -X github.com/wmy2981/gourl/internal/version.Version=$(cat VERSION)" \
     -o /gourl ./cmd/gourl

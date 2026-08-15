@@ -1,14 +1,17 @@
-# Builds the frontend and copies the artifacts into web/dist, where the Go
-# binary embeds them. Run before `go build ./cmd/gourl`.
+# Builds the frontend and copies artifacts into the Go embed locations.
+# Run before `go build ./cmd/gourl` or `go test ./...`.
 $ErrorActionPreference = "Stop"
-Set-Location "$PSScriptRoot\..\frontend"
+Set-Location "$PSScriptRoot\.."
+
+# Single source of truth for the brand icon: assets/favicon.svg. Copy it to
+# the places the frontend (vite import) and backend (go:embed) need it.
+Copy-Item "assets\favicon.svg" "frontend\src\assets\icon.svg" -Force
+Copy-Item "assets\favicon.svg" "internal\webui\icon.svg" -Force
+
+Set-Location frontend
 npm ci --no-audit --no-fund
 npm run build
-# embed paths are relative to the Go package, so the artifacts land in
-# internal/webui/dist (embed cannot reach "..").
 $dist = "$PSScriptRoot\..\internal\webui\dist"
 if (Test-Path $dist) { Remove-Item $dist -Recurse -Force }
 Copy-Item -Recurse "dist" "$dist"
-# The brand icon lives in the frontend source; keep the embedded copy in sync.
-Copy-Item "src\assets\icon.svg" "$PSScriptRoot\..\internal\webui\icon.svg" -Force
 Write-Host "frontend artifacts copied to internal/webui/dist"
