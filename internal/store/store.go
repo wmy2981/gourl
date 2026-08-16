@@ -290,6 +290,53 @@ func (s *Store) DeleteLink(ctx context.Context, code string) error {
 	return tx.Commit()
 }
 
+// DeleteLinks removes many links in one transaction, returning how many rows
+// were actually deleted (absent codes are simply skipped). Daily click
+// records are deliberately kept, as in DeleteLink.
+func (s *Store) DeleteLinks(ctx context.Context, codes []string) (int64, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+	var deleted int64
+	for _, code := range codes {
+		res, err := tx.ExecContext(ctx, `DELETE FROM links WHERE code = ?`, code)
+		if err != nil {
+			return 0, fmt.Errorf("delete links: %w", err)
+		}
+		n, err := res.RowsAffected()
+		if err != nil {
+			return 0, err
+		}
+		deleted += n
+	}
+	return deleted, tx.Commit()
+}
+
+// CountExpired returns the number of links past their expiry (expires_at in
+// the past, never counting 0 = never expires).
+func (s *Store) CountExpired(ctx context.Context, now int64) (int64, error) {
+	var n int64
+	err := s.db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM links WHERE expires_at > 0 AND expires_at < ?`, now).Scan(&n)
+	if err != nil {
+		return 0, fmt.Errorf("count expired: %w", err)
+	}
+	return n, nil
+}
+
+// DeleteExpired removes every expired link in one transaction and returns
+// how many were deleted.
+func (s *Store) DeleteExpired(ctx context.Context, now int64) (int64, error) {
+	res, err := s.db.ExecContext(ctx,
+		`DELETE FROM links WHERE expires_at > 0 AND expires_at < ?`, now)
+	if err != nil {
+		return 0, fmt.Errorf("delete expired: %w", err)
+	}
+	return res.RowsAffected()
+}
+
 // ListLinks returns links matching the options plus the total count of matches.
 func (s *Store) ListLinks(ctx context.Context, opts ListOptions) ([]Link, int, error) {
 	if opts.Page < 1 {

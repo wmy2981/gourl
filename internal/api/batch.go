@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"sort"
@@ -15,20 +16,36 @@ import (
 // batchLimit caps links per import request.
 const batchLimit = 500
 
+// batchCreateRequest is the POST /api/v1/links/batch body. A legacy bare
+// array is also accepted (conflict = error).
+type batchCreateRequest struct {
+	// Conflict policy when an item's code already exists:
+	//   error (default) — the item fails with code_taken
+	//   skip             — the item is skipped (status "skipped")
+	//   update           — the existing link is updated with the item's fields
+	Conflict string             `json:"conflict"`
+	Items    []createLinkRequest `json:"items"`
+}
+
 // batchCreate handles POST /api/v1/links/batch. Each item is validated and
 // created independently; failures of one item never fail the others.
 func (s *Server) batchCreate(w http.ResponseWriter, r *http.Request) {
-	var items []createLinkRequest
-	if err := json.NewDecoder(r.Body).Decode(&items); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_request", "invalid JSON body")
+	req, err := decodeBatchRequest(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_request", err.Error())
 		return
 	}
+	items := req.Items
 	if len(items) == 0 {
 		writeError(w, http.StatusBadRequest, "invalid_request", "batch must not be empty")
 		return
 	}
 	if len(items) > batchLimit {
 		writeError(w, http.StatusBadRequest, "invalid_request", "batch exceeds 500 items")
+		return
+	}
+	if req.Conflict != "" && req.Conflict != "error" && req.Conflict != "skip" && req.Conflict != "update" {
+		writeError(w, http.StatusBadRequest, "invalid_request", "conflict must be error, skip or update")
 		return
 	}
 
@@ -47,12 +64,12 @@ func (s *Server) batchCreate(w http.ResponseWriter, r *http.Request) {
 	var valid []pending
 	for i, item := range items {
 		res := map[string]any{"index": i, "url": item.URL}
-		code, err := s.resolveCode(item, cfg)
-		if err != nil {
+		code, verr := s.resolveCode(item, cfg)
+		if verr != nil {
 			failed++
 			res["status"] = "error"
-			res["error_code"] = err.code
-			res["error_message"] = err.message
+			res["error_code"] = verr.code
+			res["error_message"] = verr.message
 			results = append(results, res)
 			continue
 		}
@@ -62,11 +79,21 @@ func (s *Server) batchCreate(w http.ResponseWriter, r *http.Request) {
 	links := make([]store.Link, len(valid))
 	for i, p := range valid {
 		links[i] = store.Link{
-			Code:      p.code,
-			URL:       p.item.URL,
-			ExpiresAt: p.item.ExpiresAt,
-			CreatedAt: now,
-			UpdatedAt: now,
+			Code:        p.code,
+			URL:         p.item.URL,
+			Title:       p.item.Title,
+			Description: p.item.Description,
+			CreatedAt:   now,
+			UpdatedAt:   now,
+		}
+		if p.item.ExpiresAt != nil {
+			links[i].ExpiresAt = int64(*p.item.ExpiresAt)
+		}
+		if p.item.ClickCount != nil {
+			links[i].ClickCount = *p.item.ClickCount
+		}
+		if p.item.CreatedAt != nil {
+			links[i].CreatedAt = *p.item.CreatedAt
 		}
 	}
 	errs, err := s.store.CreateLinks(r.Context(), links)
@@ -76,12 +103,27 @@ func (s *Server) batchCreate(w http.ResponseWriter, r *http.Request) {
 	}
 	for i, err := range errs {
 		res := map[string]any{"index": valid[i].index, "url": valid[i].item.URL}
-		if errors.Is(err, store.ErrTaken) {
+		switch {
+		case errors.Is(err, store.ErrTaken) && req.Conflict == "update":
+			// Refresh the existing link with the imported fields.
+			if uerr := s.applyConflictUpdate(r, valid[i].item, valid[i].code); uerr != nil {
+				failed++
+				res["status"] = "error"
+				res["error_code"] = "internal_error"
+				res["error_message"] = uerr.Error()
+			} else {
+				res["status"] = "updated"
+				res["code"] = valid[i].code
+			}
+		case errors.Is(err, store.ErrTaken) && req.Conflict == "skip":
+			res["status"] = "skipped"
+			res["code"] = valid[i].code
+		case errors.Is(err, store.ErrTaken):
 			failed++
 			res["status"] = "error"
 			res["error_code"] = "code_taken"
 			res["error_message"] = "code is already in use"
-		} else {
+		default:
 			created++
 			res["status"] = "created"
 			res["code"] = valid[i].code
@@ -103,6 +145,54 @@ func (s *Server) batchCreate(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// decodeBatchRequest accepts both the current object form
+// {"conflict": "...", "items": [...]} and the legacy bare-array form.
+func decodeBatchRequest(r *http.Request) (*batchCreateRequest, error) {
+	var raw json.RawMessage
+	if err := json.NewDecoder(r.Body).Decode(&raw); err != nil {
+		return nil, fmt.Errorf("invalid JSON body")
+	}
+	// Legacy form: a bare array of items.
+	if len(raw) > 0 && raw[0] == '[' {
+		var items []createLinkRequest
+		if err := json.Unmarshal(raw, &items); err != nil {
+			return nil, fmt.Errorf("invalid JSON body")
+		}
+		return &batchCreateRequest{Items: items}, nil
+	}
+	var req batchCreateRequest
+	if err := json.Unmarshal(raw, &req); err != nil {
+		return nil, fmt.Errorf("invalid JSON body")
+	}
+	return &req, nil
+}
+
+// applyConflictUpdate merges an imported item into the existing link.
+func (s *Server) applyConflictUpdate(r *http.Request, item createLinkRequest, code string) error {
+	link, err := s.store.GetLink(r.Context(), code)
+	if err != nil {
+		return err
+	}
+	link.URL = item.URL
+	if item.Title != "" {
+		link.Title = item.Title
+	}
+	if item.Description != "" {
+		link.Description = item.Description
+	}
+	if item.ExpiresAt != nil {
+		link.ExpiresAt = int64(*item.ExpiresAt)
+	}
+	if item.ClickCount != nil {
+		link.ClickCount = *item.ClickCount
+	}
+	if item.CreatedAt != nil {
+		link.CreatedAt = *item.CreatedAt
+	}
+	link.UpdatedAt = s.now()
+	return s.store.UpdateLink(r.Context(), link)
+}
+
 // codeError carries a per-item validation error.
 type codeError struct {
 	code    string
@@ -115,7 +205,7 @@ func (s *Server) resolveCode(item createLinkRequest, cfg *config.Config) (string
 	if !isAbsoluteHTTPURL(item.URL) {
 		return "", &codeError{"invalid_request", "url must be an absolute http(s) URL"}
 	}
-	if item.ExpiresAt < 0 {
+	if item.ExpiresAt != nil && *item.ExpiresAt < 0 {
 		return "", &codeError{"invalid_request", "expires_at must be >= 0"}
 	}
 	if item.Code == "" {

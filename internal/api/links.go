@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -54,11 +55,45 @@ func (s *Server) listLinks(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// createLinkRequest is the POST /api/v1/links body.
+// expiryValue accepts either a unix-seconds timestamp (number) or a
+// yyyy-mm-dd calendar date string (parsed at local midnight).
+type expiryValue int64
+
+func (e *expiryValue) UnmarshalJSON(b []byte) error {
+	if len(b) == 0 || string(b) == "null" {
+		return nil
+	}
+	var n json.Number
+	if err := json.Unmarshal(b, &n); err == nil {
+		i, err := n.Int64()
+		if err != nil {
+			return fmt.Errorf("expires_at: %w", err)
+		}
+		*e = expiryValue(i)
+		return nil
+	}
+	var s string
+	if err := json.Unmarshal(b, &s); err == nil {
+		t, err := time.ParseInLocation("2006-01-02", s, time.Local)
+		if err != nil {
+			return fmt.Errorf("expires_at must be a unix timestamp or yyyy-mm-dd")
+		}
+		*e = expiryValue(t.Unix())
+		return nil
+	}
+	return fmt.Errorf("expires_at must be a unix timestamp or yyyy-mm-dd")
+}
+
+// createLinkRequest is the POST /api/v1/links body. click_count/created_at
+// are honored on batch imports only (single creates ignore them).
 type createLinkRequest struct {
-	URL       string `json:"url"`
-	Code      string `json:"code"`
-	ExpiresAt int64  `json:"expires_at"`
+	URL         string       `json:"url"`
+	Code        string       `json:"code"`
+	Title       string       `json:"title"`
+	Description string       `json:"description"`
+	ExpiresAt   *expiryValue `json:"expires_at"`
+	ClickCount  *int64       `json:"click_count"`
+	CreatedAt   *int64       `json:"created_at"`
 }
 
 // createLink handles POST /api/v1/links.
@@ -72,7 +107,7 @@ func (s *Server) createLink(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_request", "url must be an absolute http(s) URL")
 		return
 	}
-	if req.ExpiresAt < 0 {
+	if req.ExpiresAt != nil && *req.ExpiresAt < 0 {
 		writeError(w, http.StatusBadRequest, "invalid_request", "expires_at must be >= 0")
 		return
 	}
@@ -99,11 +134,15 @@ func (s *Server) createLink(w http.ResponseWriter, r *http.Request) {
 
 	now := s.now()
 	link := &store.Link{
-		Code:      code,
-		URL:       req.URL,
-		ExpiresAt: req.ExpiresAt,
-		CreatedAt: now,
-		UpdatedAt: now,
+		Code:        code,
+		URL:         req.URL,
+		Title:       req.Title,
+		Description: req.Description,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}
+	if req.ExpiresAt != nil {
+		link.ExpiresAt = int64(*req.ExpiresAt)
 	}
 	if err := s.store.CreateLink(r.Context(), link); err != nil {
 		if errors.Is(err, store.ErrTaken) {
