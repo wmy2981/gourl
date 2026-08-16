@@ -266,7 +266,7 @@ export default function Links() {
                                     setUrlIdx((m) => ({ ...m, [link.code]: i }))
                                     closeUrlMenu()
                                   }}
-                                  className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs transition-colors ${
+                                  className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs transition-colors ${
                                     i === idx
                                       ? 'bg-accent-soft font-medium text-accent-deep dark:text-accent'
                                       : 'text-muted hover:bg-black/5 dark:hover:bg-white/10'
