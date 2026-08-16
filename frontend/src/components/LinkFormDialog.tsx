@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api, ApiError, type Link } from '../lib/api'
-import { Button, Dialog, Input, Label } from './ui'
+import { Button, Dialog, Input, Label, useToast } from './ui'
 
 export default function LinkFormDialog({
   link,
@@ -15,12 +15,12 @@ export default function LinkFormDialog({
   onSaved: () => void
 }) {
   const { t } = useTranslation()
+  const { toast } = useToast()
   const [url, setUrl] = useState('')
   const [code, setCode] = useState('')
   // Expiry as a calendar date (yyyy-mm-dd); empty means never expires.
   const [expiresDate, setExpiresDate] = useState('')
   const [busy, setBusy] = useState(false)
-  const [error, setError] = useState('')
 
   // unix seconds → local yyyy-mm-dd for the date input ('' when never).
   const toDate = (unix: number) => {
@@ -40,7 +40,6 @@ export default function LinkFormDialog({
       setUrl(link?.url ?? '')
       setCode(link?.code ?? '')
       setExpiresDate(toDate(link?.expires_at ?? 0))
-      setError('')
     }
   }, [open, link])
 
@@ -48,7 +47,6 @@ export default function LinkFormDialog({
     e.preventDefault()
     if (busy) return
     setBusy(true)
-    setError('')
     try {
       const expires = toUnix(expiresDate)
       if (link) {
@@ -60,7 +58,7 @@ export default function LinkFormDialog({
       onClose()
     } catch (err) {
       if (err instanceof ApiError) {
-        setError(
+        toast(
           err.code === 'code_taken'
             ? t('form.codeTaken')
             : err.code === 'reserved_code'
@@ -70,9 +68,10 @@ export default function LinkFormDialog({
                 : err.code === 'invalid_request'
                   ? t('form.invalidUrl')
                   : err.message,
+          'error',
         )
       } else {
-        setError(t('common.error'))
+        toast(t('common.error'), 'error')
       }
     } finally {
       setBusy(false)
@@ -111,7 +110,6 @@ export default function LinkFormDialog({
             onChange={(e) => setExpiresDate(e.target.value)}
           />
         </div>
-        {error && <p className="text-sm text-danger">{error}</p>}
         <div className="mt-1 flex justify-end gap-2">
           <Button type="button" variant="ghost" onClick={onClose}>
             {t('form.cancel')}

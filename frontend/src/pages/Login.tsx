@@ -3,28 +3,28 @@ import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { ArrowRight, KeyRound } from 'lucide-react'
 import { api, ApiError } from '../lib/api'
-import { Button, Input, Label } from '../components/ui'
+import { Button, Input, Label, useToast } from '../components/ui'
 
 export default function Login() {
   const { t } = useTranslation()
+  const { toast } = useToast()
   const navigate = useNavigate()
   const [password, setPassword] = useState('')
-  const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!password || busy) return
     setBusy(true)
-    setError('')
     try {
       await api.login(password)
       navigate('/admin', { replace: true })
     } catch (err) {
-      setError(
+      toast(
         err instanceof ApiError && err.code === 'auth_disabled'
           ? t('login.authDisabled')
           : t('login.wrongPassword'),
+        'error',
       )
     } finally {
       setBusy(false)
@@ -53,8 +53,6 @@ export default function Login() {
           autoFocus
           autoComplete="current-password"
         />
-
-        {error && <p className="mt-3 text-sm text-danger">{error}</p>}
 
         <Button type="submit" disabled={busy || !password} className="mt-5 w-full">
           {t('login.signIn')}

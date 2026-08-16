@@ -22,7 +22,6 @@ export default function ImportDialog({
   const { toast } = useToast()
   const fileRef = useRef<HTMLInputElement>(null)
   const [text, setText] = useState('')
-  const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
 
   // Load a .json or .csv file and turn it into the editable JSON textarea.
@@ -45,16 +44,14 @@ export default function ImportDialog({
         // .json (or unknown): keep the text as-is; submit validates it.
         setText(raw)
       }
-      setError('')
     } catch {
-      setError(t('form.invalidCode'))
+      toast(t('form.invalidCode'), 'error')
     }
   }
 
   const submit = async () => {
     if (busy) return
     setBusy(true)
-    setError('')
     try {
       const parsed = JSON.parse(text)
       if (!Array.isArray(parsed)) throw new Error('not an array')
@@ -66,11 +63,7 @@ export default function ImportDialog({
       onImported()
       onClose()
     } catch (err) {
-      if (err instanceof ApiError) {
-        setError(err.message)
-      } else {
-        setError(t('form.invalidCode'))
-      }
+      toast(err instanceof ApiError ? err.message : t('form.invalidCode'), 'error')
     } finally {
       setBusy(false)
     }
@@ -101,7 +94,6 @@ export default function ImportDialog({
         className="short-code"
         placeholder='[{"url": "https://example.com/1"}, {"url": "https://example.com/2", "code": "two"}]'
       />
-      {error && <p className="mt-3 text-sm text-danger">{error}</p>}
       <div className="mt-4 flex justify-end gap-2">
         <Button variant="ghost" onClick={onClose}>
           {t('form.cancel')}
