@@ -70,7 +70,9 @@ export default function Settings() {
   const iconInput = async (file: File | undefined) => {
     if (!file) return
     try {
-      await api.uploadIcon(file)
+      const res = await api.uploadIcon(file)
+      // Keep the page snapshot in sync so the reset button appears right away.
+      setForm((f) => (f ? { ...f, icon: res.icon } : f))
       toast(t('settings.saved'))
       queryClient.invalidateQueries({ queryKey: ['config'] })
     } catch (err) {
@@ -169,9 +171,14 @@ export default function Settings() {
             />
             {form.icon && (
               <Button variant="danger" onClick={async () => {
-                await api.deleteIcon()
-                toast(t('settings.saved'))
-                queryClient.invalidateQueries({ queryKey: ['config'] })
+                try {
+                  const res = await api.deleteIcon()
+                  setForm((f) => (f ? { ...f, icon: res.icon } : f))
+                  toast(t('settings.saved'))
+                  queryClient.invalidateQueries({ queryKey: ['config'] })
+                } catch (err) {
+                  toast(err instanceof ApiError ? err.message : t('settings.saveFailed'), 'error')
+                }
               }}>
                 {t('settings.removeIcon')}
               </Button>
