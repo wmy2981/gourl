@@ -78,12 +78,14 @@ export default function ImportDialog({
 
   return (
     <Dialog open={open} onClose={onClose} title={t('form.importTitle')} wide>
-      <div className="mb-3 flex items-center justify-between gap-2">
-        <p className="text-xs text-muted">{t('form.importHint')}</p>
-        <Button variant="outline" className="shrink-0" onClick={() => fileRef.current?.click()}>
-          <Upload size={14} />
-          {t('form.importFromFile')}
-        </Button>
+      <div className="mb-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-xs text-muted">{t('form.importHint')}</p>
+          <Button variant="outline" className="shrink-0" onClick={() => fileRef.current?.click()}>
+            <Upload size={14} />
+            {t('form.importFromFile')}
+          </Button>
+        </div>
         <input
           ref={fileRef}
           type="file"

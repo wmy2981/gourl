@@ -31,10 +31,21 @@ export default function Layout() {
   const location = useLocation()
   const { dark, toggle } = useTheme()
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [mobileClosing, setMobileClosing] = useState(false)
   // The configured service name drives the sidebar, top bar and footer text;
   // falls back to the brand name while the config is still loading.
   const { data: cfg } = useQuery({ queryKey: ['config'], queryFn: api.getConfig })
   const siteName = cfg?.site.name || __APP_NAME__
+
+  // Close plays the slide-out before unmounting the drawer.
+  const closeMobile = () => {
+    if (mobileClosing) return
+    setMobileClosing(true)
+    setTimeout(() => {
+      setMobileClosing(false)
+      setMobileOpen(false)
+    }, 220)
+  }
 
   const lang = (i18n.language ?? 'en').startsWith('zh') ? 'zh' : 'en'
   const switchLang = () => setLanguage(lang === 'zh' ? 'en' : 'zh')
@@ -49,9 +60,9 @@ export default function Layout() {
 
   const nav = (
     <nav className="flex flex-col gap-1">
-      <NavItem to="/admin" icon={<LayoutDashboard size={18} />} label={t('nav.dashboard')} onClick={() => setMobileOpen(false)} />
-      <NavItem to="/admin/links" icon={<Link2 size={18} />} label={t('nav.links')} onClick={() => setMobileOpen(false)} />
-      <NavItem to="/admin/settings" icon={<Settings size={18} />} label={t('nav.settings')} onClick={() => setMobileOpen(false)} />
+      <NavItem to="/admin" icon={<LayoutDashboard size={18} />} label={t('nav.dashboard')} onClick={closeMobile} />
+      <NavItem to="/admin/links" icon={<Link2 size={18} />} label={t('nav.links')} onClick={closeMobile} />
+      <NavItem to="/admin/settings" icon={<Settings size={18} />} label={t('nav.settings')} onClick={closeMobile} />
     </nav>
   )
 
@@ -94,7 +105,7 @@ export default function Layout() {
   return (
     <div className="flex min-h-screen">
       {/* Desktop sidebar */}
-      <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-hairline bg-white/50 p-5 backdrop-blur-xl dark:bg-white/[0.04] md:flex">
+      <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col overflow-y-auto border-r border-hairline bg-white/50 p-5 backdrop-blur-xl dark:bg-white/[0.04] md:flex">
         {sidebarContent}
       </aside>
 
@@ -108,11 +119,18 @@ export default function Layout() {
           <Menu size={20} />
         </button>
       </div>
-      {mobileOpen && (
+      {(mobileOpen || mobileClosing) && (
         <div className="fixed inset-0 z-50 md:hidden">
-          <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={() => setMobileOpen(false)} />
-          <div className="absolute inset-y-0 right-0 flex w-64 flex-col bg-canvas p-5 shadow-2xl dark:bg-canvas-dark">
-            <button onClick={() => setMobileOpen(false)} className="mb-4 self-end rounded-lg p-1.5" aria-label="Close">
+          <div
+            className={`absolute inset-0 bg-black/30 backdrop-blur-sm ${mobileClosing ? 'animate-backdrop-out' : 'animate-backdrop-in'}`}
+            onClick={closeMobile}
+          />
+          <div
+            className={`absolute inset-y-0 right-0 flex w-64 flex-col overflow-y-auto bg-canvas p-5 shadow-2xl dark:bg-canvas-dark ${
+              mobileClosing ? 'animate-slide-out-right' : 'animate-slide-in-right'
+            }`}
+          >
+            <button onClick={closeMobile} className="mb-4 self-end rounded-lg p-1.5" aria-label="Close">
               <X size={20} />
             </button>
             {sidebarContent}
