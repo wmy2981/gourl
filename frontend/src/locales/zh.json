@@ -1,7 +1,9 @@
 {
   "app": {
     "name": "gourl",
-    "tagline": "轻量短链接"
+    "tagline": "轻量短链接",
+    "light": "浅色",
+    "dark": "深色"
   },
   "nav": {
     "dashboard": "仪表盘",
@@ -22,7 +24,8 @@
     "totalClicks": "总点击量",
     "clicksToday": "今日点击",
     "trend": "点击趋势 — 最近 14 天",
-    "empty": "暂无点击。创建链接并分享吧！"
+    "empty": "暂无点击",
+    "clicks": "点击"
   },
   "links": {
     "heading": "链接管理",
@@ -42,7 +45,7 @@
     "edit": "编辑",
     "delete": "删除",
     "deleteConfirm": "确认删除该链接？此操作不可撤销。",
-    "empty": "暂无链接，创建第一个吧。",
+    "empty": "暂无链接。",
     "page": "第",
     "of": "页 / 共",
     "total": "条",

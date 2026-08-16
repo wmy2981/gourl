@@ -1,7 +1,9 @@
 {
   "app": {
     "name": "gourl",
-    "tagline": "Lightweight short links"
+    "tagline": "Lightweight short links",
+    "light": "Light",
+    "dark": "Dark"
   },
   "nav": {
     "dashboard": "Dashboard",
@@ -22,7 +24,8 @@
     "totalClicks": "Total clicks",
     "clicksToday": "Clicks today",
     "trend": "Clicks — last 14 days",
-    "empty": "No clicks yet. Create a link and share it!"
+    "empty": "No clicks yet.",
+    "clicks": "Clicks"
   },
   "links": {
     "heading": "Links",
@@ -42,7 +45,7 @@
     "edit": "Edit",
     "delete": "Delete",
     "deleteConfirm": "Delete this link? This cannot be undone.",
-    "empty": "No links yet. Create your first one.",
+    "empty": "No links yet.",
     "page": "Page",
     "of": "of",
     "total": "total",
