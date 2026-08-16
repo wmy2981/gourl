@@ -22,6 +22,9 @@ services:
       # REDIS_ADDR: redis:6379
       # Local timezone: daily click buckets and expires_at are interpreted in it.
       TZ: ${TZ:-Asia/Shanghai}
+      # Rotating log files land in ./data/log on the host (persisted with the
+      # data volume, size-rotated with lumberjack).
+      LOG_DIR: /app/data/log
     volumes:
       # Directory mounts only: Docker creates missing file mounts as
       # directories, which would break CONFIG_PATH. Writable so the settings
