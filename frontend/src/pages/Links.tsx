@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import {
   Check,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Copy,
@@ -41,6 +42,9 @@ export default function Links() {
   const [importOpen, setImportOpen] = useState(false)
   const [deleting, setDeleting] = useState<Link | null>(null)
   const [copied, setCopied] = useState('')
+  // Per-link pick of which base URL is shown/copied; defaults to the first.
+  const [urlIdx, setUrlIdx] = useState<Record<string, number>>({})
+  const [urlMenu, setUrlMenu] = useState<string | null>(null)
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['links', query, page],
@@ -167,7 +171,10 @@ export default function Links() {
               </tr>
             </thead>
             <tbody>
-              {data.links.map((link) => (
+              {data.links.map((link) => {
+                const idx = urlIdx[link.code] ?? 0
+                const current = link.urls[idx] ?? link.urls[0]
+                return (
                 <tr key={link.code} className="border-b border-hairline/60 last:border-0 hover:bg-black/[0.02] dark:hover:bg-white/[0.03]">
                   <td className="px-5 py-3">
                     <div className="flex items-center gap-1.5">
@@ -179,9 +186,9 @@ export default function Links() {
                         <QrCode size={15} />
                       </button>
                       <span className="short-code font-medium">{link.code}</span>
-                      {link.urls[0] && (
+                      {current && (
                         <button
-                          onClick={() => copy(link.code, link.urls[0])}
+                          onClick={() => copy(link.code, current)}
                           title={t('links.copy')}
                           className="rounded-md p-1 text-muted transition-colors hover:bg-accent-soft hover:text-accent-deep dark:hover:text-accent"
                         >
@@ -189,9 +196,40 @@ export default function Links() {
                         </button>
                       )}
                     </div>
-                    {link.urls[0] && (
-                      <div className="mt-0.5 max-w-[240px] truncate text-xs text-muted">
-                        {link.urls[0]}
+                    {current && (
+                      <div className="relative mt-0.5">
+                        <button
+                          onClick={() => setUrlMenu(urlMenu === link.code ? null : link.code)}
+                          aria-label={t('links.pickBaseUrl')}
+                          className="flex max-w-[240px] items-center gap-1 text-xs text-muted transition-colors hover:text-accent-deep dark:hover:text-accent"
+                        >
+                          <span className="truncate">{current}</span>
+                          {link.urls.length > 1 && <ChevronDown size={12} className="shrink-0 opacity-60" />}
+                        </button>
+                        {urlMenu === link.code && link.urls.length > 1 && (
+                          <>
+                            <div className="fixed inset-0 z-30" onClick={() => setUrlMenu(null)} />
+                            <div className="absolute left-0 top-full z-40 mt-1 w-80 rounded-xl border border-hairline bg-white p-1 shadow-[0_12px_40px_rgba(0,0,0,0.18)] dark:bg-[#1c1c1e]">
+                              {link.urls.map((u, i) => (
+                                <button
+                                  key={u}
+                                  onClick={() => {
+                                    setUrlIdx((m) => ({ ...m, [link.code]: i }))
+                                    setUrlMenu(null)
+                                  }}
+                                  className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs transition-colors ${
+                                    i === idx
+                                      ? 'bg-accent-soft font-medium text-accent-deep dark:text-accent'
+                                      : 'text-muted hover:bg-black/5 dark:hover:bg-white/10'
+                                  }`}
+                                >
+                                  <span className="min-w-0 flex-1 truncate">{u}</span>
+                                  {i === idx && <Check size={12} className="shrink-0" />}
+                                </button>
+                              ))}
+                            </div>
+                          </>
+                        )}
                       </div>
                     )}
                     {link.title && <div className="mt-0.5 max-w-[240px] truncate text-xs text-muted/80">{link.title}</div>}
@@ -226,7 +264,8 @@ export default function Links() {
                     </div>
                   </td>
                 </tr>
-              ))}
+                )
+              })}
             </tbody>
           </table>
 
