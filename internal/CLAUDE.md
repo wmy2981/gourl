@@ -12,13 +12,13 @@ Subdirectory instructions for the Go backend packages. Root-level conventions (c
 ## Package map (what lives where)
 
 - `config` — YAML business config; `Manager.Update` writes back atomically and hot-swaps (settings page uses it). Add new config fields with both `yaml` and `json` tags. **`Get()` normalizes slice fields to empty (not nil) slices — JSON must never emit `null` arrays (the frontend crashed on `null.join()` once)**
-- `store` — SQLite (modernc.org/sqlite, **no CGO**). Schema migrations are the ordered `migrations` slice; add new tables there, never raw DDL
+- `store` — SQLite (modernc.org/sqlite, **no CGO**). Schema migrations are the ordered `migrations` slice; add new tables there, never raw DDL. **`daily_clicks` is permanent history**: `DeleteLink` must not remove it (dashboard totals/trend sum the daily table, so clicks survive link deletion)
 - `counter` — Redis click buffer + 30s `Flusher` (GETDEL → ApplyCounts → INCRBY add-back on failure). Keys: `counter:{code}` / `counter:{code}:{date}`
 - `shortcode` — base62 random codes, multi-level validation, **`builtinReserved` prefixes** (`api`, `admin`, `docs`, …). New system routes MUST be added here or short codes can shadow them
-- `api` — stdlib `net/http` mux (Go 1.22+ patterns, `{code...}` wildcards). Multi-level codes come from `PathValue` with possible leading slash — always route through `pathCode()`
+- `api` — stdlib `net/http` mux (Go 1.22+ patterns, `{code...}` wildcards). Multi-level codes come from `PathValue` with possible leading slash — always route through `pathCode()`. **`ua_blocks` is a regular config field** — the settings page PUTs it wholesale; `/api/v1/ua-blocks` stays for programmatic use (updating one field still means `cfg.Get()` → mutate → `cfg.Update`)
 - `fetcher` — title/description scraping with SSRF checks (private ranges, per-hop validation, 5s timeout, 1 MiB cap)
 - `webui` — go:embed of frontend dist + swagger-ui + `openapi.yaml` + icon. **Adding a new API endpoint means updating `openapi.yaml` too**
-- `logx` — slog setup, 4 levels, `LOG_LEVEL`/`LOG_FORMAT` env. Log in English; use `slog.Warn`/`Error` for failures, never plain `log.Printf`
+- `logx` — slog setup, 4 levels, `LOG_LEVEL`/`LOG_FORMAT`/`LOG_DIR` env. `LOG_DIR` mirrors logs to a lumberjack-rotated file (10MB × 5 × 30d, gzip) on the mounted volume; stderr stays in the chain. `Close()` releases the file handle. Log in English; use `slog.Warn`/`Error` for failures, never plain `log.Printf`
 
 ## Testing conventions
 

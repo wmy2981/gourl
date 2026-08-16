@@ -26,7 +26,9 @@ The full design is in [DESIGN.md](DESIGN.md) (Chinese). **It is the single sourc
 ## Engineering Rules
 
 - Go: stdlib only for HTTP; `modernc.org/sqlite` (no CGO — multi-platform builds); gofmt + go vet clean
-- Logging: `log/slog` via `internal/logx` — 4 levels (debug/info/warning/error), `LOG_LEVEL`/`LOG_FORMAT` env, English messages only, no i18n
+- Logging: `log/slog` via `internal/logx` — 4 levels (debug/info/warning/error), `LOG_LEVEL`/`LOG_FORMAT`/`LOG_DIR` env (LOG_DIR mirrors logs to a rotating file on the mounted volume, e.g. `/app/data/log`), English messages only, no i18n
+- Click stats are **permanent history**: totals/trend sum the `daily_clicks` table and link deletion keeps them — never "clean up" click records when deleting links
+- UA block patterns are **config-managed** (`config.yaml` `ua_blocks`, comma-separated in the settings form); the `/api/v1/ua-blocks` API remains for programmatic use
 - All user-facing strings (API errors, UI copy) are bilingual zh/en; site info fields in `config.yaml` are single-language
 - No local Docker builds or deployments — images are built and pushed to GHCR (`ghcr.io/wmy2981/gourl`) exclusively by GitHub Actions workflows
 - Reserved short-code prefixes (`api`, `admin`, `docs`, …) live in `internal/shortcode`; new system routes must be added there

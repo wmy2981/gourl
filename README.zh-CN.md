@@ -13,15 +13,17 @@
 - **短链接生成** — 自定义短码或自动生成，支持多级路径（`link1/link2`），位数可配置
 - **链接管理** — 现代化管理后台（苹果风玻璃拟态、响应式、深色模式）
 - **延迟计数** — 点击先入 Redis，每 30s 批量归并 SQLite，抗高并发尖峰
+- **历史保留** — 短链删除后，点击总数与趋势图统计依然保留
 - **自动获取标题** — 创建链接时自动抓取 title/description，带 SSRF 全面防护
-- **UA 屏蔽** — 管理员可定义 User-Agent 规则，命中返回 403 且不计点击
+- **UA 屏蔽** — User-Agent 规则（设置页逗号分隔），命中返回 403 且不计点击
 - **短链有效期** — 每条链接可设 `expires_at`（0 为永不过期），过期展示优雅双语提示页
 - **REST API** — 完整 JSON API，Bearer Token 认证，便于二次开发
-- **自定义站点** — 服务名称、标题、关键词、header/footer、上传图标（SVG/PNG）
+- **自定义站点** — 服务名称、标题、关键词、header/footer、上传图标（SVG/PNG，一键恢复默认）
+- **多基址** — 附加基址并排展示，链接行可选择展示或复制的基址
 - **中英文双语** — 自动检测浏览器语言，页内可手动切换
-- **二维码、CSV 导出、批量导入**
+- **二维码、CSV/JSON 导出、批量导入** — 粘贴 JSON 或加载 `.csv`/`.json` 文件
 - **API 文档** — `/docs/` 交互式 Swagger UI
-- **结构化日志** — slog 4 级（debug/info/warning/error），文本或 JSON 输出
+- **结构化日志** — slog 4 级（debug/info/warning/error），文本或 JSON 输出，可镜像到数据卷轮转文件
 
 ## 技术栈
 
@@ -45,7 +47,7 @@ docker compose up -d
 ```
 
 访问 http://localhost:8080 会自动跳转管理后台。数据（SQLite、上传图标、
-内置 Redis 的 rdb）持久化在 `./data`，配置在 `./config`（设置页会写回其中）。
+内置 Redis 的 rdb、轮转日志）持久化在 `./data`，配置在 `./config`（设置页会写回其中）。
 
 镜像由 GitHub Actions 构建发布到 [GHCR](https://github.com/wmy2981/gourl/pkgs/container/gourl)：
 `ghcr.io/wmy2981/gourl:latest`（正式版，main 分支）或 `:dev`（预发行）。
@@ -65,9 +67,10 @@ docker compose up -d
 | `TZ` | 容器默认 | 每日统计切日与过期时间按此时区解释 |
 | `LOG_LEVEL` | `info` | `debug` / `info` / `warning` / `error` |
 | `LOG_FORMAT` | `text` | `json` 结构化输出（日志走 stderr） |
+| `LOG_DIR` | — | 可选：日志镜像写入该目录的轮转文件（如挂载卷 `/app/data/log`；10 MB × 5 份 × 30 天，gzip） |
 
 业务配置在 `config.yaml`（见 `config.yaml.example`）：服务名称/标题/关键词/描述/
-header/footer、随机短码位数、主 + 附加基址、额外保留字、自定义图标。
+header/footer、随机短码位数、主 + 附加基址、额外保留字、UA 屏蔽规则、自定义图标。
 
 ## API 文档
 
@@ -87,8 +90,9 @@ header/footer、随机短码位数、主 + 附加基址、额外保留字、自�
 | POST | `/api/v1/links/batch` | 批量导入（单次 ≤500 条） |
 | GET/PATCH/DELETE | `/api/v1/links/{code}` | 详情 / 更新 / 删除 |
 | GET | `/api/v1/links/{code}/stats` | 总数 + 每日点击 |
-| GET | `/api/v1/export.csv` | 导出全部链接 |
-| GET/POST/DELETE | `/api/v1/ua-blocks` | 屏蔽的 User-Agent |
+| GET | `/api/v1/export.csv` | 导出全部链接（CSV） |
+| GET | `/api/v1/export.json` | 导出全部链接（JSON） |
+| GET/POST/DELETE | `/api/v1/ua-blocks` | 屏蔽的 User-Agent（程序化使用；设置页经 config 管理） |
 | GET/POST/DELETE | `/api/v1/tokens` | API Token |
 | GET/PUT | `/api/v1/config` | 站点配置（热生效，写回 YAML） |
 | POST/DELETE | `/api/v1/icon` | 自定义图标上传 / 恢复默认 |
