@@ -30,7 +30,9 @@ func (s *Server) favicon(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	w.Header().Set("Content-Type", "image/svg+xml")
-	w.Header().Set("Cache-Control", "public, max-age=3600")
+	// Revalidate every time: uploading a custom icon must show up in the
+	// browser tab without waiting out a long cache window.
+	w.Header().Set("Cache-Control", "no-cache")
 	_, _ = w.Write(webui.DefaultIcon())
 }
 

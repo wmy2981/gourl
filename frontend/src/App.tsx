@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { api } from './lib/api'
 import Layout from './components/Layout'
@@ -16,17 +17,15 @@ if (savedTheme === 'dark' || (!savedTheme && prefersDark)) {
 }
 
 export default function App() {
+  const { data: cfg } = useQuery({ queryKey: ['config'], queryFn: api.getConfig })
+
   useEffect(() => {
-    // The site title from the admin config drives the browser tab; fall
-    // back to the brand name when the API is unreachable.
-    document.title = 'gourl'
-    api
-      .getConfig()
-      .then((cfg) => {
-        if (cfg.site.title) document.title = cfg.site.title
-      })
-      .catch(() => {})
-  }, [])
+    // The site title drives the browser tab; the favicon follows the uploaded
+    // custom icon (the query string cache-busts so the tab updates at once).
+    document.title = cfg?.site.title || 'gourl'
+    const link = document.querySelector<HTMLLinkElement>('link[rel="icon"]')
+    if (link) link.href = `/favicon.svg?t=${cfg?.icon ? 'custom' : 'default'}`
+  }, [cfg])
 
   return (
     <ToastProvider>
