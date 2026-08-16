@@ -50,6 +50,14 @@ jobs:
           VERSION=$(cat VERSION)
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "sha7=${GITHUB_SHA:0:7}" >> "$GITHUB_OUTPUT"
+          # Dev images embed "VERSION (sha7)" so the running build is
+          # identifiable via /api/v1/health and the footer; main keeps the
+          # plain version.
+          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            echo "verstr=$VERSION" >> "$GITHUB_OUTPUT"
+          else
+            echo "verstr=$VERSION (${GITHUB_SHA:0:7})" >> "$GITHUB_OUTPUT"
+          fi
           {
             echo "tags<<EOF"
             if [ "${{ github.ref }}" = "refs/heads/main" ]; then
@@ -73,6 +81,8 @@ jobs:
           context: .
           platforms: linux/amd64, linux/arm64
           push: true
+          build-args: |
+            VERSION_STR=${{ steps.set-tag.outputs.verstr }}
           tags: |
             ${{ steps.set-tag.outputs.tags }}
             ${{ env.IMAGE }}:${{ steps.set-tag.outputs.sha7 }}
