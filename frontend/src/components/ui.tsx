@@ -214,6 +214,17 @@ export function Dialog({
     return () => window.removeEventListener('keydown', onKey)
   }, [open, onClose])
 
+  // Scroll lock: while a dialog is up (including its exit animation) the
+  // page behind must not scroll — dialogs are focused surfaces.
+  useEffect(() => {
+    if (!rendered) return
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = prev
+    }
+  }, [rendered])
+
   if (!rendered) return null
   return (
     // Outer scroller keeps tall dialogs reachable at the top (max-h centering
