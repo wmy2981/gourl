@@ -48,7 +48,8 @@
     "total": "条",
     "noResults": "没有匹配的结果。",
     "exportJson": "导出 JSON",
-    "deleted": "已删除"
+    "deleted": "已删除",
+    "pickBaseUrl": "选择展示或复制的基址"
   },
   "form": {
     "url": "目标 URL",
@@ -88,12 +89,13 @@
     "extraBaseUrlsHint": "每行一个",
     "addExtra": "添加基址",
     "reservedCodes": "额外保留字",
-    "reservedCodesHint": "每行一个，例如 ops",
+    "reservedCodesHint": "逗号分隔，例如 ops",
     "icon": "图标",
     "uploadIcon": "上传 SVG/PNG",
     "removeIcon": "恢复默认",
     "uaBlocks": "屏蔽的 User-Agent",
-    "uaBlockHint": "大小写不敏感子串，每行一个，例如 Googlebot",
+    "uaBlockHint": "大小写不敏感子串，逗号分隔，例如 Googlebot",
+    "uaPlaceholder": "curl, Googlebot",
     "addUaBlock": "添加",
     "tokens": "API Token",
     "tokensHint": "完整 Token 仅在创建时展示一次",
@@ -115,6 +117,6 @@
     "cancel": "取消"
   },
   "footer": {
-    "openSource": "GitHub 开源"
+    "openSource": "Github"
   }
 }
