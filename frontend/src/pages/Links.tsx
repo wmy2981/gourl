@@ -431,7 +431,7 @@ export default function Links() {
           </table>
 
           {totalPages > 1 && (
-            <div className="flex items-center justify-between border-t border-hairline px-5 py-3 text-sm text-muted">
+            <div className="sticky left-0 flex items-center justify-between border-t border-hairline bg-white/90 px-5 py-3 text-sm text-muted backdrop-blur-xl dark:bg-[#161617]/90">
               <span>
                 {t('links.page')} {page} {t('links.of')} {totalPages} · {data.total} {t('links.total')}
               </span>
