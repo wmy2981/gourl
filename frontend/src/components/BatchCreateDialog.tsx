@@ -113,10 +113,7 @@ export default function BatchCreateDialog({
             id="batch-lines"
             rows={8}
             value={text}
-            onChange={(e) => {
-              setText(e.target.value)
-              setFailures([])
-            }}
+            onChange={(e) => setText(e.target.value)}
             className="short-code"
             placeholder="[mycode](2030/12/31)https://example.com/page"
           />
