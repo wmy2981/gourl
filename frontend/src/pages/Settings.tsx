@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { KeyRound, ShieldOff, Trash2, Upload } from 'lucide-react'
+import { KeyRound, Trash2, Upload } from 'lucide-react'
 import { api, ApiError, type AppConfig } from '../lib/api'
 import { Button, Card, Input, Label, Textarea, useToast } from '../components/ui'
 
@@ -14,7 +14,7 @@ export default function Settings() {
   const [form, setForm] = useState<AppConfig | null>(null)
   const [extraUrlsText, setExtraUrlsText] = useState('')
   const [reservedText, setReservedText] = useState('')
-  const [uaPattern, setUaPattern] = useState('')
+  const [uaText, setUaText] = useState('')
   const [tokenNote, setTokenNote] = useState('')
   const [newToken, setNewToken] = useState('')
 
@@ -22,7 +22,8 @@ export default function Settings() {
     if (cfg && !form) {
       setForm(cfg)
       setExtraUrlsText(cfg.extra_base_urls.join('\n'))
-      setReservedText(cfg.reserved_codes.join('\n'))
+      setReservedText(cfg.reserved_codes.join(', '))
+      setUaText(cfg.ua_blocks.join(', '))
     }
   }, [cfg, form])
 
@@ -47,13 +48,20 @@ export default function Settings() {
 
   const save = () => {
     saveMutation.mutate({
-      ...form,
+      site: form.site,
+      short_code_length: form.short_code_length,
+      base_url: form.base_url,
+      icon: form.icon,
       extra_base_urls: extraUrlsText
         .split('\n')
         .map((s) => s.trim())
         .filter(Boolean),
       reserved_codes: reservedText
-        .split('\n')
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean),
+      ua_blocks: uaText
+        .split(',')
         .map((s) => s.trim())
         .filter(Boolean),
     })
@@ -172,26 +180,21 @@ export default function Settings() {
           </div>
         </Card>
 
-        {/* UA blocks */}
-        <UABlockSection
-          uaPattern={uaPattern}
-          setUaPattern={setUaPattern}
-          add={async () => {
-            try {
-              const patterns = uaPattern
-                .split('\n')
-                .map((s) => s.trim())
-                .filter(Boolean)
-              for (const p of patterns) {
-                await api.addUABlock(p)
-              }
-              setUaPattern('')
-              queryClient.invalidateQueries({ queryKey: ['ua-blocks'] })
-            } catch (err) {
-              toast(err instanceof ApiError ? err.message : t('common.error'), 'error')
-            }
-          }}
-        />
+        {/* UA blocks: like extra base urls and reserved codes, the list is
+            edited here and applied by the save button */}
+        <Card className="p-6">
+          <h2 className="mb-1 text-sm font-medium text-muted">{t('settings.uaBlocks')}</h2>
+          <p className="mb-4 text-xs text-muted">{t('settings.uaBlockHint')}</p>
+          {/* Unconditional: block rules never expire, whether any exist yet or not. */}
+          <p className="mb-4 text-xs text-muted">{t('common.never')}</p>
+          <Textarea
+            rows={3}
+            value={uaText}
+            onChange={(e) => setUaText(e.target.value)}
+            placeholder={t('settings.uaPlaceholder')}
+            aria-label="UA patterns"
+          />
+        </Card>
 
         {/* API tokens */}
         <TokenSection
@@ -217,54 +220,6 @@ export default function Settings() {
         </div>
       </div>
     </div>
-  )
-}
-
-function UABlockSection({
-  uaPattern,
-  setUaPattern,
-  add,
-}: {
-  uaPattern: string
-  setUaPattern: (v: string) => void
-  add: () => void
-}) {
-  const { t } = useTranslation()
-  const queryClient = useQueryClient()
-  const { data } = useQuery({ queryKey: ['ua-blocks'], queryFn: api.uaBlocks })
-
-  return (
-    <Card className="p-6">
-      <h2 className="mb-1 text-sm font-medium text-muted">{t('settings.uaBlocks')}</h2>
-      <p className="mb-4 text-xs text-muted">{t('settings.uaBlockHint')}</p>
-      {/* Unconditional: block rules never expire, whether any exist yet or not. */}
-      <p className="mb-4 text-xs text-muted">{t('common.never')}</p>
-      <div className="flex flex-col gap-2">
-        {data?.ua_blocks.map((b) => (
-          <div key={b.id} className="flex items-center justify-between rounded-xl border border-hairline px-3.5 py-2">
-            <span className="short-code text-sm">{b.pattern}</span>
-            <Button variant="ghost" className="!p-1.5" onClick={async () => {
-              await api.deleteUABlock(b.id)
-              queryClient.invalidateQueries({ queryKey: ['ua-blocks'] })
-            }} aria-label="Remove">
-              <ShieldOff size={15} />
-            </Button>
-          </div>
-        ))}
-        <Textarea
-          rows={3}
-          value={uaPattern}
-          onChange={(e) => setUaPattern(e.target.value)}
-          placeholder="curl"
-          aria-label="UA pattern"
-        />
-        <div className="flex justify-end">
-          <Button variant="outline" onClick={add} disabled={!uaPattern.trim()}>
-            {t('settings.addUaBlock')}
-          </Button>
-        </div>
-      </div>
-    </Card>
   )
 }
 

@@ -63,6 +63,7 @@ export interface AppConfig {
   base_url: string
   extra_base_urls: string[]
   reserved_codes: string[]
+  ua_blocks: string[]
   icon: string
 }
 
