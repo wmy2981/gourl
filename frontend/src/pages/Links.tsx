@@ -10,6 +10,7 @@ import {
   Copy,
   Download,
   FilePlus2,
+  ListPlus,
   Pencil,
   Plus,
   QrCode,
@@ -23,6 +24,7 @@ import LinkFormDialog from '../components/LinkFormDialog'
 import QRDialog from '../components/QRDialog'
 import ImportDialog from '../components/ImportDialog'
 import ExportDialog from '../components/ExportDialog'
+import BatchCreateDialog from '../components/BatchCreateDialog'
 
 const PAGE_SIZE = 20
 
@@ -45,6 +47,7 @@ export default function Links() {
   const [qrLink, setQrLink] = useState<Link | null>(null)
   const [importOpen, setImportOpen] = useState(false)
   const [exportOpen, setExportOpen] = useState(false)
+  const [batchOpen, setBatchOpen] = useState(false)
   const [deleting, setDeleting] = useState<Link | null>(null)
   const [copied, setCopied] = useState('')
   // Per-link pick of which base URL is shown/copied; defaults to the first.
@@ -126,6 +129,10 @@ export default function Links() {
           <Button variant="outline" onClick={() => setExportOpen(true)}>
             <Download size={16} />
             {t('links.export')}
+          </Button>
+          <Button variant="outline" onClick={() => setBatchOpen(true)}>
+            <ListPlus size={16} />
+            {t('links.batchCreate')}
           </Button>
           <Button
             onClick={() => {
@@ -349,6 +356,7 @@ export default function Links() {
       />
       <ImportDialog open={importOpen} onClose={() => setImportOpen(false)} onImported={invalidate} />
       <ExportDialog open={exportOpen} onClose={() => setExportOpen(false)} />
+      <BatchCreateDialog open={batchOpen} onClose={() => setBatchOpen(false)} onCreated={invalidate} />
 
       <Dialog open={deleting !== null} onClose={() => setDeleting(null)} title={t('links.delete')}>
         <p className="text-sm text-muted">{t('links.deleteConfirm')}</p>
