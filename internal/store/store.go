@@ -217,8 +217,9 @@ func (s *Store) RenameLink(ctx context.Context, oldCode, newCode string, now int
 	return tx.Commit()
 }
 
-// DeleteLink removes a link and its daily click records. Returns ErrNotFound
-// if the code was absent.
+// DeleteLink removes a link row. Its daily click records are deliberately
+// kept: the dashboard totals and trend chart count history even for links
+// that no longer exist. Returns ErrNotFound if the code was absent.
 func (s *Store) DeleteLink(ctx context.Context, code string) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -236,9 +237,6 @@ func (s *Store) DeleteLink(ctx context.Context, code string) error {
 	}
 	if n == 0 {
 		return ErrNotFound
-	}
-	if _, err := tx.ExecContext(ctx, `DELETE FROM daily_clicks WHERE code = ?`, code); err != nil {
-		return fmt.Errorf("delete daily clicks: %w", err)
 	}
 	return tx.Commit()
 }

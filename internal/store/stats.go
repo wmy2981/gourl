@@ -12,12 +12,14 @@ type DailySummary struct {
 }
 
 // StatsOverview aggregates dashboard numbers: total links, total clicks and
-// per-day click sums from fromDate onwards (inclusive).
+// per-day click sums from fromDate onwards (inclusive). The click totals come
+// from the daily table — independent of link rows — so deleting a link keeps
+// its historical clicks in the totals and the trend chart.
 func (s *Store) StatsOverview(ctx context.Context, fromDate string) (linksTotal, clicksTotal int64, daily []DailySummary, err error) {
 	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM links`).Scan(&linksTotal); err != nil {
 		return 0, 0, nil, fmt.Errorf("count links: %w", err)
 	}
-	if err := s.db.QueryRowContext(ctx, `SELECT COALESCE(SUM(click_count), 0) FROM links`).Scan(&clicksTotal); err != nil {
+	if err := s.db.QueryRowContext(ctx, `SELECT COALESCE(SUM(count), 0) FROM daily_clicks`).Scan(&clicksTotal); err != nil {
 		return 0, 0, nil, fmt.Errorf("sum clicks: %w", err)
 	}
 	rows, err := s.db.QueryContext(ctx,

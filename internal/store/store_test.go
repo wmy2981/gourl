@@ -126,7 +126,9 @@ func TestRenameLinkConflictReturnsErrTaken(t *testing.T) {
 	}
 }
 
-func TestDeleteLinkRemovesDailyClicks(t *testing.T) {
+// TestDeleteLinkKeepsDailyClicks: daily click records survive link deletion
+// so the dashboard history stays complete.
+func TestDeleteLinkKeepsDailyClicks(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
 	if err := s.CreateLink(ctx, sampleLink("abc")); err != nil {
@@ -145,8 +147,8 @@ func TestDeleteLinkRemovesDailyClicks(t *testing.T) {
 	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM daily_clicks WHERE code = 'abc'`).Scan(&n); err != nil {
 		t.Fatal(err)
 	}
-	if n != 0 {
-		t.Errorf("daily clicks not removed: %d rows", n)
+	if n != 1 {
+		t.Errorf("daily clicks lost on delete: %d rows, want 1", n)
 	}
 }
 
