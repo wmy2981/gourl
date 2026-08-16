@@ -71,6 +71,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PATCH /api/v1/links/{code...}", s.requireAuth(s.updateLink))
 	mux.HandleFunc("DELETE /api/v1/links/{code...}", s.requireAuth(s.deleteLink))
 	mux.HandleFunc("GET /api/v1/export.csv", s.requireAuth(s.exportCSV))
+	mux.HandleFunc("GET /api/v1/export.json", s.requireAuth(s.exportJSON))
 	mux.HandleFunc("GET /api/v1/tokens", s.requireAuth(s.listTokens))
 	mux.HandleFunc("POST /api/v1/tokens", s.requireAuth(s.createToken))
 	mux.HandleFunc("DELETE /api/v1/tokens/{id}", s.requireAuth(s.deleteToken))

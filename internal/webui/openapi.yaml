@@ -179,6 +179,18 @@ paths:
           description: CSV attachment
           content:
             text/csv: { schema: { type: string } }
+  /export.json:
+    get:
+      tags: [links]
+      summary: Export all links as a JSON array
+      responses:
+        "200":
+          description: JSON array of links
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Link" }
   /ua-blocks:
     get:
       tags: [ua-blocks]
