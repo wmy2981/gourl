@@ -199,7 +199,7 @@ export default function Settings() {
             value={uaText}
             onChange={(e) => setUaText(e.target.value)}
             placeholder={t('settings.uaPlaceholder')}
-            aria-label="UA patterns"
+            aria-label={t('settings.uaPatterns')}
           />
         </Card>
 
@@ -283,7 +283,7 @@ function TokenSection({
             <Button variant="ghost" className="!p-1.5" onClick={async () => {
               await api.deleteToken(tok.id)
               queryClient.invalidateQueries({ queryKey: ['tokens'] })
-            }} aria-label="Revoke">
+            }} aria-label={t('settings.revoke')}>
               <Trash2 size={15} />
             </Button>
           </div>

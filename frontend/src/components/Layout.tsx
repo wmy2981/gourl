@@ -122,7 +122,7 @@ export default function Layout() {
           <AppIcon size={22} />
           <span className="font-semibold">{siteName}</span>
         </div>
-        <button onClick={() => setMobileOpen(true)} aria-label="Menu" className="rounded-lg p-1.5">
+        <button onClick={() => setMobileOpen(true)} aria-label={t('app.menu')} className="rounded-lg p-1.5">
           <Menu size={20} />
         </button>
       </div>
@@ -137,7 +137,7 @@ export default function Layout() {
               mobileClosing ? 'animate-slide-out-right' : 'animate-slide-in-right'
             }`}
           >
-            <button onClick={closeMobile} className="mb-4 self-end rounded-lg p-1.5" aria-label="Close">
+            <button onClick={closeMobile} className="mb-4 self-end rounded-lg p-1.5" aria-label={t('common.close')}>
               <X size={20} />
             </button>
             {sidebarContent}

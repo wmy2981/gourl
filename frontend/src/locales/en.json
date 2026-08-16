@@ -3,7 +3,8 @@
     "name": "gourl",
     "tagline": "Lightweight short links",
     "light": "Light",
-    "dark": "Dark"
+    "dark": "Dark",
+    "menu": "Menu"
   },
   "nav": {
     "dashboard": "Dashboard",
@@ -19,6 +20,7 @@
     "resume": "Resume",
     "export": "Export .log",
     "keyword": "Filter by keyword…",
+    "from": "From",
     "to": "to",
     "noHistory": "LOG_DIR is not configured — live logs only (no history)",
     "empty": "No logs yet.",
@@ -73,6 +75,8 @@
     "pickBaseUrl": "Choose which base URL to show or copy",
     "selectAll": "Select all on this page",
     "selectRow": "Select this row",
+    "prevPage": "Previous page",
+    "nextPage": "Next page",
     "selected": "{{count}} selected",
     "deleteSelected": "Delete selected",
     "bulkDeleteTitle": "Delete links",
@@ -107,7 +111,8 @@
     "description": "Description",
     "descriptionPlaceholder": "Optional note about this link",
     "batchTitle": "Batch create links",
-    "batchHint": "One item per line: [code](2026/12/31)https://… (brackets optional, empty = never expires; # starts a comment)",
+    "batchHint": "One item per line: [code](2026/12/31)https://… (short code and expiry are optional, empty = never expires; # starts a comment)",
+    "urlRequired": "Destination URL is required",
     "batchLineNum": "Line {{line}}",
     "batchSyntax": "Invalid syntax — expected [code](date)url",
     "batchFailures": "Failed items (editable, then retry)",
@@ -142,6 +147,7 @@
     "uploadIcon": "Upload SVG/PNG",
     "removeIcon": "Reset to default",
     "uaBlocks": "Blocked user agents",
+    "uaPatterns": "Blocked user-agent patterns",
     "uaBlockHint": "Case-insensitive substrings, comma-separated, e.g. Googlebot",
     "uaPlaceholder": "curl, Googlebot",
     "addUaBlock": "Add",
@@ -162,7 +168,10 @@
     "never": "Never",
     "close": "Close",
     "delete": "Delete",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "clear": "Clear",
+    "pickDate": "Pick a date",
+    "dismiss": "Dismiss"
   },
   "footer": {
     "openSource": "Github"

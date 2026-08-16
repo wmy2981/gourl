@@ -3,7 +3,8 @@
     "name": "gourl",
     "tagline": "轻量短链接",
     "light": "浅色",
-    "dark": "深色"
+    "dark": "深色",
+    "menu": "菜单"
   },
   "nav": {
     "dashboard": "仪表盘",
@@ -19,6 +20,7 @@
     "resume": "继续",
     "export": "导出 .log",
     "keyword": "关键字过滤…",
+    "from": "从",
     "to": "至",
     "noHistory": "未配置 LOG_DIR，仅显示实时日志（历史不可用）",
     "empty": "暂无日志。",
@@ -73,6 +75,8 @@
     "pickBaseUrl": "选择展示或复制的基址",
     "selectAll": "全选本页",
     "selectRow": "选择此行",
+    "prevPage": "上一页",
+    "nextPage": "下一页",
     "selected": "已选 {{count}} 项",
     "deleteSelected": "删除所选",
     "bulkDeleteTitle": "批量删除",
@@ -107,7 +111,8 @@
     "description": "说明",
     "descriptionPlaceholder": "选填，说明这个链接的用途",
     "batchTitle": "批量创建",
-    "batchHint": "每行一项：[code](2026/12/31)https://…（[] 和 () 可省略，留空 = 永不过期；# 开头为注释）",
+    "batchHint": "每行一项：[code](2026/12/31)https://…（短码和截止日期均可省略，留空 = 永不过期；# 开头为注释）",
+    "urlRequired": "请填写目标 URL",
     "batchLineNum": "第 {{line}} 行",
     "batchSyntax": "格式无效，请用 [code](date)url",
     "batchFailures": "失败项（可修改后重试）",
@@ -142,6 +147,7 @@
     "uploadIcon": "上传 SVG/PNG",
     "removeIcon": "恢复默认",
     "uaBlocks": "屏蔽的 User-Agent",
+    "uaPatterns": "屏蔽的 User-Agent 规则",
     "uaBlockHint": "大小写不敏感子串，逗号分隔，例如 Googlebot",
     "uaPlaceholder": "curl, Googlebot",
     "addUaBlock": "添加",
@@ -162,7 +168,10 @@
     "never": "永不过期",
     "close": "关闭",
     "delete": "删除",
-    "cancel": "取消"
+    "cancel": "取消",
+    "clear": "清除",
+    "pickDate": "选择日期",
+    "dismiss": "关闭"
   },
   "footer": {
     "openSource": "Github"

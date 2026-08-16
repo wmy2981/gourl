@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { CalendarDays, X } from 'lucide-react'
 
 // Parses yyyy/MM/dd or yyyy-MM-dd (month/day may be 1-2 digits) into ISO
@@ -45,6 +46,7 @@ export default function DateInput({
   placeholder?: string
   className?: string
 }) {
+  const { t } = useTranslation()
   const [text, setText] = useState(toSlash(value))
   const [invalid, setInvalid] = useState(false)
   const pickerRef = useRef<HTMLInputElement>(null)
@@ -84,7 +86,7 @@ export default function DateInput({
         <button
           type="button"
           onClick={() => handle('')}
-          aria-label="Clear"
+          aria-label={t('common.clear')}
           className="absolute right-9 top-1/2 -translate-y-1/2 rounded-md p-1 text-muted/70 transition-colors hover:text-ink dark:hover:text-ink-dark"
         >
           <X size={14} />
@@ -93,7 +95,7 @@ export default function DateInput({
       <button
         type="button"
         onClick={openPicker}
-        aria-label="Pick a date"
+        aria-label={t('common.pickDate')}
         className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-muted/70 transition-colors hover:text-ink dark:hover:text-ink-dark"
       >
         <CalendarDays size={16} />
