@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { Upload } from 'lucide-react'
 import { api, ApiError, type ImportItem } from '../lib/api'
 import { parseCSV } from '../lib/csv'
-import { Button, Dialog, Label, Textarea, useToast } from './ui'
+import { Button, Dialog, Label, Select, Textarea, useToast } from './ui'
 
 // Batch import: items pasted as JSON or loaded from a file, with a conflict
 // policy for codes that already exist. JSON files are parsed as-is; CSV files
@@ -24,9 +24,6 @@ export default function ImportDialog({
   const [text, setText] = useState('')
   const [conflict, setConflict] = useState<'error' | 'skip' | 'update'>('error')
   const [busy, setBusy] = useState(false)
-
-  const selectClass =
-    'w-40 rounded-xl border border-hairline bg-white/70 dark:bg-white/[0.07] px-3 py-2 text-sm outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/30'
 
   // Load a .json or .csv file and turn it into the editable JSON textarea.
   const loadFile = async (file: File | undefined) => {
@@ -100,19 +97,19 @@ export default function ImportDialog({
         className="short-code"
         placeholder='[{"url": "https://example.com/1"}, {"url": "https://example.com/2", "code": "two"}]'
       />
-      <div className="mt-4 flex items-center justify-between gap-2">
-        <div>
-          <Label htmlFor="import-conflict">{t('form.importConflict')}</Label>
-          <select
-            id="import-conflict"
+      <div className="mt-4 flex items-end justify-between gap-2">
+        <div className="w-44">
+          <Label>{t('form.importConflict')}</Label>
+          <Select
             value={conflict}
-            onChange={(e) => setConflict(e.target.value as 'error' | 'skip' | 'update')}
-            className={selectClass}
-          >
-            <option value="error">{t('form.conflictError')}</option>
-            <option value="skip">{t('form.conflictSkip')}</option>
-            <option value="update">{t('form.conflictUpdate')}</option>
-          </select>
+            onChange={(v) => setConflict(v as 'error' | 'skip' | 'update')}
+            ariaLabel={t('form.importConflict')}
+            options={[
+              { value: 'error', label: t('form.conflictError') },
+              { value: 'skip', label: t('form.conflictSkip') },
+              { value: 'update', label: t('form.conflictUpdate') },
+            ]}
+          />
         </div>
         <div className="flex gap-2">
           <Button variant="ghost" onClick={onClose}>

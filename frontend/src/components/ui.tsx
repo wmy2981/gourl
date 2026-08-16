@@ -1,7 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useReducer, useRef, useState } from 'react'
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, TextareaHTMLAttributes } from 'react'
+import { useTranslation } from 'react-i18next'
 import { AnimatePresence, motion } from 'motion/react'
-import { AlertCircle, CheckCircle2, X } from 'lucide-react'
+import { AlertCircle, Check, CheckCircle2, ChevronDown, X } from 'lucide-react'
 
 /* ---------- Button ---------- */
 
@@ -54,6 +55,9 @@ export function Label({ children, htmlFor }: { children: ReactNode; htmlFor?: st
 
 /* ---------- Checkbox ---------- */
 
+// Drawn checkbox (native inputs render with the OS palette, which clashes
+// with both themes): amber fill when checked, hairline border otherwise, a
+// theme-consistent hover state.
 export function Checkbox({
   checked,
   onChange,
@@ -66,13 +70,92 @@ export function Checkbox({
   className?: string
 }) {
   return (
-    <input
-      type="checkbox"
-      checked={checked}
-      onChange={(e) => onChange(e.target.checked)}
+    <button
+      type="button"
+      role="checkbox"
+      aria-checked={checked}
       aria-label={ariaLabel}
-      className={`size-4 cursor-pointer accent-[#f59e0b] transition-opacity ${className}`}
-    />
+      onClick={() => onChange(!checked)}
+      className={`flex size-4 shrink-0 cursor-pointer items-center justify-center rounded-[5px] border transition-colors ${
+        checked
+          ? 'border-accent bg-accent text-white'
+          : 'border-muted/45 bg-transparent hover:border-accent'
+      } ${className}`}
+    >
+      {checked && <Check size={12} strokeWidth={3.5} />}
+    </button>
+  )
+}
+
+/* ---------- Select ---------- */
+
+// Custom dropdown replacing the native <select>: same amber-on-graphite
+// language as the rest of the UI, pop-in options panel, theme-aware.
+export function Select({
+  value,
+  onChange,
+  options,
+  ariaLabel,
+  className = '',
+}: {
+  value: string
+  onChange: (value: string) => void
+  options: { value: string; label: string }[]
+  ariaLabel?: string
+  className?: string
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const onDown = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [open])
+
+  const current = options.find((o) => o.value === value)
+
+  return (
+    <div ref={ref} className={`relative ${className}`}>
+      <button
+        type="button"
+        aria-label={ariaLabel}
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+        className="flex h-9 w-full items-center justify-between gap-2 rounded-xl border border-hairline bg-white/70 px-3 text-sm text-ink transition focus:border-accent focus:ring-2 focus:ring-accent/30 dark:bg-white/[0.07] dark:text-ink-dark"
+      >
+        <span className="truncate">{current?.label}</span>
+        <ChevronDown
+          size={14}
+          className={`shrink-0 text-muted transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
+        />
+      </button>
+      {open && (
+        <div className="absolute z-50 mt-1 w-full overflow-hidden rounded-xl border border-hairline bg-white p-1 shadow-[0_12px_40px_rgba(0,0,0,0.18)] dark:bg-[#1c1c1e] animate-pop-in">
+          {options.map((o) => (
+            <button
+              key={o.value}
+              type="button"
+              onClick={() => {
+                onChange(o.value)
+                setOpen(false)
+              }}
+              className={`flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm transition-colors ${
+                o.value === value
+                  ? 'bg-accent-soft font-medium text-accent-deep dark:text-accent'
+                  : 'text-ink hover:bg-black/5 dark:text-ink-dark dark:hover:bg-white/10'
+              }`}
+            >
+              <span className="truncate">{o.label}</span>
+              {o.value === value && <Check size={14} className="shrink-0 text-accent" />}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -109,6 +192,7 @@ export function Dialog({
   // Exit animation driven by the open prop: whatever triggers close (X,
   // Escape, backdrop, or a form's cancel button calling onClose), the panel
   // stays mounted for a beat to play pop-out/backdrop-out before unmounting.
+  const { t } = useTranslation()
   const [rendered, setRendered] = useState(open)
   const [closing, setClosing] = useState(false)
 
@@ -150,7 +234,7 @@ export function Dialog({
         >
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-lg font-semibold">{title}</h2>
-            <button onClick={onClose} aria-label="Close" className="rounded-lg p-1 transition-colors hover:bg-black/5 dark:hover:bg-white/10">
+            <button onClick={onClose} aria-label={t('common.close')} className="rounded-lg p-1 transition-colors hover:bg-black/5 dark:hover:bg-white/10">
               <X size={18} />
             </button>
           </div>
@@ -181,6 +265,7 @@ const PEEK = 12 // visible edge of each collapsed rear card
 const EXPAND_GAP = 8 // spacing between cards when expanded
 
 export function ToastProvider({ children }: { children: ReactNode }) {
+  const { t } = useTranslation()
   const [toasts, setToasts] = useState<Toast[]>([])
   const [expanded, setExpanded] = useState(false)
   // Measured heights per card: the pile overlap is (height - peek), and cards
@@ -211,23 +296,23 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       >
         <div className="pointer-events-auto flex flex-col">
           <AnimatePresence>
-            {[...toasts].reverse().map((t, i, arr) => {
+            {[...toasts].reverse().map((toast, i, arr) => {
               // Newest renders last (bottom, front-most). Rear cards get a
               // negative bottom margin so they rise and the front card covers
               // their lower half — only a 12px top edge of each stays visible,
               // a pile like the reference implementation. Hover expands them.
               const isFront = i === arr.length - 1
-              const cardH = heights.current.get(t.id) ?? TOAST_FALLBACK_H
+              const cardH = heights.current.get(toast.id) ?? TOAST_FALLBACK_H
               const marginBottom = isFront ? 0 : expanded ? EXPAND_GAP : PEEK - cardH
               return (
                 <motion.div
-                  key={t.id}
+                  key={toast.id}
                   layout
                   ref={(el) => {
                     // Cards are content-sized; record the rendered height so
                     // the pile overlap tracks it (fires once per card).
-                    if (el && heights.current.get(t.id) !== el.offsetHeight) {
-                      heights.current.set(t.id, el.offsetHeight)
+                    if (el && heights.current.get(toast.id) !== el.offsetHeight) {
+                      heights.current.set(toast.id, el.offsetHeight)
                       force()
                     }
                   }}
@@ -236,20 +321,20 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                   exit={{ opacity: 0, y: -14, scale: 0.95 }}
                   transition={{ type: 'spring', stiffness: 380, damping: 32 }}
                   className={`flex w-fit max-w-80 select-none items-start gap-2.5 rounded-lg border px-3.5 py-3 text-sm font-medium shadow-[0_8px_30px_rgba(0,0,0,0.12)] ${
-                    t.kind === 'error'
+                    toast.kind === 'error'
                       ? 'border-danger/20 bg-[#fff7f6] text-danger dark:bg-[#2a1a1a] dark:text-red-300'
                       : 'border-accent/20 bg-[#fffaf0] text-accent-deep dark:bg-[#2a2015] dark:text-amber-300'
                   }`}
                 >
-                  {t.kind === 'error' ? (
+                  {toast.kind === 'error' ? (
                     <AlertCircle size={16} className="mt-0.5 shrink-0 text-danger" fill="currentColor" stroke="white" />
                   ) : (
                     <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-accent" />
                   )}
-                  <span className="min-w-0 line-clamp-2">{t.message}</span>
+                  <span className="min-w-0 line-clamp-2">{toast.message}</span>
                   <button
-                    onClick={() => dismiss(t.id)}
-                    aria-label="Dismiss"
+                    onClick={() => dismiss(toast.id)}
+                    aria-label={t('common.dismiss')}
                     className="shrink-0 rounded-md p-0.5 text-muted/70 transition-colors hover:text-ink dark:hover:text-ink-dark"
                   >
                     <X size={14} />

@@ -90,6 +90,43 @@
       background-color 0.3s ease,
       color 0.3s ease;
   }
+
+  /* Custom scrollbars: thin rounded thumbs that follow the theme. Firefox
+     gets scrollbar-width/color; WebKit/Blink get the pseudo-element styling.
+     The border + background-clip trick insets the thumb so it never touches
+     the container edge. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(134, 134, 139, 0.45) transparent;
+  }
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(134, 134, 139, 0.45);
+    border-radius: 9999px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(245, 158, 11, 0.75);
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+  .dark ::-webkit-scrollbar-thumb {
+    background: rgba(245, 245, 247, 0.3);
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+  .dark ::-webkit-scrollbar-thumb:hover {
+    background: rgba(245, 158, 11, 0.85);
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
 }
 
 @layer components {

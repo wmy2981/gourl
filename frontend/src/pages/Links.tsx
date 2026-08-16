@@ -20,7 +20,7 @@ import {
 } from 'lucide-react'
 import { api, ApiError, type Link } from '../lib/api'
 import { copyText } from '../lib/clipboard'
-import { Button, Card, Checkbox, Dialog, Input, useToast } from '../components/ui'
+import { Button, Card, Checkbox, Dialog, Input, Select, useToast } from '../components/ui'
 import LinkFormDialog from '../components/LinkFormDialog'
 import QRDialog from '../components/QRDialog'
 import ImportDialog from '../components/ImportDialog'
@@ -220,20 +220,21 @@ export default function Links() {
             className="pl-9"
           />
         </div>
-        <select
+        <Select
           value={expires}
-          onChange={(e) => {
-            setExpires(e.target.value)
+          onChange={(v) => {
+            setExpires(v)
             setPage(1)
             setSelected(new Set())
           }}
-          aria-label={t('links.filterExpires')}
-          className="h-9 rounded-xl border border-hairline bg-white/70 px-2.5 text-sm outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/30 dark:bg-white/[0.07]"
-        >
-          <option value="">{t('links.filterAll')}</option>
-          <option value="active">{t('links.filterActive')}</option>
-          <option value="expired">{t('links.filterExpired')}</option>
-        </select>
+          ariaLabel={t('links.filterExpires')}
+          options={[
+            { value: '', label: t('links.filterAll') },
+            { value: 'active', label: t('links.filterActive') },
+            { value: 'expired', label: t('links.filterExpired') },
+          ]}
+          className="w-32"
+        />
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="outline" onClick={clearExpired}>
             <CalendarX size={16} />
@@ -435,10 +436,10 @@ export default function Links() {
                 {t('links.page')} {page} {t('links.of')} {totalPages} · {data.total} {t('links.total')}
               </span>
               <div className="flex gap-1">
-                <Button variant="ghost" className="!p-1.5" disabled={page <= 1} onClick={() => setPage(page - 1)} aria-label="Previous">
+                <Button variant="ghost" className="!p-1.5" disabled={page <= 1} onClick={() => setPage(page - 1)} aria-label={t('links.prevPage')}>
                   <ChevronLeft size={16} />
                 </Button>
-                <Button variant="ghost" className="!p-1.5" disabled={page >= totalPages} onClick={() => setPage(page + 1)} aria-label="Next">
+                <Button variant="ghost" className="!p-1.5" disabled={page >= totalPages} onClick={() => setPage(page + 1)} aria-label={t('links.nextPage')}>
                   <ChevronRight size={16} />
                 </Button>
               </div>
