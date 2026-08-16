@@ -10,7 +10,11 @@ import { setLanguage } from '../lib/i18n'
 import iconUrl from '../assets/icon.svg'
 
 function AppIcon({ size = 28 }: { size?: number }) {
-  return <img src={iconUrl} width={size} height={size} alt="" aria-hidden />
+  // The uploaded custom icon (served from /assets/) replaces the built-in
+  // brand icon wherever the app shows it; falls back to the default.
+  const { data: cfg } = useQuery({ queryKey: ['config'], queryFn: api.getConfig })
+  const src = cfg?.icon ? `/assets/${cfg.icon}` : iconUrl
+  return <img src={src} width={size} height={size} alt="" aria-hidden />
 }
 
 // Theme persisted on <html class="dark">.
