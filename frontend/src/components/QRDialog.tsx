@@ -28,7 +28,11 @@ export default function QRDialog({
   const urls = shown?.urls ?? []
   const [index, setIndex] = useState(0)
   useEffect(() => {
-    if (open && link) setIndex(Math.min(initialIndex, Math.max(urls.length - 1, 0)))
+    // Clamp against the *incoming* link's URLs: on the first render `shown`
+    // still holds null (or the previous link), so clamping against `urls`
+    // would drop the picked variant back to 0 — and on reopen it would clamp
+    // with the previous link's URL count.
+    if (open && link) setIndex(Math.min(initialIndex, Math.max(link.urls.length - 1, 0)))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, link, initialIndex])
   const active = urls[Math.min(index, Math.max(urls.length - 1, 0))]
