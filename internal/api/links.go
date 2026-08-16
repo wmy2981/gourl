@@ -36,6 +36,8 @@ func (s *Server) listLinks(w http.ResponseWriter, r *http.Request) {
 		PageSize: pageSize,
 		Sort:     r.URL.Query().Get("sort"),
 		Order:    r.URL.Query().Get("order"),
+		Expires:  r.URL.Query().Get("expires"),
+		Now:      s.now(),
 	}
 	links, total, err := s.store.ListLinks(r.Context(), opts)
 	if err != nil {

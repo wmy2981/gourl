@@ -261,6 +261,47 @@ func TestSingleCreateIgnoresStatsOverrides(t *testing.T) {
 	}
 }
 
+func TestListExpiresFilter(t *testing.T) {
+	s, _ := newTestServer(t)
+	// Test clock is 1700000000.
+	createRaw(t, s, "https://example.com/old", "old", 1690000000)
+	createRaw(t, s, "https://example.com/fresh", "fresh", 1710000000)
+	createRaw(t, s, "https://example.com/never", "never", nil)
+
+	var list struct {
+		Links []struct {
+			Code string `json:"code"`
+		} `json:"links"`
+	}
+	rec := do(t, s, http.MethodGet, "/api/v1/links?expires=expired", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d", rec.Code)
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &list); err != nil {
+		t.Fatal(err)
+	}
+	if len(list.Links) != 1 || list.Links[0].Code != "old" {
+		t.Fatalf("expired filter = %+v, want only 'old'", list.Links)
+	}
+
+	rec = do(t, s, http.MethodGet, "/api/v1/links?expires=active", nil)
+	if err := json.Unmarshal(rec.Body.Bytes(), &list); err != nil {
+		t.Fatal(err)
+	}
+	if len(list.Links) != 2 {
+		t.Fatalf("active filter = %+v, want fresh + never", list.Links)
+	}
+
+	// Combined with the keyword search the AND join must keep both conditions.
+	rec = do(t, s, http.MethodGet, "/api/v1/links?q=fresh&expires=active", nil)
+	if err := json.Unmarshal(rec.Body.Bytes(), &list); err != nil {
+		t.Fatal(err)
+	}
+	if len(list.Links) != 1 || list.Links[0].Code != "fresh" {
+		t.Fatalf("combined filter = %+v, want only 'fresh'", list.Links)
+	}
+}
+
 func TestBatchCreateInvalidConflict(t *testing.T) {
 	s, _ := newTestServer(t)
 	rec := do(t, s, http.MethodPost, "/api/v1/links/batch", map[string]any{

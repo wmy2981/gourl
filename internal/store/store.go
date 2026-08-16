@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 
 	sqlite3 "modernc.org/sqlite"
 	sqlite3lib "modernc.org/sqlite/lib"
@@ -37,6 +38,11 @@ type ListOptions struct {
 	PageSize int    // default 20, max 100
 	Sort     string // created_at (default) | clicks | code
 	Order    string // desc (default) | asc
+	// Expires filters by expiry state: "" or "all" = no filter, "expired" =
+	// past expiry, "active" = never expires or still valid. Now is the clock
+	// used for the comparison (injectable for tests).
+	Expires string
+	Now     int64
 }
 
 // Store wraps the SQLite connection.
@@ -357,12 +363,25 @@ func (s *Store) ListLinks(ctx context.Context, opts ListOptions) ([]Link, int, e
 		order = "ASC"
 	}
 
-	var where string
+	var conds []string
 	var args []any
 	if opts.Query != "" {
-		where = ` WHERE code LIKE ? OR url LIKE ? OR title LIKE ?`
+		// Parens keep AND-joined expiry filters from binding inside the ORs.
+		conds = append(conds, `(code LIKE ? OR url LIKE ? OR title LIKE ?)`)
 		like := "%" + opts.Query + "%"
 		args = []any{like, like, like}
+	}
+	switch opts.Expires {
+	case "expired":
+		conds = append(conds, `expires_at > 0 AND expires_at < ?`)
+		args = append(args, opts.Now)
+	case "active":
+		conds = append(conds, `(expires_at = 0 OR expires_at >= ?)`)
+		args = append(args, opts.Now)
+	}
+	where := ""
+	if len(conds) > 0 {
+		where = ` WHERE ` + strings.Join(conds, ` AND `)
 	}
 
 	var total int

@@ -36,12 +36,17 @@ function formatDate(unix: number, t: (k: string) => string): string {
   return `${d.getFullYear()}/${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
+function isExpired(link: Link): boolean {
+  return link.expires_at > 0 && link.expires_at * 1000 < Date.now()
+}
+
 export default function Links() {
   const { t } = useTranslation()
   const { toast } = useToast()
   const queryClient = useQueryClient()
 
   const [query, setQuery] = useState('')
+  const [expires, setExpires] = useState('')
   const [page, setPage] = useState(1)
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<Link | null>(null)
@@ -92,8 +97,8 @@ export default function Links() {
   }, [urlMenu])
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['links', query, page],
-    queryFn: () => api.listLinks({ q: query, page, page_size: PAGE_SIZE }),
+    queryKey: ['links', query, expires, page],
+    queryFn: () => api.listLinks({ q: query, expires, page, page_size: PAGE_SIZE }),
     placeholderData: (prev) => prev,
   })
 
@@ -215,6 +220,20 @@ export default function Links() {
             className="pl-9"
           />
         </div>
+        <select
+          value={expires}
+          onChange={(e) => {
+            setExpires(e.target.value)
+            setPage(1)
+            setSelected(new Set())
+          }}
+          aria-label={t('links.filterExpires')}
+          className="h-9 rounded-xl border border-hairline bg-white/70 px-2.5 text-sm outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/30 dark:bg-white/[0.07]"
+        >
+          <option value="">{t('links.filterAll')}</option>
+          <option value="active">{t('links.filterActive')}</option>
+          <option value="expired">{t('links.filterExpired')}</option>
+        </select>
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="outline" onClick={clearExpired}>
             <CalendarX size={16} />
@@ -380,7 +399,9 @@ export default function Links() {
                     )}
                   </td>
                   <td className="short-code px-5 py-3 text-right tabular-nums">{link.click_count}</td>
-                  <td className="px-5 py-3 text-muted">{formatDate(link.expires_at, t)}</td>
+                  <td className={`px-5 py-3 ${isExpired(link) ? 'text-danger' : 'text-muted'}`}>
+                    {formatDate(link.expires_at, t)}
+                  </td>
                   <td className="px-5 py-3">
                     <div className="flex gap-1">
                       <button
