@@ -56,7 +56,17 @@
     "total": "total",
     "noResults": "Nothing matches your search.",
     "deleted": "Deleted",
-    "pickBaseUrl": "Choose which base URL to show or copy"
+    "pickBaseUrl": "Choose which base URL to show or copy",
+    "selectAll": "Select all on this page",
+    "selectRow": "Select this row",
+    "selected": "{{count}} selected",
+    "deleteSelected": "Delete selected",
+    "bulkDeleteTitle": "Delete links",
+    "bulkDeleteConfirm": "This will delete {{count}} links. This cannot be undone.",
+    "clearExpired": "Clear expired",
+    "noExpired": "No expired links",
+    "clearExpiredConfirm": "This will delete {{count}} expired links. This cannot be undone.",
+    "expiredCleared": "Deleted {{count}} expired links"
   },
   "form": {
     "url": "Destination URL",

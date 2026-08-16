@@ -56,7 +56,17 @@
     "total": "条",
     "noResults": "没有匹配的结果。",
     "deleted": "已删除",
-    "pickBaseUrl": "选择展示或复制的基址"
+    "pickBaseUrl": "选择展示或复制的基址",
+    "selectAll": "全选本页",
+    "selectRow": "选择此行",
+    "selected": "已选 {{count}} 项",
+    "deleteSelected": "删除所选",
+    "bulkDeleteTitle": "批量删除",
+    "bulkDeleteConfirm": "将删除 {{count}} 条链接，此操作不可撤销。",
+    "clearExpired": "清空过期",
+    "noExpired": "没有过期链接",
+    "clearExpiredConfirm": "将删除 {{count}} 条过期链接，此操作不可撤销。",
+    "expiredCleared": "已删除 {{count}} 条过期链接"
   },
   "form": {
     "url": "目标 URL",

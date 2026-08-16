@@ -52,6 +52,30 @@ export function Label({ children, htmlFor }: { children: ReactNode; htmlFor?: st
   )
 }
 
+/* ---------- Checkbox ---------- */
+
+export function Checkbox({
+  checked,
+  onChange,
+  'aria-label': ariaLabel,
+  className = '',
+}: {
+  checked: boolean
+  onChange: (checked: boolean) => void
+  'aria-label'?: string
+  className?: string
+}) {
+  return (
+    <input
+      type="checkbox"
+      checked={checked}
+      onChange={(e) => onChange(e.target.checked)}
+      aria-label={ariaLabel}
+      className={`size-4 cursor-pointer accent-[#f59e0b] transition-opacity ${className}`}
+    />
+  )
+}
+
 /* ---------- Card ---------- */
 
 export function Card({ children, className = '' }: { children: ReactNode; className?: string }) {

@@ -6,6 +6,7 @@ import {
   Check,
   ChevronDown,
   ChevronLeft,
+  CalendarX,
   ChevronRight,
   Copy,
   Download,
@@ -19,7 +20,7 @@ import {
 } from 'lucide-react'
 import { api, ApiError, type Link } from '../lib/api'
 import { copyText } from '../lib/clipboard'
-import { Button, Card, Dialog, Input, useToast } from '../components/ui'
+import { Button, Card, Checkbox, Dialog, Input, useToast } from '../components/ui'
 import LinkFormDialog from '../components/LinkFormDialog'
 import QRDialog from '../components/QRDialog'
 import ImportDialog from '../components/ImportDialog'
@@ -49,6 +50,11 @@ export default function Links() {
   const [exportOpen, setExportOpen] = useState(false)
   const [batchOpen, setBatchOpen] = useState(false)
   const [deleting, setDeleting] = useState<Link | null>(null)
+  // Batch selection: codes chosen across pages are kept until the search
+  // changes (or the deletion finishes), so mis-scoped selections can't linger.
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false)
+  const [expiredConfirm, setExpiredConfirm] = useState<number | null>(null)
   const [copied, setCopied] = useState('')
   // Per-link pick of which base URL is shown/copied; defaults to the first.
   const [urlIdx, setUrlIdx] = useState<Record<string, number>>({})
@@ -104,6 +110,54 @@ export default function Links() {
     onError: (err: unknown) => toast(err instanceof ApiError ? err.message : t('common.error'), 'error'),
   })
 
+  const pageCodes = data?.links.map((l) => l.code) ?? []
+  const allPageSelected = pageCodes.length > 0 && pageCodes.every((c) => selected.has(c))
+
+  const togglePage = (on: boolean) => {
+    const next = new Set(selected)
+    for (const c of pageCodes) {
+      if (on) next.add(c)
+      else next.delete(c)
+    }
+    setSelected(next)
+  }
+
+  const deleteSelectedMutation = useMutation({
+    mutationFn: (codes: string[]) => api.deleteLinks(codes),
+    onSuccess: () => {
+      invalidate()
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+      setBulkDeleteOpen(false)
+      setSelected(new Set())
+      toast(t('links.deleted'))
+    },
+    onError: (err: unknown) => toast(err instanceof ApiError ? err.message : t('common.error'), 'error'),
+  })
+
+  const clearExpired = async () => {
+    try {
+      const { count } = await api.expiredCount()
+      if (count === 0) {
+        toast(t('links.noExpired'))
+        return
+      }
+      setExpiredConfirm(count)
+    } catch {
+      toast(t('common.error'), 'error')
+    }
+  }
+
+  const clearExpiredMutation = useMutation({
+    mutationFn: () => api.deleteExpired(),
+    onSuccess: (res) => {
+      invalidate()
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+      setExpiredConfirm(null)
+      toast(t('links.expiredCleared', { count: res.deleted }))
+    },
+    onError: (err: unknown) => toast(err instanceof ApiError ? err.message : t('common.error'), 'error'),
+  })
+
   const copy = async (code: string, url: string) => {
     // Clipboard fallback chain: API → hidden textarea (works on plain http).
     const ok = await copyText(url)
@@ -146,17 +200,36 @@ export default function Links() {
         </div>
       </div>
 
-      <div className="relative mb-4 max-w-md">
-        <Search size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted" />
-        <Input
-          value={query}
-          onChange={(e) => {
-            setQuery(e.target.value)
-            setPage(1)
-          }}
-          placeholder={t('links.search')}
-          className="pl-9"
-        />
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <div className="relative max-w-md flex-1">
+          <Search size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted" />
+          <Input
+            value={query}
+            onChange={(e) => {
+              setQuery(e.target.value)
+              setPage(1)
+              // A different search context invalidates the cross-page selection.
+              setSelected(new Set())
+            }}
+            placeholder={t('links.search')}
+            className="pl-9"
+          />
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" onClick={clearExpired}>
+            <CalendarX size={16} />
+            {t('links.clearExpired')}
+          </Button>
+          {selected.size > 0 && (
+            <>
+              <span className="text-sm tabular-nums text-muted">{t('links.selected', { count: selected.size })}</span>
+              <Button variant="danger" onClick={() => setBulkDeleteOpen(true)}>
+                <Trash2 size={16} />
+                {t('links.deleteSelected')}
+              </Button>
+            </>
+          )}
+        </div>
       </div>
 
       {isLoading ? (
@@ -172,6 +245,9 @@ export default function Links() {
           <table className="w-full min-w-[900px] text-left text-sm">
             <thead>
               <tr className="border-b border-hairline text-xs uppercase tracking-wide text-muted">
+                <th className="w-12 px-5 py-3">
+                  <Checkbox checked={allPageSelected} onChange={togglePage} aria-label={t('links.selectAll')} />
+                </th>
                 <th className="px-5 py-3 font-medium">{t('links.shortUrl')}</th>
                 <th className="px-5 py-3 font-medium">{t('links.destination')}</th>
                 <th className="px-5 py-3 font-medium">{t('links.description')}</th>
@@ -186,6 +262,18 @@ export default function Links() {
                 const current = link.urls[idx] ?? link.urls[0]
                 return (
                 <tr key={link.code} className="border-b border-hairline/60 last:border-0 hover:bg-black/[0.02] dark:hover:bg-white/[0.03]">
+                  <td className="px-5 py-3">
+                    <Checkbox
+                      checked={selected.has(link.code)}
+                      onChange={(on) => {
+                        const next = new Set(selected)
+                        if (on) next.add(link.code)
+                        else next.delete(link.code)
+                        setSelected(next)
+                      }}
+                      aria-label={t('links.selectRow')}
+                    />
+                  </td>
                   <td className="px-5 py-3">
                     <div className="flex items-center gap-1.5">
                       <button
@@ -371,6 +459,42 @@ export default function Links() {
             variant="danger"
             disabled={deleteMutation.isPending}
             onClick={() => deleting && deleteMutation.mutate(deleting.code)}
+          >
+            {t('common.delete')}
+          </Button>
+        </div>
+      </Dialog>
+
+      <Dialog open={bulkDeleteOpen} onClose={() => setBulkDeleteOpen(false)} title={t('links.bulkDeleteTitle')}>
+        <p className="text-sm text-muted">{t('links.bulkDeleteConfirm', { count: selected.size })}</p>
+        <div className="mt-5 flex justify-end gap-2">
+          <Button variant="ghost" onClick={() => setBulkDeleteOpen(false)}>
+            {t('common.cancel')}
+          </Button>
+          <Button
+            variant="danger"
+            disabled={deleteSelectedMutation.isPending}
+            onClick={() => deleteSelectedMutation.mutate([...selected])}
+          >
+            {t('common.delete')}
+          </Button>
+        </div>
+      </Dialog>
+
+      <Dialog
+        open={expiredConfirm !== null}
+        onClose={() => setExpiredConfirm(null)}
+        title={t('links.clearExpired')}
+      >
+        <p className="text-sm text-muted">{t('links.clearExpiredConfirm', { count: expiredConfirm ?? 0 })}</p>
+        <div className="mt-5 flex justify-end gap-2">
+          <Button variant="ghost" onClick={() => setExpiredConfirm(null)}>
+            {t('common.cancel')}
+          </Button>
+          <Button
+            variant="danger"
+            disabled={clearExpiredMutation.isPending}
+            onClick={() => clearExpiredMutation.mutate()}
           >
             {t('common.delete')}
           </Button>
