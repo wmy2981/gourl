@@ -22,7 +22,10 @@ plus Redis — that's all it takes to run your own short links.
 - **Customization** — site name, title, keywords, header/footer, uploaded icon (SVG/PNG, one-click reset)
 - **Multi-base URLs** — extra base URLs are served side by side; pick which one a link row shows or copies
 - **i18n** — English and Chinese, auto-detected with a manual switcher
-- **QR codes, CSV/JSON export, batch import** — paste JSON or load a `.csv`/`.json` file
+- **QR codes, CSV/JSON export, batch import** — paste JSON or load a `.csv`/`.json` file; import conflicts resolve as error/skip/update
+- **Batch ops** — bulk create (one strict-syntax line per link), cross-page bulk delete, one-click clear-expired, expiry filter with expired-row highlighting
+- **Live log page** — Server-Sent Events stream with level/keyword/time filters and `.log` export; history from the mirrored file
+- **Chinese short codes** — custom codes may contain simplified Chinese characters
 - **API documentation** — interactive Swagger UI at `/docs/`
 - **Structured logging** — slog with 4 levels (debug/info/warning/error), text or JSON, optionally mirrored to a rotating file on the data volume
 
@@ -97,12 +100,14 @@ Base path `/api/v1`. Admin endpoints accept a session cookie or
 |---|---|---|
 | GET | `/api/v1/health` | **Public**: name, version, uptime, redis/sqlite probes |
 | POST | `/api/v1/auth/login` | Password login → session cookie |
-| GET/POST | `/api/v1/links` | List (paged, searchable) / create |
-| POST | `/api/v1/links/batch` | Batch import (≤500 per call) |
-| GET/PATCH/DELETE | `/api/v1/links/{code}` | Detail / update / delete |
-| GET | `/api/v1/links/{code}/stats` | Total + daily click counts |
-| GET | `/api/v1/export.csv` | Export all links as CSV |
-| GET | `/api/v1/export.json` | Export all links as JSON |
+| GET/POST/DELETE | `/api/v1/links` | List (paged, searchable, expiry-filterable) / create / batch delete by codes |
+| POST | `/api/v1/links/batch` | Batch import (≤500 per call, `conflict` = error/skip/update) |
+| GET/DELETE | `/api/v1/links/expired` | Count expired / clear all expired links |
+| GET/PATCH/DELETE | `/api/v1/links/{code}` | Detail / update / delete (click history is kept) |
+| GET | `/api/v1/export.csv` | Export all links as CSV (7 uniform fields, UTF-8 BOM) |
+| GET | `/api/v1/export.json` | Export all links as JSON (same 7 fields) |
+| GET | `/api/v1/logs` | Log history from the LOG_DIR file (paginated) |
+| GET | `/api/v1/logs/stream` | Live log stream (Server-Sent Events) |
 | GET/POST/DELETE | `/api/v1/ua-blocks` | Blocked User-Agent patterns (programmatic use; the settings page manages them via config) |
 | GET/POST/DELETE | `/api/v1/tokens` | API tokens |
 | GET/PUT | `/api/v1/config` | Site config (hot-applied, written back to YAML) |

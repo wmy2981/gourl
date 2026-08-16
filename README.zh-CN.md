@@ -14,14 +14,17 @@
 - **链接管理** — 现代化管理后台（苹果风玻璃拟态、响应式、深色模式）
 - **延迟计数** — 点击先入 Redis，每 30s 批量归并 SQLite，抗高并发尖峰
 - **历史保留** — 短链删除后，点击总数与趋势图统计依然保留
-- **自动获取标题** — 创建链接时自动抓取 title/description，带 SSRF 全面防护
+- **自动获取标题** — 创建链接后后台异步抓取 title/description（不阻塞请求），带 SSRF 全面防护
 - **UA 屏蔽** — User-Agent 规则（设置页逗号分隔），命中返回 403 且不计点击
+- **批量操作** — 批量创建（每行一条严格语法）、跨页多选批量删除、一键清空过期、过期状态筛选与红色标识
+- **实时日志页** — SSE 实时流 + 级别/关键字/时间筛选 + `.log` 导出；历史来自 LOG_DIR 文件
+- **中文短码** — 自定义短码支持简体中文
 - **短链有效期** — 每条链接可设 `expires_at`（0 为永不过期），过期展示优雅双语提示页
 - **REST API** — 完整 JSON API，Bearer Token 认证，便于二次开发
 - **自定义站点** — 服务名称、标题、关键词、header/footer、上传图标（SVG/PNG，一键恢复默认）
 - **多基址** — 附加基址并排展示，链接行可选择展示或复制的基址
 - **中英文双语** — 自动检测浏览器语言，页内可手动切换
-- **二维码、CSV/JSON 导出、批量导入** — 粘贴 JSON 或加载 `.csv`/`.json` 文件
+- **二维码、CSV/JSON 导出、批量导入** — 粘贴 JSON 或加载 `.csv`/`.json` 文件；导入遇重复 code 可选报错/跳过/更新
 - **API 文档** — `/docs/` 交互式 Swagger UI
 - **结构化日志** — slog 4 级（debug/info/warning/error），文本或 JSON 输出，可镜像到数据卷轮转文件
 
@@ -89,12 +92,14 @@ header/footer、随机短码位数、主 + 附加基址、额外保留字、UA �
 |---|---|---|
 | GET | `/api/v1/health` | **公开**：名称、版本、uptime、redis/sqlite 探活 |
 | POST | `/api/v1/auth/login` | 密码登录 → 会话 Cookie |
-| GET/POST | `/api/v1/links` | 列表（分页/搜索）/ 创建 |
-| POST | `/api/v1/links/batch` | 批量导入（单次 ≤500 条） |
-| GET/PATCH/DELETE | `/api/v1/links/{code}` | 详情 / 更新 / 删除 |
-| GET | `/api/v1/links/{code}/stats` | 总数 + 每日点击 |
-| GET | `/api/v1/export.csv` | 导出全部链接（CSV） |
-| GET | `/api/v1/export.json` | 导出全部链接（JSON） |
+| GET/POST/DELETE | `/api/v1/links` | 列表（分页/搜索/过期筛选）/ 创建 / 按 codes 批量删除 |
+| POST | `/api/v1/links/batch` | 批量导入（单次 ≤500 条，`conflict` = error/skip/update） |
+| GET/DELETE | `/api/v1/links/expired` | 统计过期数量 / 一键清空过期链接 |
+| GET/PATCH/DELETE | `/api/v1/links/{code}` | 详情 / 更新 / 删除（点击历史保留） |
+| GET | `/api/v1/export.csv` | 导出全部链接（CSV，统一 7 字段，UTF-8 BOM） |
+| GET | `/api/v1/export.json` | 导出全部链接（JSON，与 CSV 相同 7 字段） |
+| GET | `/api/v1/logs` | 日志历史（从 LOG_DIR 文件读取，分页） |
+| GET | `/api/v1/logs/stream` | 日志实时流（Server-Sent Events） |
 | GET/POST/DELETE | `/api/v1/ua-blocks` | 屏蔽的 User-Agent（程序化使用；设置页经 config 管理） |
 | GET/POST/DELETE | `/api/v1/tokens` | API Token |
 | GET/PUT | `/api/v1/config` | 站点配置（热生效，写回 YAML） |

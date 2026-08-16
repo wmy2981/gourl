@@ -64,11 +64,12 @@ paths:
   /links:
     get:
       tags: [links]
-      summary: List links (paginated, searchable, sortable)
+      summary: List links (paginated, searchable, sortable, expiry-filterable)
       parameters:
         - { name: page, in: query, schema: { type: integer, default: 1 } }
         - { name: page_size, in: query, schema: { type: integer, default: 20, maximum: 100 } }
         - { name: q, in: query, schema: { type: string }, description: Match on code/url/title }
+        - { name: expires, in: query, schema: { type: string, enum: ["", active, expired] }, description: "Filter by expiry state (default: all)" }
         - { name: sort, in: query, schema: { type: string, enum: [created_at, clicks, code] } }
         - { name: order, in: query, schema: { type: string, enum: [asc, desc] } }
       responses:
@@ -85,39 +86,88 @@ paths:
                   page_size: { type: integer }
     post:
       tags: [links]
-      summary: Create a link (auto-fetches title/description)
+      summary: Create a link (title/description are fetched in the background)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateLink" }
+      responses:
+        "201": { description: Created, returns the link with full short URLs }
+        "400": { description: Invalid url/code or reserved code }
+        "409": { description: Code already in use }
+    delete:
+      tags: [links]
+      summary: Delete multiple links at once
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [url]
+              required: [codes]
               properties:
-                url: { type: string, description: "Absolute http(s) URL" }
-                code: { type: string, description: "Optional custom code, may contain / (≤5 levels); empty = random" }
-                expires_at: { type: integer, description: "Unix seconds, 0 = never" }
+                codes:
+                  type: array
+                  maxItems: 500
+                  items: { type: string }
       responses:
-        "201": { description: Created, returns the link with full short URLs }
-        "400": { description: Invalid url/code or reserved code }
-        "409": { description: Code already in use }
+        "200":
+          description: Number of links actually deleted (absent codes are skipped). Daily click history is kept, as always.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deleted: { type: integer }
   /links/batch:
     post:
       tags: [links]
       summary: Batch import links (≤500 per call, per-item results)
+      description: "conflict decides what happens when an item's code already exists: error (default, the item fails with code_taken), skip (the item is skipped) or update (the existing link is refreshed with the item's fields). A legacy bare-array body is still accepted (conflict = error)."
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: array
-              items: { $ref: "#/components/schemas/CreateLink" }
+              type: object
+              properties:
+                conflict: { type: string, enum: [error, skip, update], default: error }
+                items:
+                  type: array
+                  maxItems: 500
+                  items: { $ref: "#/components/schemas/CreateLink" }
       responses:
         "201":
-          description: Per-item results with created/failed counts
+          description: Per-item results (status created/updated/skipped/error) with created/failed counts
+  /links/expired:
+    get:
+      tags: [links]
+      summary: Count links past their expiry
+      responses:
+        "200":
+          description: Number of expired links (drives the clear-expired confirmation)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count: { type: integer }
+    delete:
+      tags: [links]
+      summary: Delete every expired link (daily click history is kept)
+      responses:
+        "200":
+          description: Number of deleted links
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deleted: { type: integer }
   /links/{code}:
     parameters:
-      - { name: code, in: path, required: true, schema: { type: string }, description: "Short code (may contain /)" }
+      - { name: code, in: path, required: true, schema: { type: string }, description: "Short code (may contain /, ASCII or Chinese)" }
     get:
       tags: [links]
       summary: Get a link
@@ -126,7 +176,7 @@ paths:
         "404": { description: Not found }
     patch:
       tags: [links]
-      summary: Update a link (url change re-fetches title unless overridden)
+      summary: Update a link (url change re-fetches title in the background unless overridden)
       requestBody:
         required: true
         content:
@@ -145,31 +195,10 @@ paths:
         "409": { description: New code already in use }
     delete:
       tags: [links]
-      summary: Delete a link and its daily click records
+      summary: Delete a link (its daily click records are deliberately kept for history)
       responses:
         "204": { description: Deleted }
         "404": { description: Not found }
-  /links/{code}/stats:
-    get:
-      tags: [links]
-      summary: Total and daily click counts for a link
-      responses:
-        "200":
-          description: Stats
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  code: { type: string }
-                  click_count: { type: integer }
-                  daily:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        date: { type: string, example: "2026-08-15" }
-                        count: { type: integer }
   /export.csv:
     get:
       tags: [links]
@@ -182,15 +211,45 @@ paths:
   /export.json:
     get:
       tags: [links]
-      summary: Export all links as a JSON array
+      summary: Export all links as a JSON array of the same 7 fields the CSV carries
       responses:
         "200":
-          description: JSON array of links
+          description: JSON array of {code, url, title, description, expires_at, click_count, created_at}
           content:
             application/json:
               schema:
                 type: array
-                items: { $ref: "#/components/schemas/Link" }
+                items: { $ref: "#/components/schemas/ExportRow" }
+  /logs:
+    get:
+      tags: [logs]
+      summary: Recent log records read back from the mirrored log file (LOG_DIR)
+      description: "Newest first; available is false when LOG_DIR is not configured (the admin log page then shows the live stream only)."
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, default: 200, maximum: 1000 } }
+        - { name: offset, in: query, schema: { type: integer, default: 0 }, description: "Records to skip (newest first) for paging" }
+      responses:
+        "200":
+          description: Log records plus history availability
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  available: { type: boolean }
+                  records:
+                    type: array
+                    items: { $ref: "#/components/schemas/LogRecord" }
+  /logs/stream:
+    get:
+      tags: [logs]
+      summary: Server-Sent Events stream of live log records
+      description: "Each frame is an `event: log` carrying a LogRecord as JSON; a comment ping keeps the connection alive. Requires an authenticated session cookie or bearer token."
+      responses:
+        "200":
+          description: text/event-stream
+          content:
+            text/event-stream: { schema: { type: string } }
   /ua-blocks:
     get:
       tags: [ua-blocks]
@@ -334,9 +393,43 @@ components:
       type: object
       required: [url]
       properties:
-        url: { type: string }
+        url: { type: string, description: "Absolute http(s) URL" }
+        code: { type: string, description: "Optional custom code, may contain / (≤5 levels, ASCII or Chinese); empty = random" }
+        title: { type: string }
+        description: { type: string }
+        expires_at:
+          oneOf:
+            - type: integer
+              description: Unix seconds; 0 = never
+            - type: string
+              description: "yyyy-MM-dd calendar date, parsed at local midnight"
+        click_count:
+          type: integer
+          description: "Import-time override (batch only); single creates ignore it"
+        created_at:
+          type: integer
+          description: "Import-time override (batch only); single creates ignore it"
+    ExportRow:
+      type: object
+      description: The uniform 7-field export shape shared by CSV and JSON
+      properties:
         code: { type: string }
-        expires_at: { type: integer }
+        url: { type: string }
+        title: { type: string }
+        description: { type: string }
+        expires_at: { type: integer, description: "Unix seconds, 0 = never" }
+        click_count: { type: integer }
+        created_at: { type: integer }
+    LogRecord:
+      type: object
+      properties:
+        time: { type: string, format: date-time }
+        level: { type: string, enum: [debug, info, warn, error], description: "Empty for unparseable history lines" }
+        message: { type: string }
+        attrs:
+          type: object
+          description: Structured key-value attributes of the log line
+          additionalProperties: true
     Config:
       type: object
       properties:

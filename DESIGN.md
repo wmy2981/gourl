@@ -56,17 +56,16 @@ gourl/
 │   ├── config/                 # YAML 加载 + 校验 + 热更新（原子写回，文件锁）
 │   ├── store/                  # SQLite：schema、links、daily_clicks、ua_blocks、api_tokens
 │   ├── counter/                # Redis 计数 + 30s 归并任务
-│   ├── fetcher/                # 标题/描述抓取 + SSRF 防护
-│   ├── shortcode/              # 随机短码生成（base62）+ 保留字校验
-│   ├── api/                    # REST 路由、handler、认证中间件
-│   ├── admin/                  # 登录会话、管理后台 API
-│   ├── assets/                 # 图标上传：存储、类型/大小校验
+│   ├── fetcher/                # 标题/描述抓取 + SSRF 防护（后台异步队列使用）
+│   ├── shortcode/              # 随机短码生成（base62）+ 保留字校验（自定义码支持中文）
+│   ├── api/                    # REST 路由、handler、认证、SSE 日志流
+│   ├── logx/                   # slog 4 级日志：订阅广播（日志页 SSE）+ LOG_DIR 文件历史
+│   ├── webui/                  # go:embed：前端 dist、swagger-ui、openapi.yaml、默认图标
 │   └── version/                # 构建时注入版本号
 ├── frontend/                   # Vite React SPA（管理后台）
-│   ├── src/                    # pages: login / dashboard / links / settings
+│   ├── src/                    # pages: login / dashboard / links / logs / settings
 │   └── e2e/                    # Playwright 测试
-├── web/                        # 前端构建产物 embed 入口（dist 复制于此）
-├── assets/                     # 内置默认图标（SVG）
+├── assets/                     # 内置默认图标（SVG，单一事实来源）
 ├── .github/
 │   ├── workflows/ci.yml        # push/PR → 全量检查
 │   ├── workflows/release.yml   # push main/dev → 版本校验 + tag + Release
@@ -76,7 +75,7 @@ gourl/
 └── docker-compose.yml          # app + redis；挂载 config.yaml、data 卷（SQLite）、assets 卷（图标）
 ```
 
-前端构建产物 `frontend/dist` 复制到 `web/` 并以 `embed` 打进单个二进制，单镜像部署。
+前端构建产物由 `scripts/build-frontend.ps1` 复制到 `internal/webui/dist` 并以 `embed` 打进单个二进制，单镜像部署。
 
 ### 3.2 配置分层
 
@@ -99,7 +98,7 @@ icon: ""                            # 自定义图标文件名（assets/ 下，�
 
 **环境变量（运行时与机密，docker-compose 注入）**
 
-`PORT`（默认 8080）、`DB_PATH`（SQLite 文件路径）、`REDIS_ADDR`、`ADMIN_PASSWORD`（空=禁用登录，内网信任模式）、`SESSION_SECRET`、`CONFIG_PATH`（默认 config.yaml）、`TZ`（容器时区，决定每日统计切日边界、expires_at 解释与时间展示；docker-compose 默认 `Asia/Shanghai`）。
+`PORT`（默认 8080）、`DB_PATH`（SQLite 文件路径）、`REDIS_ADDR`、`ADMIN_PASSWORD`（空=禁用登录，内网信任模式）、`SESSION_SECRET`、`CONFIG_PATH`（默认 config.yaml）、`TZ`（容器时区，决定每日统计切日边界、expires_at 解释与时间展示；docker-compose 默认 `Asia/Shanghai`）、`LOG_LEVEL`（debug/info/warning/error，默认 info）、`LOG_FORMAT`（json 或 text，默认 text）、`LOG_DIR`（可选目录，镜像到 lumberjack 轮转文件，同时作为日志页的历史来源）。
 
 ### 3.3 数据流
 
@@ -148,14 +147,19 @@ icon: ""                            # 自定义图标文件名（assets/ 下，�
 | GET | `/api/v1/health` | **公开**：服务名称、版本、启动时间、uptime、redis/sqlite 状态；依赖异常返回 503 |
 | POST | `/api/v1/auth/login` | 密码登录，签发会话 |
 | POST | `/api/v1/auth/logout` | 登出 |
-| GET | `/api/v1/links` | 列表（分页 + 关键字搜索 code/url/title + 排序） |
-| POST | `/api/v1/links` | 创建（`url` 必填；`code` 可选，可多级，命中保留字/重复 → 400/409；`expires_at` 可选，0=永不；自动抓取 title/description；响应含 `urls` 数组 = 主+副 baseurl 生成的完整短链列表） |
-| POST | `/api/v1/links/batch` | 批量导入（JSON 数组，上限 500 条/次，逐条校验，返回逐条结果） |
+| GET | `/api/v1/links` | 列表（分页 + 关键字搜索 code/url/title + 过期状态筛选 `expires=active|expired` + 排序） |
+| POST | `/api/v1/links` | 创建（`url` 必填；`code` 可选，可多级，命中保留字/重复 → 400/409；`expires_at` 可选，0=永不；title/description 由后台异步抓取，响应立即返回；响应含 `urls` 数组 = 主+副 baseurl 生成的完整短链列表） |
+| DELETE | `/api/v1/links` | 批量删除（body `{codes: [...]}`，上限 500；不存在的 code 跳过） |
+| POST | `/api/v1/links/batch` | 批量导入（对象 `{conflict, items}`，上限 500 条/次，逐条校验返回逐条结果；`conflict` 为 error/skip/update——code 已存在时报错/跳过/更新；兼容旧裸数组 body；item 支持 title/description/日期字符串 expires_at/click_count/created_at 覆盖） |
+| GET | `/api/v1/links/expired` | 过期链接数量（清空过期前的确认依据） |
+| DELETE | `/api/v1/links/expired` | 清空所有过期链接 |
 | GET | `/api/v1/links/{code}` | 详情（响应含完整短链列表） |
-| PATCH | `/api/v1/links/{code}` | 修改 url/title/description/expires_at/code（改 code 重新校验保留字/重复；改 url 可重新抓取标题） |
-| DELETE | `/api/v1/links/{code}` | 删除（级联删除 daily_clicks） |
-| GET | `/api/v1/links/{code}/stats` | 统计：总数 + 每日数组 |
-| GET | `/api/v1/export.csv` | CSV 导出全部链接（code, url, title, expires_at, clicks, created_at） |
+| PATCH | `/api/v1/links/{code}` | 修改 url/title/description/expires_at/code（改 code 重新校验保留字/重复；改 url 触发后台重新抓取标题） |
+| DELETE | `/api/v1/links/{code}` | 删除（**保留** daily_clicks 点击历史） |
+| GET | `/api/v1/export.csv` | CSV 导出全部链接（code, url, title, description, expires_at, click_count, created_at，UTF-8 BOM） |
+| GET | `/api/v1/export.json` | JSON 导出全部链接（与 CSV 相同 7 字段，导入导出对称） |
+| GET | `/api/v1/logs` | 日志历史（从 LOG_DIR 文件读取，最新在前，limit/offset 分页；未配置 LOG_DIR 时 `available=false`） |
+| GET | `/api/v1/logs/stream` | 日志实时流（SSE，`event: log` 推送结构化记录，30s 心跳） |
 | GET/POST | `/api/v1/ua-blocks` | UA 屏蔽列表 / 新增 |
 | DELETE | `/api/v1/ua-blocks/{id}` | 删除屏蔽规则 |
 | GET/POST | `/api/v1/tokens` | Token 列表（仅前缀+note）/ 生成新 Token（响应展示一次完整值） |
@@ -164,7 +168,7 @@ icon: ""                            # 自定义图标文件名（assets/ 下，�
 | POST | `/api/v1/icon` | 上传图标（SVG/PNG ≤1MB）；DELETE `/api/v1/icon` 恢复默认 |
 | GET | `/api/v1/dashboard` | 仪表盘：链接总数、总点击数、今日点击、最近 14 天每日总点击 |
 
-公开端点：`GET /{code...}`（302 跳转）、`GET /expired`（服务端渲染）、`GET /assets/{file}`（自定义图标静态服务）。保留前缀（api/admin/expired/health/assets/favicon/export + 自定义）优先于短链匹配。
+公开端点：`GET /{code...}`（302 跳转；过期的渲染过期页，不存在的渲染 404 页）、`GET /assets/{file}`（自定义图标静态服务）、`GET /admin` 与 `/docs`（管理后台与 Swagger UI）。保留前缀（api/admin/expired/health/assets/favicon/export/docs + 自定义）优先于短链匹配，命中保留前缀渲染 404。
 
 错误统一格式：`{ "error": { "code": "...", "message": "..." } }`，message 按 `Accept-Language` 双语。
 
@@ -208,7 +212,7 @@ i18n：react-i18next；自动检测 + 页内切换（localStorage 记忆）。�
 
 ## 11. Docker
 
-- **Dockerfile** 多阶段：`node:22-alpine` 构建前端 → 复制 dist 到 web/ → `golang:1.24-alpine` 构建（CGO_ENABLED=0）→ `alpine` 运行时，非 root（uid 10001），HEALTHCHECK 打 `/api/v1/health`
+- **Dockerfile** 多阶段：`node:22-alpine` 构建前端 → 复制 dist 到 internal/webui/ → `golang:1.26-alpine` 构建（CGO_ENABLED=0）→ `alpine` 运行时，非 root（uid 10001），HEALTHCHECK 打 `/api/v1/health`
 - **docker-compose.yml**：`app`（映射 8080，挂载：config.yaml、data 卷（SQLite）、assets 卷（图标）；设置 `TZ: Asia/Shanghai`）+ `redis`（AOF 持久化）；`ADMIN_PASSWORD`/`SESSION_SECRET` 等经环境变量注入
 - 本机不构建、不部署 docker，镜像全部由 GitHub Actions 工作流构建并推 GHCR
 
