@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import {
@@ -45,6 +45,31 @@ export default function Links() {
   // Per-link pick of which base URL is shown/copied; defaults to the first.
   const [urlIdx, setUrlIdx] = useState<Record<string, number>>({})
   const [urlMenu, setUrlMenu] = useState<string | null>(null)
+  // The menu is fixed-positioned (the table scrolls, so an absolute menu gets
+  // clipped by the overflow container); these hold its viewport origin.
+  const [menuPos, setMenuPos] = useState<{ x: number; y: number } | null>(null)
+  const [menuClosing, setMenuClosing] = useState(false)
+
+  const closeUrlMenu = () => {
+    if (menuClosing) return
+    setMenuClosing(true)
+    setTimeout(() => {
+      setMenuClosing(false)
+      setUrlMenu(null)
+      setMenuPos(null)
+    }, 160)
+  }
+
+  // A fixed menu drifts away from its button on scroll — close it instead.
+  useEffect(() => {
+    if (!urlMenu) return
+    const onScroll = () => {
+      setUrlMenu(null)
+      setMenuPos(null)
+    }
+    window.addEventListener('scroll', onScroll, true)
+    return () => window.removeEventListener('scroll', onScroll, true)
+  }, [urlMenu])
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['links', query, page],
@@ -199,23 +224,47 @@ export default function Links() {
                     {current && (
                       <div className="relative mt-0.5">
                         <button
-                          onClick={() => setUrlMenu(urlMenu === link.code ? null : link.code)}
+                          onClick={(e) => {
+                            if (urlMenu === link.code) {
+                              closeUrlMenu()
+                              return
+                            }
+                            const r = e.currentTarget.getBoundingClientRect()
+                            // Clamp so the fixed menu never runs off the right edge.
+                            setMenuPos({
+                              x: Math.min(r.left, window.innerWidth - 336),
+                              y: r.bottom + 4,
+                            })
+                            setUrlMenu(link.code)
+                          }}
                           aria-label={t('links.pickBaseUrl')}
                           className="flex max-w-[240px] items-center gap-1 text-xs text-muted transition-colors hover:text-accent-deep dark:hover:text-accent"
                         >
                           <span className="truncate">{current}</span>
-                          {link.urls.length > 1 && <ChevronDown size={12} className="shrink-0 opacity-60" />}
+                          {link.urls.length > 1 && (
+                            <ChevronDown
+                              size={12}
+                              className={`shrink-0 opacity-60 transition-transform duration-200 ${
+                                urlMenu === link.code ? 'rotate-180' : ''
+                              }`}
+                            />
+                          )}
                         </button>
-                        {urlMenu === link.code && link.urls.length > 1 && (
+                        {urlMenu === link.code && menuPos && link.urls.length > 1 && (
                           <>
-                            <div className="fixed inset-0 z-30" onClick={() => setUrlMenu(null)} />
-                            <div className="absolute left-0 top-full z-40 mt-1 w-80 rounded-xl border border-hairline bg-white p-1 shadow-[0_12px_40px_rgba(0,0,0,0.18)] dark:bg-[#1c1c1e]">
+                            <div className="fixed inset-0 z-30" onClick={closeUrlMenu} />
+                            <div
+                              className={`fixed z-40 w-80 rounded-xl border border-hairline bg-white p-1 shadow-[0_12px_40px_rgba(0,0,0,0.18)] dark:bg-[#1c1c1e] ${
+                                menuClosing ? 'animate-pop-out' : 'animate-pop-in'
+                              }`}
+                              style={{ left: menuPos.x, top: menuPos.y }}
+                            >
                               {link.urls.map((u, i) => (
                                 <button
                                   key={u}
                                   onClick={() => {
                                     setUrlIdx((m) => ({ ...m, [link.code]: i }))
-                                    setUrlMenu(null)
+                                    closeUrlMenu()
                                   }}
                                   className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs transition-colors ${
                                     i === idx
