@@ -56,6 +56,11 @@ Images are built and published by GitHub Actions on [GHCR](https://github.com/wm
 `ghcr.io/wmy2981/gourl:latest` (releases, main branch) or `:dev` (pre-releases).
 To deploy a pre-release: `GOURL_IMAGE=ghcr.io/wmy2981/gourl:dev docker compose up -d`.
 
+Pre-release images embed the commit hash in the version string
+(`0.1.0 (abc1234)`), visible in `/api/v1/health` and the admin footer, so a
+running dev build identifies its exact commit; main builds keep the plain
+version.
+
 ## Configuration
 
 | Variable | Default | Purpose |

@@ -20,7 +20,7 @@ The full design is in [DESIGN.md](DESIGN.md) (Chinese). **It is the single sourc
 - **One logical change = one commit**; each change must carry its tests, and nothing is committed until all tests pass
 - Branch model: `main` (release) + `dev` (pre-release); feature branches merge via PR
 - **dev is the active development branch**: CI + Docker build must be green on dev before merging to main
-- Version: single source of truth is the root `VERSION` file, maintained manually; release pipeline validates forward-only progression, unchanged versions skip (never fail) — see `.github/scripts/release_check.py`
+- Version: single source of truth is the root `VERSION` file, maintained manually; release pipeline validates forward-only progression, unchanged versions skip (never fail) — see `.github/scripts/release_check.py`. Docker builds inject `VERSION (sha7)` (dev branch) or the plain version (main) via the `VERSION_STR` build arg — both the Go `version.Version` (health/log) and the frontend `__APP_VERSION__` (footer/login); local builds fall back to the VERSION file
 - CI/build workflows have **no concurrency block**: every push runs its own full pipeline and never cancels an older run
 
 ## Engineering Rules

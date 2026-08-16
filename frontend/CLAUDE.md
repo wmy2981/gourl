@@ -19,7 +19,7 @@ Subdirectory instructions for the React SPA admin console. Root-level convention
 ## Gotchas
 
 - **Icon single source**: the brand icon lives at the repo root `assets/favicon.svg`. `src/assets/icon.svg` is a **gitignored generated copy** (imported by `Layout.tsx`); never edit it — change the root source and re-copy (`cp ../../assets/favicon.svg src/assets/icon.svg`). CI and `scripts/build-frontend.ps1` regenerate it
-- **Version injection**: `vite.config.ts` reads the repo-root `VERSION` file (`../VERSION`) into `__APP_VERSION__` — used in the footer and login page. The Docker build copies VERSION to `/VERSION` (filesystem root) because `../VERSION` resolves there from `/app`
+- **Version injection**: `vite.config.ts` reads the repo-root `VERSION` file (`../VERSION`) into `__APP_VERSION__` — used in the footer and login page. The Docker build copies VERSION to `/VERSION` (filesystem root) because `../VERSION` resolves there from `/app`, and dev builds overwrite it with `VERSION (sha7)` (build arg `VERSION_STR`)
 - **E2E data is shared**: all specs hit the same webServer process (single in-memory DB) and run serially (`workers: 1`). Tests must not depend on list ordering beyond the newest-first default
 - **Playwright assertions**: `getByText` collides when both the code cell and the full short-URL line contain the same text — use `{ exact: true }` for short-code assertions, and scope dialog buttons via `getByRole('dialog')`
 - **Row URL button collision**: each link row's base-URL picker button carries `aria-label={t('links.pickBaseUrl')}` — without it the accessible name is the URL itself and fuzzy role matchers like `getByRole('button', { name: /edit/i })` click it instead of the row's Edit action

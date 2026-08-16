@@ -53,6 +53,9 @@ docker compose up -d
 `ghcr.io/wmy2981/gourl:latest`（正式版，main 分支）或 `:dev`（预发行）。
 部署预发行版：`GOURL_IMAGE=ghcr.io/wmy2981/gourl:dev docker compose up -d`。
 
+预发行镜像在版本号中内嵌提交哈希（如 `0.1.0 (abc1234)`），可见于
+`/api/v1/health` 与管理后台页脚，便于识别正在运行的构建；main 构建保持纯版本号。
+
 ## 配置
 
 | 环境变量 | 默认值 | 用途 |

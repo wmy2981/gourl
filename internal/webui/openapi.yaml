@@ -195,6 +195,7 @@ paths:
     get:
       tags: [ua-blocks]
       summary: List blocked User-Agent patterns
+      description: Programmatic access — the settings page manages these patterns through the Config resource (GET/PUT /config, field ua_blocks).
       responses:
         "200": { description: List }
     post:
@@ -352,6 +353,10 @@ components:
         base_url: { type: string }
         extra_base_urls: { type: array, items: { type: string } }
         reserved_codes: { type: array, items: { type: string } }
+        ua_blocks:
+          type: array
+          description: Blocked User-Agent patterns (case-insensitive substring match). Managed from the settings page like any other list field; PUT replaces the whole list.
+          items: { type: string }
         icon: { type: string }
 security:
   - bearerAuth: []
