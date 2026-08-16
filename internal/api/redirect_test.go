@@ -1,7 +1,6 @@
 package api
 
 import (
-	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -68,7 +67,9 @@ func TestRedirectCountsClick(t *testing.T) {
 
 func TestRedirectUABlockedNotCounted(t *testing.T) {
 	s, mr := newTestServer(t)
-	if _, err := s.store.CreateUABlock(context.Background(), "Googlebot", s.now()); err != nil {
+	cfg := s.cfg.Get()
+	cfg.UABlocks = []string{"Googlebot"}
+	if err := s.cfg.Update(cfg); err != nil {
 		t.Fatal(err)
 	}
 	createLink(t, s, "abc", "https://example.com/target")

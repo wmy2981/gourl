@@ -62,18 +62,14 @@ func (s *Server) redirect(w http.ResponseWriter, r *http.Request) {
 }
 
 // uaBlocked reports whether the request UA matches any configured block
-// pattern (case-insensitive substring match).
+// pattern (case-insensitive substring match). Patterns come from config.yaml.
 func (s *Server) uaBlocked(r *http.Request) (bool, error) {
 	ua := strings.ToLower(r.UserAgent())
 	if ua == "" {
 		return false, nil
 	}
-	blocks, err := s.store.ListUABlocks(r.Context())
-	if err != nil {
-		return false, err
-	}
-	for _, b := range blocks {
-		if strings.Contains(ua, strings.ToLower(b.Pattern)) {
+	for _, p := range s.cfg.Get().UABlocks {
+		if strings.Contains(ua, strings.ToLower(p)) {
 			return true, nil
 		}
 	}

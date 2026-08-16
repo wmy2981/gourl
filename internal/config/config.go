@@ -35,6 +35,7 @@ type Config struct {
 	BaseURL         string   `yaml:"base_url" json:"base_url"`
 	ExtraBaseURLs   []string `yaml:"extra_base_urls" json:"extra_base_urls"`
 	ReservedCodes   []string `yaml:"reserved_codes" json:"reserved_codes"`
+	UABlocks        []string `yaml:"ua_blocks" json:"ua_blocks"`
 	Icon            string   `yaml:"icon" json:"icon"`
 }
 
@@ -135,11 +136,15 @@ func (m *Manager) Get() *Config {
 	cp := *m.cfg
 	cp.ExtraBaseURLs = append([]string(nil), m.cfg.ExtraBaseURLs...)
 	cp.ReservedCodes = append([]string(nil), m.cfg.ReservedCodes...)
+	cp.UABlocks = append([]string(nil), m.cfg.UABlocks...)
 	if cp.ExtraBaseURLs == nil {
 		cp.ExtraBaseURLs = []string{}
 	}
 	if cp.ReservedCodes == nil {
 		cp.ReservedCodes = []string{}
+	}
+	if cp.UABlocks == nil {
+		cp.UABlocks = []string{}
 	}
 	return &cp
 }

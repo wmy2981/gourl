@@ -27,5 +27,9 @@ extra_base_urls: []
 # (api, admin, expired, health, assets, favicon, export, ...). Case-insensitive.
 reserved_codes: []
 
+# Blocked User-Agent patterns (case-insensitive substring match, 403 + no
+# click counted). Managed from the settings page, persisted here.
+ua_blocks: []
+
 # Custom icon file name inside the assets data directory (empty = built-in default).
 icon: ""
