@@ -88,7 +88,7 @@ export function Dialog({
       <div
         role="dialog"
         aria-modal="true"
-        className={`glass w-full ${wide ? 'max-w-2xl' : 'max-w-md'} max-h-[85vh] overflow-y-auto p-6`}
+        className={`glass w-full animate-pop-in ${wide ? 'max-w-2xl' : 'max-w-md'} max-h-[85vh] overflow-y-auto p-6`}
       >
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-semibold">{title}</h2>
@@ -118,19 +118,25 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([])
   const toast = useCallback((message: string, kind: 'success' | 'error' = 'success') => {
     const id = Date.now() + Math.random()
-    setToasts((ts) => [...ts, { id, message, kind }])
-    setTimeout(() => setToasts((ts) => ts.filter((t) => t.id !== id)), 3200)
+    // Errors deserve more reading time; successes dismiss quickly.
+    const ttl = kind === 'error' ? 6000 : 3200
+    setToasts((ts) => [...ts.slice(-4), { id, message, kind }]) // stack, cap at 5
+    setTimeout(() => setToasts((ts) => ts.filter((t) => t.id !== id)), ttl)
   }, [])
   return (
     <ToastContext.Provider value={{ toast }}>
       {children}
-      <div className="fixed bottom-5 left-1/2 z-[60] flex -translate-x-1/2 flex-col items-center gap-2">
+      {/* Bottom-right stacked toasts: compact, out of the way, layered */}
+      <div className="pointer-events-none fixed bottom-5 right-5 z-[60] flex max-w-sm flex-col items-end gap-1.5">
         {toasts.map((t) => (
           <div
             key={t.id}
-            className={`glass px-4 py-2.5 text-sm font-medium ${
-              t.kind === 'error' ? '!text-danger' : ''
-            } animate-[fadeIn_.2s_ease]`}
+            className={`glass animate-toast-in pointer-events-auto max-w-full truncate px-3.5 py-2 text-sm font-medium shadow-lg ${
+              t.kind === 'error'
+                ? '!text-danger !bg-white/90 dark:!bg-[#2a1a1a]/90'
+                : ''
+            }`}
+            title={t.message}
           >
             {t.message}
           </div>

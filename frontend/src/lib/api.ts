@@ -38,7 +38,7 @@ export interface LinkListResponse {
 export interface UABlock {
   id: number
   pattern: string
-  created_at: number
+  created_at?: number
 }
 
 export interface TokenInfo {
@@ -140,6 +140,7 @@ export const api = {
   deleteLink: (code: string) =>
     request<void>(`/api/v1/links/${encodePath(code)}`, { method: 'DELETE' }),
   exportCsv: () => request<Blob>('/api/v1/export.csv'),
+  exportJson: () => request<Link[]>('/api/v1/export.json'),
 
   uaBlocks: () => request<{ ua_blocks: UABlock[] }>('/api/v1/ua-blocks'),
   addUABlock: (pattern: string) =>

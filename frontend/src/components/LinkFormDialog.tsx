@@ -17,15 +17,29 @@ export default function LinkFormDialog({
   const { t } = useTranslation()
   const [url, setUrl] = useState('')
   const [code, setCode] = useState('')
-  const [expiresAt, setExpiresAt] = useState('0')
+  // Expiry as a calendar date (yyyy-mm-dd); empty means never expires.
+  const [expiresDate, setExpiresDate] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+
+  // unix seconds → local yyyy-mm-dd for the date input ('' when never).
+  const toDate = (unix: number) => {
+    if (!unix) return ''
+    const d = new Date(unix * 1000)
+    const pad = (n: number) => String(n).padStart(2, '0')
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+  }
+  // local yyyy-mm-dd → unix seconds at local midnight.
+  const toUnix = (date: string) => {
+    if (!date) return 0
+    return Math.floor(new Date(`${date}T00:00:00`).getTime() / 1000)
+  }
 
   useEffect(() => {
     if (open) {
       setUrl(link?.url ?? '')
       setCode(link?.code ?? '')
-      setExpiresAt(String(link?.expires_at ?? 0))
+      setExpiresDate(toDate(link?.expires_at ?? 0))
       setError('')
     }
   }, [open, link])
@@ -36,7 +50,7 @@ export default function LinkFormDialog({
     setBusy(true)
     setError('')
     try {
-      const expires = Number(expiresAt)
+      const expires = toUnix(expiresDate)
       if (link) {
         await api.updateLink(link.code, { url, code, expires_at: expires })
       } else {
@@ -92,10 +106,9 @@ export default function LinkFormDialog({
           <Label htmlFor="link-expires">{t('form.expiresAt')}</Label>
           <Input
             id="link-expires"
-            type="number"
-            min={0}
-            value={expiresAt}
-            onChange={(e) => setExpiresAt(e.target.value)}
+            type="date"
+            value={expiresDate}
+            onChange={(e) => setExpiresDate(e.target.value)}
           />
         </div>
         {error && <p className="text-sm text-danger">{error}</p>}

@@ -46,14 +46,16 @@
     "page": "Page",
     "of": "of",
     "total": "total",
-    "noResults": "Nothing matches your search."
+    "noResults": "Nothing matches your search.",
+    "exportJson": "Export JSON",
+    "deleted": "Deleted"
   },
   "form": {
     "url": "Destination URL",
     "urlPlaceholder": "https://example.com/very/long/path",
     "code": "Short code (optional)",
     "codePlaceholder": "my-code or auto-generated",
-    "expiresAt": "Expires at (unix seconds, 0 = never)",
+    "expiresAt": "Expiry date (empty = never)",
     "save": "Save",
     "cancel": "Cancel",
     "create": "Create",
@@ -66,7 +68,8 @@
     "invalidUrl": "Destination must be an absolute http(s) URL",
     "invalidCode": "Invalid short code",
     "codeTaken": "This short code is already in use",
-    "reserved": "This short code is a reserved system path"
+    "reserved": "This short code is a reserved system path",
+    "importFromFile": "Import from file"
   },
   "settings": {
     "heading": "Settings",
@@ -82,7 +85,7 @@
     "baseUrl": "Primary base URL",
     "baseUrlHint": "Empty = inferred from request host",
     "extraBaseUrls": "Extra base URLs",
-    "extraBaseUrlsHint": "Shown alongside the primary URL",
+    "extraBaseUrlsHint": "One per line",
     "addExtra": "Add base URL",
     "reservedCodes": "Extra reserved codes",
     "reservedCodesHint": "One per line, e.g. ops",
@@ -90,7 +93,7 @@
     "uploadIcon": "Upload SVG/PNG",
     "removeIcon": "Reset to default",
     "uaBlocks": "Blocked user agents",
-    "uaBlockHint": "Case-insensitive substring, e.g. Googlebot",
+    "uaBlockHint": "Case-insensitive substring, one per line, e.g. Googlebot",
     "addUaBlock": "Add",
     "tokens": "API tokens",
     "tokensHint": "Full tokens are shown only once at creation",
@@ -99,7 +102,9 @@
     "revoke": "Revoke",
     "save": "Save settings",
     "saved": "Settings saved",
-    "saveFailed": "Could not save settings"
+    "saveFailed": "Could not save settings",
+    "tokenNeverExpires": "Tokens never expire — revoke them manually when no longer needed.",
+    "apiDocs": "API documentation"
   },
   "common": {
     "loading": "Loading…",

@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
+import { api } from './lib/api'
 import Layout from './components/Layout'
 import { ToastProvider } from './components/ui'
 import Dashboard from './pages/Dashboard'
@@ -16,9 +17,15 @@ if (savedTheme === 'dark' || (!savedTheme && prefersDark)) {
 
 export default function App() {
   useEffect(() => {
-    // Set the document title from the service name once config loads in
-    // pages; here the default keeps the tab labeled.
+    // The site title from the admin config drives the browser tab; fall
+    // back to the brand name when the API is unreachable.
     document.title = 'gourl'
+    api
+      .getConfig()
+      .then((cfg) => {
+        if (cfg.site.title) document.title = cfg.site.title
+      })
+      .catch(() => {})
   }, [])
 
   return (

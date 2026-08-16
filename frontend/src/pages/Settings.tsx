@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { KeyRound, Plus, ShieldOff, Trash2, Upload } from 'lucide-react'
+import { KeyRound, ShieldOff, Trash2, Upload } from 'lucide-react'
 import { api, ApiError, type AppConfig } from '../lib/api'
 import { Button, Card, Input, Label, Textarea, useToast } from '../components/ui'
 
@@ -12,6 +12,7 @@ export default function Settings() {
 
   const { data: cfg } = useQuery({ queryKey: ['config'], queryFn: api.getConfig })
   const [form, setForm] = useState<AppConfig | null>(null)
+  const [extraUrlsText, setExtraUrlsText] = useState('')
   const [reservedText, setReservedText] = useState('')
   const [uaPattern, setUaPattern] = useState('')
   const [tokenNote, setTokenNote] = useState('')
@@ -20,6 +21,7 @@ export default function Settings() {
   useEffect(() => {
     if (cfg && !form) {
       setForm(cfg)
+      setExtraUrlsText(cfg.extra_base_urls.join('\n'))
       setReservedText(cfg.reserved_codes.join('\n'))
     }
   }, [cfg, form])
@@ -46,6 +48,10 @@ export default function Settings() {
   const save = () => {
     saveMutation.mutate({
       ...form,
+      extra_base_urls: extraUrlsText
+        .split('\n')
+        .map((s) => s.trim())
+        .filter(Boolean),
       reserved_codes: reservedText
         .split('\n')
         .map((s) => s.trim())
@@ -121,29 +127,13 @@ export default function Settings() {
               <p className="mt-1 text-xs text-muted">{t('settings.baseUrlHint')}</p>
             </div>
             <div className="sm:col-span-2">
-              <Label>{t('settings.extraBaseUrls')}</Label>
-              <div className="flex flex-col gap-2">
-                {form.extra_base_urls.map((u, i) => (
-                  <div key={i} className="flex gap-2">
-                    <Input value={u} onChange={(e) => {
-                      const next = [...form.extra_base_urls]
-                      next[i] = e.target.value
-                      set('extra_base_urls', next)
-                    }} />
-                    <Button variant="ghost" onClick={() => set('extra_base_urls', form.extra_base_urls.filter((_, j) => j !== i))} aria-label="Remove">
-                      <Trash2 size={15} />
-                    </Button>
-                  </div>
-                ))}
-                <Button
-                  variant="outline"
-                  className="self-start"
-                  onClick={() => set('extra_base_urls', [...form.extra_base_urls, ''])}
-                >
-                  <Plus size={15} />
-                  {t('settings.addExtra')}
-                </Button>
-              </div>
+              <Label htmlFor="cfg-extra-urls">{t('settings.extraBaseUrls')}</Label>
+              <Textarea
+                id="cfg-extra-urls"
+                rows={3}
+                value={extraUrlsText}
+                onChange={(e) => setExtraUrlsText(e.target.value)}
+              />
               <p className="mt-1 text-xs text-muted">{t('settings.extraBaseUrlsHint')}</p>
             </div>
             <div className="sm:col-span-2">
@@ -188,7 +178,13 @@ export default function Settings() {
           setUaPattern={setUaPattern}
           add={async () => {
             try {
-              await api.addUABlock(uaPattern)
+              const patterns = uaPattern
+                .split('\n')
+                .map((s) => s.trim())
+                .filter(Boolean)
+              for (const p of patterns) {
+                await api.addUABlock(p)
+              }
               setUaPattern('')
               queryClient.invalidateQueries({ queryKey: ['ua-blocks'] })
             } catch (err) {
@@ -241,6 +237,8 @@ function UABlockSection({
     <Card className="p-6">
       <h2 className="mb-1 text-sm font-medium text-muted">{t('settings.uaBlocks')}</h2>
       <p className="mb-4 text-xs text-muted">{t('settings.uaBlockHint')}</p>
+      {/* Unconditional: block rules never expire, whether any exist yet or not. */}
+      <p className="mb-4 text-xs text-muted">{t('common.never')}</p>
       <div className="flex flex-col gap-2">
         {data?.ua_blocks.map((b) => (
           <div key={b.id} className="flex items-center justify-between rounded-xl border border-hairline px-3.5 py-2">
@@ -253,11 +251,14 @@ function UABlockSection({
             </Button>
           </div>
         ))}
-        {data?.ua_blocks.length === 0 && (
-          <p className="py-2 text-sm text-muted">{t('common.never')}</p>
-        )}
-        <div className="flex gap-2">
-          <Input value={uaPattern} onChange={(e) => setUaPattern(e.target.value)} placeholder="curl" aria-label="UA pattern" />
+        <Textarea
+          rows={3}
+          value={uaPattern}
+          onChange={(e) => setUaPattern(e.target.value)}
+          placeholder="curl"
+          aria-label="UA pattern"
+        />
+        <div className="flex justify-end">
           <Button variant="outline" onClick={add} disabled={!uaPattern.trim()}>
             {t('settings.addUaBlock')}
           </Button>
@@ -287,6 +288,18 @@ function TokenSection({
     <Card className="p-6">
       <h2 className="mb-1 text-sm font-medium text-muted">{t('settings.tokens')}</h2>
       <p className="mb-4 text-xs text-muted">{t('settings.tokensHint')}</p>
+      {/* Unconditional: tokens never expire, whether any exist yet or not. */}
+      <p className="mb-4 text-xs text-muted">{t('settings.tokenNeverExpires')}</p>
+      <p className="mb-4">
+        <a
+          href="/docs/"
+          target="_blank"
+          rel="noreferrer"
+          className="text-sm font-medium text-accent-deep transition-colors hover:text-accent dark:text-accent"
+        >
+          {t('settings.apiDocs')} →
+        </a>
+      </p>
       {newToken && (
         <div className="mb-4 rounded-xl border border-accent/40 bg-accent-soft p-3">
           <p className="short-code break-all text-sm">{newToken}</p>

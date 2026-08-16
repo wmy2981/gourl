@@ -15,16 +15,13 @@ import {
   Trash2,
 } from 'lucide-react'
 import { api, ApiError, type Link } from '../lib/api'
+import { copyText } from '../lib/clipboard'
 import { Button, Card, Dialog, Input, useToast } from '../components/ui'
 import LinkFormDialog from '../components/LinkFormDialog'
 import QRDialog from '../components/QRDialog'
 import ImportDialog from '../components/ImportDialog'
 
 const PAGE_SIZE = 20
-
-function copyText(text: string): Promise<void> {
-  return navigator.clipboard.writeText(text)
-}
 
 function formatDate(unix: number, t: (k: string) => string): string {
   if (unix <= 0) return t('common.never')
@@ -59,31 +56,47 @@ export default function Links() {
       invalidate()
       queryClient.invalidateQueries({ queryKey: ['dashboard'] })
       setDeleting(null)
-      toast(t('links.delete'))
+      toast(t('links.deleted'))
     },
     onError: (err: unknown) => toast(err instanceof ApiError ? err.message : t('common.error'), 'error'),
   })
 
   const copy = async (code: string, url: string) => {
-    try {
-      await copyText(url)
+    // Clipboard fallback chain: API → hidden textarea (works on plain http).
+    const ok = await copyText(url)
+    if (ok) {
       setCopied(code)
       setTimeout(() => setCopied(''), 1500)
-    } catch {
-      toast(t('common.error'), 'error')
+    } else {
+      toast(url, 'error')
     }
+  }
+
+  const download = (blob: Blob, filename: string) => {
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = filename
+    a.click()
+    URL.revokeObjectURL(a.href)
   }
 
   const exportCsv = async () => {
     try {
       const res = await fetch('/api/v1/export.csv', { credentials: 'same-origin' })
       if (!res.ok) throw new Error(String(res.status))
-      const blob = await res.blob()
-      const a = document.createElement('a')
-      a.href = URL.createObjectURL(blob)
-      a.download = `gourl-links-${new Date().toISOString().slice(0, 10)}.csv`
-      a.click()
-      URL.revokeObjectURL(a.href)
+      download(await res.blob(), `gourl-links-${new Date().toISOString().slice(0, 10)}.csv`)
+    } catch {
+      toast(t('common.error'), 'error')
+    }
+  }
+
+  const exportJson = async () => {
+    try {
+      const links = await api.exportJson()
+      const blob = new Blob([JSON.stringify(links, null, 2)], {
+        type: 'application/json',
+      })
+      download(blob, `gourl-links-${new Date().toISOString().slice(0, 10)}.json`)
     } catch {
       toast(t('common.error'), 'error')
     }
@@ -103,6 +116,10 @@ export default function Links() {
           <Button variant="outline" onClick={exportCsv}>
             <Download size={16} />
             {t('links.export')}
+          </Button>
+          <Button variant="outline" onClick={exportJson}>
+            <Download size={16} />
+            {t('links.exportJson')}
           </Button>
           <Button
             onClick={() => {

@@ -1,10 +1,14 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { Upload } from 'lucide-react'
 import { api, ApiError } from '../lib/api'
+import { parseCSV } from '../lib/csv'
 import { Button, Dialog, Textarea, useToast } from './ui'
 
-// Batch import: a JSON array of {url, code?, expires_at?} items, one per
-// intent, e.g. [{"url": "https://a.com/x"}, {"url": "https://b.com/y", "code": "b"}]
+// Batch import: a JSON array of {url, code?, expires_at?} items pasted or
+// loaded from a file. JSON files are parsed as-is; CSV files expect a header
+// row (code,url,title,description,expires_at) — the same shape the exports
+// produce.
 export default function ImportDialog({
   open,
   onClose,
@@ -16,9 +20,36 @@ export default function ImportDialog({
 }) {
   const { t } = useTranslation()
   const { toast } = useToast()
+  const fileRef = useRef<HTMLInputElement>(null)
   const [text, setText] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+
+  // Load a .json or .csv file and turn it into the editable JSON textarea.
+  const loadFile = async (file: File | undefined) => {
+    if (!file) return
+    try {
+      const raw = await file.text()
+      if (file.name.toLowerCase().endsWith('.csv')) {
+        const rows = parseCSV(raw)
+        const items = rows.map((r) => {
+          const item: Record<string, unknown> = { url: r.url }
+          if (r.code) item.code = r.code
+          if (r.title) item.title = r.title
+          if (r.description) item.description = r.description
+          if (r.expires_at) item.expires_at = Number(r.expires_at)
+          return item
+        })
+        setText(JSON.stringify(items, null, 2))
+      } else {
+        // .json (or unknown): keep the text as-is; submit validates it.
+        setText(raw)
+      }
+      setError('')
+    } catch {
+      setError(t('form.invalidCode'))
+    }
+  }
 
   const submit = async () => {
     if (busy) return
@@ -47,7 +78,20 @@ export default function ImportDialog({
 
   return (
     <Dialog open={open} onClose={onClose} title={t('form.importTitle')} wide>
-      <p className="mb-3 text-xs text-muted">{t('form.importHint')}</p>
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <p className="text-xs text-muted">{t('form.importHint')}</p>
+        <Button variant="outline" className="shrink-0" onClick={() => fileRef.current?.click()}>
+          <Upload size={14} />
+          {t('form.importFromFile')}
+        </Button>
+        <input
+          ref={fileRef}
+          type="file"
+          accept=".json,.csv"
+          className="hidden"
+          onChange={(e) => loadFile(e.target.files?.[0])}
+        />
+      </div>
       <Textarea
         rows={10}
         value={text}

@@ -46,14 +46,16 @@
     "page": "第",
     "of": "页 / 共",
     "total": "条",
-    "noResults": "没有匹配的结果。"
+    "noResults": "没有匹配的结果。",
+    "exportJson": "导出 JSON",
+    "deleted": "已删除"
   },
   "form": {
     "url": "目标 URL",
     "urlPlaceholder": "https://example.com/very/long/path",
     "code": "短码（可选）",
     "codePlaceholder": "my-code 或自动生成",
-    "expiresAt": "过期时间（unix 秒，0 为永不过期）",
+    "expiresAt": "过期日期（留空=永不过期）",
     "save": "保存",
     "cancel": "取消",
     "create": "创建",
@@ -66,7 +68,8 @@
     "invalidUrl": "目标必须是完整的 http(s) URL",
     "invalidCode": "短码格式无效",
     "codeTaken": "该短码已被占用",
-    "reserved": "该短码是系统保留路径"
+    "reserved": "该短码是系统保留路径",
+    "importFromFile": "从文件导入"
   },
   "settings": {
     "heading": "设置",
@@ -82,7 +85,7 @@
     "baseUrl": "主基址",
     "baseUrlHint": "留空则按请求 Host 推断",
     "extraBaseUrls": "附加基址",
-    "extraBaseUrlsHint": "与主地址一同展示",
+    "extraBaseUrlsHint": "每行一个",
     "addExtra": "添加基址",
     "reservedCodes": "额外保留字",
     "reservedCodesHint": "每行一个，例如 ops",
@@ -90,7 +93,7 @@
     "uploadIcon": "上传 SVG/PNG",
     "removeIcon": "恢复默认",
     "uaBlocks": "屏蔽的 User-Agent",
-    "uaBlockHint": "大小写不敏感子串，例如 Googlebot",
+    "uaBlockHint": "大小写不敏感子串，每行一个，例如 Googlebot",
     "addUaBlock": "添加",
     "tokens": "API Token",
     "tokensHint": "完整 Token 仅在创建时展示一次",
@@ -99,7 +102,9 @@
     "revoke": "吊销",
     "save": "保存设置",
     "saved": "设置已保存",
-    "saveFailed": "保存失败"
+    "saveFailed": "保存失败",
+    "tokenNeverExpires": "Token 永不过期——不再需要时请手动吊销。",
+    "apiDocs": "API 文档"
   },
   "common": {
     "loading": "加载中…",

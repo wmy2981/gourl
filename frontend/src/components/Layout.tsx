@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { LayoutDashboard, Link2, LogOut, Menu, Moon, Settings, Sun, X } from 'lucide-react'
 import { api } from '../lib/api'
@@ -27,8 +28,13 @@ function useTheme() {
 export default function Layout() {
   const { t, i18n } = useTranslation()
   const navigate = useNavigate()
+  const location = useLocation()
   const { dark, toggle } = useTheme()
   const [mobileOpen, setMobileOpen] = useState(false)
+  // The configured service name drives the sidebar, top bar and footer text;
+  // falls back to the brand name while the config is still loading.
+  const { data: cfg } = useQuery({ queryKey: ['config'], queryFn: api.getConfig })
+  const siteName = cfg?.site.name || __APP_NAME__
 
   const lang = (i18n.language ?? 'en').startsWith('zh') ? 'zh' : 'en'
   const switchLang = () => setLanguage(lang === 'zh' ? 'en' : 'zh')
@@ -54,7 +60,7 @@ export default function Layout() {
       <div className="mb-8 flex items-center gap-2.5">
         <AppIcon />
         <div>
-          <div className="font-semibold leading-tight">{__APP_NAME__}</div>
+          <div className="font-semibold leading-tight">{siteName}</div>
           <div className="text-xs text-muted">{t('app.tagline')}</div>
         </div>
       </div>
@@ -96,7 +102,7 @@ export default function Layout() {
       <div className="fixed inset-x-0 top-0 z-40 flex items-center justify-between border-b border-hairline bg-canvas/80 px-4 py-3 backdrop-blur-xl dark:bg-canvas-dark/80 md:hidden">
         <div className="flex items-center gap-2">
           <AppIcon size={22} />
-          <span className="font-semibold">{__APP_NAME__}</span>
+          <span className="font-semibold">{siteName}</span>
         </div>
         <button onClick={() => setMobileOpen(true)} aria-label="Menu" className="rounded-lg p-1.5">
           <Menu size={20} />
@@ -115,14 +121,15 @@ export default function Layout() {
       )}
 
       <main className="min-w-0 flex-1 px-4 pb-16 pt-16 md:px-8 md:pt-8">
-        <div className="mx-auto max-w-5xl">
+        {/* key remounts the page on navigation, replaying the fade-up */}
+        <div key={location.pathname} className="mx-auto max-w-5xl animate-fade-up">
           <Outlet />
         </div>
       </main>
 
       {/* Footer: project name, GitHub link, version */}
       <footer className="fixed inset-x-0 bottom-0 z-30 border-t border-hairline bg-canvas/80 py-2.5 text-center text-xs text-muted backdrop-blur-xl dark:bg-canvas-dark/80">
-        <span className="font-medium text-ink/80 dark:text-ink-dark/80">{__APP_NAME__}</span>
+        <span className="font-medium text-ink/80 dark:text-ink-dark/80">{siteName}</span>
         <span className="mx-2 opacity-40">·</span>
         <a href={__APP_REPO__} target="_blank" rel="noreferrer" className="transition-colors hover:text-accent">
           {t('footer.openSource')}
@@ -148,6 +155,7 @@ function NavItem({
   return (
     <NavLink
       to={to}
+      end={to === '/admin'}
       onClick={onClick}
       className={({ isActive }) =>
         `flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm transition-colors ${

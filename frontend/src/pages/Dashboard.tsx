@@ -75,8 +75,9 @@ export default function Dashboard() {
                 <Tooltip
                   contentStyle={{
                     borderRadius: 12,
-                    border: 'none',
-                    background: 'rgba(255,255,255,0.9)',
+                    border: '1px solid var(--color-hairline)',
+                    background: 'var(--tooltip-bg)',
+                    color: 'var(--tooltip-text)',
                     backdropFilter: 'blur(12px)',
                     boxShadow: '0 8px 30px rgba(0,0,0,0.12)',
                   }}
