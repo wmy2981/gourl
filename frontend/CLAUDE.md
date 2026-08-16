@@ -30,7 +30,9 @@ Subdirectory instructions for the React SPA admin console. Root-level convention
 
 - UI accent is **amber** on graphite neutrals (Apple-style glassmorphism); never default blue-purple gradients. The **brand icon is amber `#f59e0b`** too (user-specified, shares the accent color)
 - Motion runs on **CSS tokens** (`--animate-*` in `index.css`) for pages/dialogs/drawers and on **`motion` (framer-motion)** for toasts: a stacked pile (newest in front, rear cards peek 12px, hover expands, spring 380/32), content-sized cards with measured heights. Do not reintroduce a global `prefers-reduced-motion` kill-switch — it was removed on purpose (the owner's OS has it enabled and wants the animations)
-- Every user-facing warning/error goes through the toast system — no inline error paragraphs
+- Every user-facing warning/error goes through the toast system — no inline error paragraphs, and no native browser validation bubbles: required-field checks are custom + toast (e.g. `form.urlRequired`)
+- Form controls come from `ui.tsx`: `Select` (custom dropdown — never raw `<select>`, its options panel reuses the pop-in motion), `Checkbox` (drawn, never raw `<input type="checkbox">` — the OS palette clashes with both themes), `DateInput` (fixed yyyy/MM/dd + native picker via showPicker). All aria-labels must be i18n keys
+- Scrollbars are themed globally in `index.css` (webkit pseudo-elements + Firefox `scrollbar-color`); don't restyle per-container
 - Follow the frontend-design skill's two-pass process (token system first, then implementation) for UI work
 - All copy is bilingual via `react-i18next`; `src/locales/en.json` and `zh.json` must keep identical key sets (enforced by a vitest test)
 - Forms must associate `<Label htmlFor>` with input `id` — accessibility and Playwright's `getByLabel` depend on it
