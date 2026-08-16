@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import {
@@ -45,10 +46,13 @@ export default function Links() {
   // Per-link pick of which base URL is shown/copied; defaults to the first.
   const [urlIdx, setUrlIdx] = useState<Record<string, number>>({})
   const [urlMenu, setUrlMenu] = useState<string | null>(null)
-  // The menu is fixed-positioned (the table scrolls, so an absolute menu gets
-  // clipped by the overflow container); these hold its viewport origin.
+  // The menu is rendered through a portal into document.body with fixed
+  // viewport coordinates: nothing inside the page (overflow containers,
+  // transformed wrappers, stacking contexts) can clip or hijack it. These
+  // hold the viewport origin it was opened at.
   const [menuPos, setMenuPos] = useState<{ x: number; y: number } | null>(null)
   const [menuClosing, setMenuClosing] = useState(false)
+  const openedAt = useRef(0)
 
   const closeUrlMenu = () => {
     if (menuClosing) return
@@ -61,9 +65,12 @@ export default function Links() {
   }
 
   // A fixed menu drifts away from its button on scroll — close it instead.
+  // The 150ms grace window ignores the scroll burst a click itself can cause
+  // (focus scrolling, inertia) right after opening.
   useEffect(() => {
     if (!urlMenu) return
     const onScroll = () => {
+      if (Date.now() - openedAt.current < 150) return
       setUrlMenu(null)
       setMenuPos(null)
     }
@@ -230,11 +237,15 @@ export default function Links() {
                               return
                             }
                             const r = e.currentTarget.getBoundingClientRect()
-                            // Clamp so the fixed menu never runs off the right edge.
+                            // Clamp right edge; flip above the button when
+                            // there is no room below it in the viewport.
+                            const estH = 200
+                            const fitsBelow = r.bottom + 4 + estH <= window.innerHeight
                             setMenuPos({
                               x: Math.min(r.left, window.innerWidth - 336),
-                              y: r.bottom + 4,
+                              y: fitsBelow ? r.bottom + 4 : Math.max(8, r.top - estH - 4),
                             })
+                            openedAt.current = Date.now()
                             setUrlMenu(link.code)
                           }}
                           aria-label={t('links.pickBaseUrl')}
@@ -250,35 +261,39 @@ export default function Links() {
                             />
                           )}
                         </button>
-                        {urlMenu === link.code && menuPos && link.urls.length > 1 && (
-                          <>
-                            <div className="fixed inset-0 z-30" onClick={closeUrlMenu} />
-                            <div
-                              className={`fixed z-40 w-80 rounded-xl border border-hairline bg-white p-1 shadow-[0_12px_40px_rgba(0,0,0,0.18)] dark:bg-[#1c1c1e] ${
-                                menuClosing ? 'animate-pop-out' : 'animate-pop-in'
-                              }`}
-                              style={{ left: menuPos.x, top: menuPos.y }}
-                            >
-                              {link.urls.map((u, i) => (
-                                <button
-                                  key={u}
-                                  onClick={() => {
-                                    setUrlIdx((m) => ({ ...m, [link.code]: i }))
-                                    closeUrlMenu()
-                                  }}
-                                  className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs transition-colors ${
-                                    i === idx
-                                      ? 'bg-accent-soft font-medium text-accent-deep dark:text-accent'
-                                      : 'text-muted hover:bg-black/5 dark:hover:bg-white/10'
-                                  }`}
-                                >
-                                  <span className="min-w-0 flex-1 truncate">{u}</span>
-                                  {i === idx && <Check size={12} className="shrink-0" />}
-                                </button>
-                              ))}
-                            </div>
-                          </>
-                        )}
+                        {urlMenu === link.code &&
+                          menuPos &&
+                          link.urls.length > 1 &&
+                          createPortal(
+                            <>
+                              <div className="fixed inset-0 z-40" onClick={closeUrlMenu} />
+                              <div
+                                className={`fixed z-50 w-80 rounded-xl border border-hairline bg-white p-1 shadow-[0_12px_40px_rgba(0,0,0,0.18)] dark:bg-[#1c1c1e] ${
+                                  menuClosing ? 'animate-pop-out' : 'animate-pop-in'
+                                }`}
+                                style={{ left: menuPos.x, top: menuPos.y }}
+                              >
+                                {link.urls.map((u, i) => (
+                                  <button
+                                    key={u}
+                                    onClick={() => {
+                                      setUrlIdx((m) => ({ ...m, [link.code]: i }))
+                                      closeUrlMenu()
+                                    }}
+                                    className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs transition-colors ${
+                                      i === idx
+                                        ? 'bg-accent-soft font-medium text-accent-deep dark:text-accent'
+                                        : 'text-muted hover:bg-black/5 dark:hover:bg-white/10'
+                                    }`}
+                                  >
+                                    <span className="min-w-0 flex-1 truncate">{u}</span>
+                                    {i === idx && <Check size={12} className="shrink-0" />}
+                                  </button>
+                                ))}
+                              </div>
+                            </>,
+                            document.body,
+                          )}
                       </div>
                     )}
                     {link.title && <div className="mt-0.5 max-w-[240px] truncate text-xs text-muted/80">{link.title}</div>}
@@ -345,7 +360,13 @@ export default function Links() {
           queryClient.invalidateQueries({ queryKey: ['dashboard'] })
         }}
       />
-      <QRDialog link={qrLink} open={qrLink !== null} onClose={() => setQrLink(null)} />
+      {/* The QR dialog opens on the base URL picked via the row dropdown. */}
+      <QRDialog
+        link={qrLink}
+        open={qrLink !== null}
+        onClose={() => setQrLink(null)}
+        initialIndex={qrLink ? (urlIdx[qrLink.code] ?? 0) : 0}
+      />
       <ImportDialog open={importOpen} onClose={() => setImportOpen(false)} onImported={invalidate} />
 
       <Dialog open={deleting !== null} onClose={() => setDeleting(null)} title={t('links.delete')}>
