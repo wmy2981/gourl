@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
 import { useTranslation } from 'react-i18next'
 import { Dialog } from './ui'
@@ -16,15 +16,21 @@ export default function QRDialog({
   onClose: () => void
 }) {
   const { t } = useTranslation()
-  const urls = link?.urls ?? []
+  // The parent nulls the link on close; keep the last content so the QR does
+  // not vanish while the dialog is still animating out.
+  const [shown, setShown] = useState(link)
+  useEffect(() => {
+    if (link) setShown(link)
+  }, [link])
+  const urls = shown?.urls ?? []
   const [index, setIndex] = useState(0)
   const active = urls[Math.min(index, Math.max(urls.length - 1, 0))]
 
   return (
     <Dialog open={open} onClose={onClose} title={t('links.qr')}>
-      {link && (
+      {shown && (
         <div className="flex flex-col items-center gap-4">
-          <div className="short-code text-sm text-muted">{link.code}</div>
+          <div className="short-code text-sm text-muted">{shown.code}</div>
           {active ? (
             <div className="rounded-2xl bg-white p-4 shadow-inner">
               <QRCodeSVG value={active} size={196} fgColor="#1d1d1f" />
