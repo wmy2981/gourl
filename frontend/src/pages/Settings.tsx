@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { KeyRound, Trash2, Upload } from 'lucide-react'
+import { KeyRound, Plus, Trash2, Upload } from 'lucide-react'
 import { api, ApiError, type AppConfig } from '../lib/api'
 import { Button, Card, Input, Label, Textarea, useToast } from '../components/ui'
 
@@ -296,8 +296,8 @@ function TokenSection({
         )}
         <div className="flex gap-2">
           <Input value={tokenNote} onChange={(e) => setTokenNote(e.target.value)} placeholder={t('form.note')} />
-          <Button variant="outline" onClick={create}>
-            {t('settings.createToken')}
+          <Button variant="outline" onClick={create} aria-label={t('settings.createToken')} className="!px-2.5">
+            <Plus size={16} />
           </Button>
         </div>
       </div>
