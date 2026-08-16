@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"unicode/utf8"
 )
 
 // alphabet is base62 (digits, uppercase, lowercase).
@@ -64,14 +65,16 @@ func IsReserved(code string, extra []string) bool {
 	return false
 }
 
-// Validate checks a custom code: non-empty, url-safe characters, at most
-// MaxSegments levels, each segment non-empty, total length <= MaxLength.
+// Validate checks a custom code: non-empty, url-safe characters (ASCII
+// alphanumerics, - _ and CJK unified ideographs — simplified Chinese), at
+// most MaxSegments levels, each segment non-empty, total length <= MaxLength
+// (counted in runes, so a 64-character Chinese code is fine).
 func Validate(code string) error {
 	if code == "" {
 		return errors.New("code must not be empty")
 	}
-	if len(code) > MaxLength {
-		return fmt.Errorf("code too long: %d chars, max %d", len(code), MaxLength)
+	if n := utf8.RuneCountInString(code); n > MaxLength {
+		return fmt.Errorf("code too long: %d chars, max %d", n, MaxLength)
 	}
 	segs := strings.Split(code, "/")
 	if len(segs) > MaxSegments {
@@ -82,7 +85,11 @@ func Validate(code string) error {
 			return errors.New("code segments must not be empty")
 		}
 		for _, r := range s {
-			if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '-' || r == '_') {
+			// CJK unified ideographs cover simplified Chinese; the same range
+			// also admits traditional/Japanese kanji, which is intentional
+			// (there is no Unicode range for simplified-only characters).
+			if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' ||
+				r == '-' || r == '_' || r >= '一' && r <= '鿿') {
 				return fmt.Errorf("invalid character %q in code", r)
 			}
 		}

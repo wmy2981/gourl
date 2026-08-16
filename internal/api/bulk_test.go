@@ -4,6 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"strings"
 	"testing"
 	"time"
 )
@@ -299,6 +302,47 @@ func TestListExpiresFilter(t *testing.T) {
 	}
 	if len(list.Links) != 1 || list.Links[0].Code != "fresh" {
 		t.Fatalf("combined filter = %+v, want only 'fresh'", list.Links)
+	}
+}
+
+func TestChineseShortCodeRoundTrip(t *testing.T) {
+	s, _ := newTestServer(t)
+	rec := do(t, s, http.MethodPost, "/api/v1/links", map[string]any{
+		"url":  "https://example.com/目标页面",
+		"code": "中文码",
+	})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create status = %d, body %s", rec.Code, rec.Body.String())
+	}
+	var l linkJSON
+	if err := json.Unmarshal(rec.Body.Bytes(), &l); err != nil {
+		t.Fatal(err)
+	}
+	if l.Code != "中文码" {
+		t.Fatalf("code = %q", l.Code)
+	}
+
+	// The redirect route resolves the percent-encoded path back to the code.
+	req := httptest.NewRequest(http.MethodGet, "/中文码", nil)
+	rr := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rr, req)
+	if rr.Code != http.StatusFound {
+		t.Fatalf("redirect status = %d", rr.Code)
+	}
+	// http.Redirect percent-encodes the non-ASCII location; browsers decode
+	// it transparently, so assert on the decoded form.
+	loc := rr.Header().Get("Location")
+	if decoded, err := url.QueryUnescape(loc); err != nil || decoded != "https://example.com/目标页面" {
+		t.Fatalf("location = %q (decoded %q)", loc, decoded)
+	}
+
+	// Search finds it by code.
+	rec = do(t, s, http.MethodGet, "/api/v1/links?q="+url.QueryEscape("中文"), nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("list status = %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "中文码") {
+		t.Fatalf("search should find the Chinese code, body %s", rec.Body.String())
 	}
 }
 
