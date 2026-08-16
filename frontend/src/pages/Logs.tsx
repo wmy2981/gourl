@@ -181,10 +181,22 @@ export default function Logs() {
           placeholder={t('logs.keyword')}
           className="w-44"
         />
-        <label className="flex items-center gap-1.5 text-xs text-muted">
-          <input type="datetime-local" value={from} onChange={(e) => setFrom(e.target.value)} className="bg-transparent text-xs outline-none" />
+        <label className="flex min-w-0 flex-wrap items-center gap-1.5 text-xs text-muted">
+          <input
+            type="datetime-local"
+            value={from}
+            onChange={(e) => setFrom(e.target.value)}
+            aria-label={t('logs.from')}
+            className="w-40 bg-transparent text-xs text-ink outline-none dark:text-ink-dark"
+          />
           {t('logs.to')}
-          <input type="datetime-local" value={to} onChange={(e) => setTo(e.target.value)} className="bg-transparent text-xs outline-none" />
+          <input
+            type="datetime-local"
+            value={to}
+            onChange={(e) => setTo(e.target.value)}
+            aria-label={t('logs.to')}
+            className="w-40 bg-transparent text-xs text-ink outline-none dark:text-ink-dark"
+          />
         </label>
       </Card>
 
@@ -215,9 +227,12 @@ export default function Logs() {
                   <span className={`shrink-0 font-medium ${levelClass[r.level] ?? 'text-muted'}`}>
                     {r.level ? r.level.toUpperCase() : '—'}
                   </span>
-                  <span className="min-w-0 whitespace-pre-wrap break-all">{r.message}</span>
+                  {/* flex-1 keeps the message column from collapsing to one
+                      character per line on narrow viewports; the attrs column
+                      is capped so it never squeezes the message out. */}
+                  <span className="min-w-0 flex-1 whitespace-pre-wrap break-all">{r.message}</span>
                   {r.attrs && Object.keys(r.attrs).length > 0 && (
-                    <span className="ml-auto shrink-0 whitespace-pre-wrap break-all text-muted/50">
+                    <span className="ml-auto max-w-[45%] shrink-0 whitespace-pre-wrap break-all text-muted/50">
                       {Object.entries(r.attrs)
                         .map(([k, v]) => `${k}=${String(v)}`)
                         .join(' ')}

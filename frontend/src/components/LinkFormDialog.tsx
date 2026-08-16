@@ -50,6 +50,10 @@ export default function LinkFormDialog({
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (busy) return
+    if (!url.trim()) {
+      toast(t('form.urlRequired'), 'error')
+      return
+    }
     if (expiresDate === null) {
       toast(t('form.invalidDate'), 'error')
       return
@@ -96,7 +100,6 @@ export default function LinkFormDialog({
             value={url}
             onChange={(e) => setUrl(e.target.value)}
             placeholder={t('form.urlPlaceholder')}
-            required
           />
         </div>
         <div>
