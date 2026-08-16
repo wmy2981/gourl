@@ -74,6 +74,44 @@ export interface DashboardData {
   daily: { date: string; count: number }[]
 }
 
+export interface LogRecord {
+  time: string
+  level: 'debug' | 'info' | 'warn' | 'error' | ''
+  message: string
+  attrs?: Record<string, unknown>
+}
+
+export interface LogHistoryResponse {
+  available: boolean
+  records: LogRecord[]
+}
+
+export interface BatchCreateResult {
+  index: number
+  url: string
+  status: 'created' | 'updated' | 'skipped' | 'error'
+  code?: string
+  error_code?: string
+  error_message?: string
+}
+
+export interface BatchCreateResponse {
+  created: number
+  failed: number
+  results: BatchCreateResult[]
+}
+
+/** Import item: url is required; the rest is optional and mirrors the export fields. */
+export interface ImportItem {
+  url: string
+  code?: string
+  title?: string
+  description?: string
+  expires_at?: number | string
+  click_count?: number
+  created_at?: number
+}
+
 const JSON_HEADERS = { 'Content-Type': 'application/json' }
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -128,13 +166,13 @@ export const api = {
     const qs = q.toString()
     return request<LinkListResponse>(`/api/v1/links${qs ? `?${qs}` : ''}`)
   },
-  createLink: (body: { url: string; code?: string; expires_at?: number }) =>
+  createLink: (body: { url: string; code?: string; expires_at?: number; title?: string; description?: string }) =>
     request<Link>('/api/v1/links', { method: 'POST', body: JSON.stringify(body) }),
-  batchCreate: (items: { url: string; code?: string; expires_at?: number }[]) =>
-    request<{ created: number; failed: number; results: unknown[] }>(
-      '/api/v1/links/batch',
-      { method: 'POST', body: JSON.stringify(items) },
-    ),
+  batchCreate: (items: ImportItem[], conflict: 'error' | 'skip' | 'update' = 'error') =>
+    request<BatchCreateResponse>('/api/v1/links/batch', {
+      method: 'POST',
+      body: JSON.stringify({ conflict, items }),
+    }),
   getLink: (code: string) => request<Link>(`/api/v1/links/${encodePath(code)}`),
   updateLink: (code: string, body: Record<string, unknown>) =>
     request<Link>(`/api/v1/links/${encodePath(code)}`, {
@@ -143,8 +181,30 @@ export const api = {
     }),
   deleteLink: (code: string) =>
     request<void>(`/api/v1/links/${encodePath(code)}`, { method: 'DELETE' }),
+  deleteLinks: (codes: string[]) =>
+    request<{ deleted: number }>('/api/v1/links', {
+      method: 'DELETE',
+      body: JSON.stringify({ codes }),
+    }),
+  expiredCount: () => request<{ count: number }>('/api/v1/links/expired'),
+  deleteExpired: () =>
+    request<{ deleted: number }>('/api/v1/links/expired', { method: 'DELETE' }),
   exportCsv: () => request<Blob>('/api/v1/export.csv'),
-  exportJson: () => request<Link[]>('/api/v1/export.json'),
+  exportJson: () => request<Record<string, unknown>[]>('/api/v1/export.json'),
+  logHistory: (limit = 200, offset = 0) =>
+    request<LogHistoryResponse>(`/api/v1/logs?limit=${limit}&offset=${offset}`),
+  logStream: (onLog: (rec: LogRecord) => void, onError?: () => void) => {
+    const es = new EventSource('/api/v1/logs/stream')
+    es.addEventListener('log', (e) => {
+      try {
+        onLog(JSON.parse((e as MessageEvent).data) as LogRecord)
+      } catch {
+        // malformed frame: ignore
+      }
+    })
+    es.onerror = () => onError?.()
+    return es
+  },
 
   uaBlocks: () => request<{ ua_blocks: UABlock[] }>('/api/v1/ua-blocks'),
   addUABlock: (pattern: string) =>

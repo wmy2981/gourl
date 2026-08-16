@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api, ApiError, type Link } from '../lib/api'
-import { Button, Dialog, Input, Label, useToast } from './ui'
+import { Button, Dialog, Input, Label, Textarea, useToast } from './ui'
 import DateInput from './DateInput'
 
 export default function LinkFormDialog({
@@ -19,6 +19,7 @@ export default function LinkFormDialog({
   const { toast } = useToast()
   const [url, setUrl] = useState('')
   const [code, setCode] = useState('')
+  const [description, setDescription] = useState('')
   // Expiry as a calendar date (yyyy-mm-dd); null while the typed text is not
   // a valid date; empty string means never expires.
   const [expiresDate, setExpiresDate] = useState<string | null>('')
@@ -41,6 +42,7 @@ export default function LinkFormDialog({
     if (open) {
       setUrl(link?.url ?? '')
       setCode(link?.code ?? '')
+      setDescription(link?.description ?? '')
       setExpiresDate(toDate(link?.expires_at ?? 0))
     }
   }, [open, link])
@@ -56,9 +58,9 @@ export default function LinkFormDialog({
     try {
       const expires = toUnix(expiresDate)
       if (link) {
-        await api.updateLink(link.code, { url, code, expires_at: expires })
+        await api.updateLink(link.code, { url, code, description, expires_at: expires })
       } else {
-        await api.createLink({ url, code: code || undefined, expires_at: expires })
+        await api.createLink({ url, code: code || undefined, description, expires_at: expires })
       }
       onSaved()
       onClose()
@@ -105,6 +107,16 @@ export default function LinkFormDialog({
             onChange={(e) => setCode(e.target.value)}
             placeholder={t('form.codePlaceholder')}
             className="short-code"
+          />
+        </div>
+        <div>
+          <Label htmlFor="link-description">{t('form.description')}</Label>
+          <Textarea
+            id="link-description"
+            rows={2}
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder={t('form.descriptionPlaceholder')}
           />
         </div>
         <div>

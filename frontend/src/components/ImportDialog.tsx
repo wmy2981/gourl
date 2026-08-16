@@ -1,14 +1,14 @@
 import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Upload } from 'lucide-react'
-import { api, ApiError } from '../lib/api'
+import { api, ApiError, type ImportItem } from '../lib/api'
 import { parseCSV } from '../lib/csv'
-import { Button, Dialog, Textarea, useToast } from './ui'
+import { Button, Dialog, Label, Textarea, useToast } from './ui'
 
-// Batch import: a JSON array of {url, code?, expires_at?} items pasted or
-// loaded from a file. JSON files are parsed as-is; CSV files expect a header
-// row (code,url,title,description,expires_at) — the same shape the exports
-// produce.
+// Batch import: items pasted as JSON or loaded from a file, with a conflict
+// policy for codes that already exist. JSON files are parsed as-is; CSV files
+// expect a header row matching the export shape
+// (code,url,title,description,expires_at,click_count,created_at).
 export default function ImportDialog({
   open,
   onClose,
@@ -22,7 +22,11 @@ export default function ImportDialog({
   const { toast } = useToast()
   const fileRef = useRef<HTMLInputElement>(null)
   const [text, setText] = useState('')
+  const [conflict, setConflict] = useState<'error' | 'skip' | 'update'>('error')
   const [busy, setBusy] = useState(false)
+
+  const selectClass =
+    'w-40 rounded-xl border border-hairline bg-white/70 dark:bg-white/[0.07] px-3 py-2 text-sm outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/30'
 
   // Load a .json or .csv file and turn it into the editable JSON textarea.
   const loadFile = async (file: File | undefined) => {
@@ -31,12 +35,16 @@ export default function ImportDialog({
       const raw = await file.text()
       if (file.name.toLowerCase().endsWith('.csv')) {
         const rows = parseCSV(raw)
-        const items = rows.map((r) => {
-          const item: Record<string, unknown> = { url: r.url }
+        const items: ImportItem[] = rows.map((r) => {
+          const item: ImportItem = { url: r.url }
           if (r.code) item.code = r.code
           if (r.title) item.title = r.title
           if (r.description) item.description = r.description
-          if (r.expires_at) item.expires_at = Number(r.expires_at)
+          // Number = unix seconds; anything else (a yyyy-MM-dd string) is
+          // passed through — the backend accepts both.
+          if (r.expires_at) item.expires_at = Number(r.expires_at) || r.expires_at
+          if (r.click_count) item.click_count = Number(r.click_count)
+          if (r.created_at) item.created_at = Number(r.created_at)
           return item
         })
         setText(JSON.stringify(items, null, 2))
@@ -55,9 +63,7 @@ export default function ImportDialog({
     try {
       const parsed = JSON.parse(text)
       if (!Array.isArray(parsed)) throw new Error('not an array')
-      const res = await api.batchCreate(
-        parsed.map((item: unknown) => item as { url: string; code?: string; expires_at?: number }),
-      )
+      const res = await api.batchCreate(parsed as ImportItem[], conflict)
       toast(t('form.importResults', { created: res.created, failed: res.failed }))
       setText('')
       onImported()
@@ -94,13 +100,28 @@ export default function ImportDialog({
         className="short-code"
         placeholder='[{"url": "https://example.com/1"}, {"url": "https://example.com/2", "code": "two"}]'
       />
-      <div className="mt-4 flex justify-end gap-2">
-        <Button variant="ghost" onClick={onClose}>
-          {t('form.cancel')}
-        </Button>
-        <Button onClick={submit} disabled={busy || !text.trim()}>
-          {t('form.create')}
-        </Button>
+      <div className="mt-4 flex items-center justify-between gap-2">
+        <div>
+          <Label htmlFor="import-conflict">{t('form.importConflict')}</Label>
+          <select
+            id="import-conflict"
+            value={conflict}
+            onChange={(e) => setConflict(e.target.value as 'error' | 'skip' | 'update')}
+            className={selectClass}
+          >
+            <option value="error">{t('form.conflictError')}</option>
+            <option value="skip">{t('form.conflictSkip')}</option>
+            <option value="update">{t('form.conflictUpdate')}</option>
+          </select>
+        </div>
+        <div className="flex gap-2">
+          <Button variant="ghost" onClick={onClose}>
+            {t('form.cancel')}
+          </Button>
+          <Button onClick={submit} disabled={busy || !text.trim()}>
+            {t('form.create')}
+          </Button>
+        </div>
       </div>
     </Dialog>
   )

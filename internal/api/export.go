@@ -5,19 +5,45 @@ import (
 	"net/http"
 	"strconv"
 	"time"
+
+	"github.com/wmy2981/gourl/internal/store"
 )
 
-// exportJSON handles GET /api/v1/export.json: every link as a JSON array.
+// exportRow is the uniform 7-field export shape shared by CSV and JSON:
+// code, url, title, description, expires_at, click_count, created_at.
+type exportRow struct {
+	Code        string `json:"code"`
+	URL         string `json:"url"`
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	ExpiresAt   int64  `json:"expires_at"`
+	ClickCount  int64  `json:"click_count"`
+	CreatedAt   int64  `json:"created_at"`
+}
+
+func toExportRow(l *store.Link) exportRow {
+	return exportRow{
+		Code:        l.Code,
+		URL:         l.URL,
+		Title:       l.Title,
+		Description: l.Description,
+		ExpiresAt:   l.ExpiresAt,
+		ClickCount:  l.ClickCount,
+		CreatedAt:   l.CreatedAt,
+	}
+}
+
+// exportJSON handles GET /api/v1/export.json: every link as a JSON array of
+// the same 7 fields the CSV carries (import/export symmetry).
 func (s *Server) exportJSON(w http.ResponseWriter, r *http.Request) {
 	links, err := s.store.ListAllLinks(r.Context())
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "internal_error", "failed to export links")
 		return
 	}
-	cfg := s.cfg.Get()
-	out := make([]linkJSON, 0, len(links))
+	out := make([]exportRow, 0, len(links))
 	for i := range links {
-		out = append(out, toLinkJSON(&links[i], fullURLs(cfg, r, links[i].Code)))
+		out = append(out, toExportRow(&links[i]))
 	}
 	writeJSON(w, http.StatusOK, out)
 }

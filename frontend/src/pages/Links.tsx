@@ -22,6 +22,7 @@ import { Button, Card, Dialog, Input, useToast } from '../components/ui'
 import LinkFormDialog from '../components/LinkFormDialog'
 import QRDialog from '../components/QRDialog'
 import ImportDialog from '../components/ImportDialog'
+import ExportDialog from '../components/ExportDialog'
 
 const PAGE_SIZE = 20
 
@@ -43,6 +44,7 @@ export default function Links() {
   const [editing, setEditing] = useState<Link | null>(null)
   const [qrLink, setQrLink] = useState<Link | null>(null)
   const [importOpen, setImportOpen] = useState(false)
+  const [exportOpen, setExportOpen] = useState(false)
   const [deleting, setDeleting] = useState<Link | null>(null)
   const [copied, setCopied] = useState('')
   // Per-link pick of which base URL is shown/copied; defaults to the first.
@@ -110,36 +112,6 @@ export default function Links() {
     }
   }
 
-  const download = (blob: Blob, filename: string) => {
-    const a = document.createElement('a')
-    a.href = URL.createObjectURL(blob)
-    a.download = filename
-    a.click()
-    URL.revokeObjectURL(a.href)
-  }
-
-  const exportCsv = async () => {
-    try {
-      const res = await fetch('/api/v1/export.csv', { credentials: 'same-origin' })
-      if (!res.ok) throw new Error(String(res.status))
-      download(await res.blob(), `gourl-links-${new Date().toISOString().slice(0, 10)}.csv`)
-    } catch {
-      toast(t('common.error'), 'error')
-    }
-  }
-
-  const exportJson = async () => {
-    try {
-      const links = await api.exportJson()
-      const blob = new Blob([JSON.stringify(links, null, 2)], {
-        type: 'application/json',
-      })
-      download(blob, `gourl-links-${new Date().toISOString().slice(0, 10)}.json`)
-    } catch {
-      toast(t('common.error'), 'error')
-    }
-  }
-
   const totalPages = data ? Math.max(1, Math.ceil(data.total / PAGE_SIZE)) : 1
 
   return (
@@ -151,13 +123,9 @@ export default function Links() {
             <FilePlus2 size={16} />
             {t('links.import')}
           </Button>
-          <Button variant="outline" onClick={exportCsv}>
+          <Button variant="outline" onClick={() => setExportOpen(true)}>
             <Download size={16} />
             {t('links.export')}
-          </Button>
-          <Button variant="outline" onClick={exportJson}>
-            <Download size={16} />
-            {t('links.exportJson')}
           </Button>
           <Button
             onClick={() => {
@@ -194,11 +162,12 @@ export default function Links() {
         </Card>
       ) : (
         <Card className="overflow-x-auto">
-          <table className="w-full min-w-[760px] text-left text-sm">
+          <table className="w-full min-w-[900px] text-left text-sm">
             <thead>
               <tr className="border-b border-hairline text-xs uppercase tracking-wide text-muted">
                 <th className="px-5 py-3 font-medium">{t('links.shortUrl')}</th>
                 <th className="px-5 py-3 font-medium">{t('links.destination')}</th>
+                <th className="px-5 py-3 font-medium">{t('links.description')}</th>
                 <th className="px-5 py-3 text-right font-medium">{t('links.clicks')}</th>
                 <th className="px-5 py-3 font-medium">{t('links.expires')}</th>
                 <th className="px-5 py-3 font-medium">{t('links.actions')}</th>
@@ -306,6 +275,15 @@ export default function Links() {
                       {link.url}
                     </a>
                   </td>
+                  <td className="max-w-[220px] px-5 py-3 text-muted/80">
+                    {link.description ? (
+                      <span className="line-clamp-2" title={link.description}>
+                        {link.description}
+                      </span>
+                    ) : (
+                      <span className="text-muted/40">—</span>
+                    )}
+                  </td>
                   <td className="short-code px-5 py-3 text-right tabular-nums">{link.click_count}</td>
                   <td className="px-5 py-3 text-muted">{formatDate(link.expires_at, t)}</td>
                   <td className="px-5 py-3">
@@ -370,6 +348,7 @@ export default function Links() {
         initialIndex={qrLink ? (urlIdx[qrLink.code] ?? 0) : 0}
       />
       <ImportDialog open={importOpen} onClose={() => setImportOpen(false)} onImported={invalidate} />
+      <ExportDialog open={exportOpen} onClose={() => setExportOpen(false)} />
 
       <Dialog open={deleting !== null} onClose={() => setDeleting(null)} title={t('links.delete')}>
         <p className="text-sm text-muted">{t('links.deleteConfirm')}</p>
