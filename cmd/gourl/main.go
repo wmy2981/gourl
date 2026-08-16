@@ -26,6 +26,11 @@ func envOr(key, def string) string {
 func main() {
 	logx.Init()
 
+	// Log the build identity first: dev images embed "VERSION (sha7)", so
+	// even a startup failure (bad config, unwritable data dir, …) can be
+	// traced to the exact build.
+	slog.Info("gourl version", "version", version.Version)
+
 	cfgPath := envOr("CONFIG_PATH", "config.yaml")
 	cfg, err := config.NewManager(cfgPath)
 	if err != nil {
