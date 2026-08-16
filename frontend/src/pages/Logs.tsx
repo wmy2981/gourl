@@ -229,10 +229,11 @@ export default function Logs() {
                   </span>
                   {/* flex-1 keeps the message column from collapsing to one
                       character per line on narrow viewports; the attrs column
-                      is capped so it never squeezes the message out. */}
+                      is capped and hidden on phones so it can never squeeze
+                      the message out. */}
                   <span className="min-w-0 flex-1 whitespace-pre-wrap break-all">{r.message}</span>
                   {r.attrs && Object.keys(r.attrs).length > 0 && (
-                    <span className="ml-auto max-w-[45%] shrink-0 whitespace-pre-wrap break-all text-muted/50">
+                    <span className="ml-auto hidden max-w-[45%] shrink-0 whitespace-pre-wrap break-all text-muted/50 sm:block">
                       {Object.entries(r.attrs)
                         .map(([k, v]) => `${k}=${String(v)}`)
                         .join(' ')}
