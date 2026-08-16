@@ -8,8 +8,22 @@
   "nav": {
     "dashboard": "Dashboard",
     "links": "Links",
+    "logs": "Logs",
     "settings": "Settings",
     "logout": "Sign out"
+  },
+  "logs": {
+    "live": "Live",
+    "reconnecting": "Disconnected, reconnecting…",
+    "pause": "Pause",
+    "resume": "Resume",
+    "export": "Export .log",
+    "keyword": "Filter by keyword…",
+    "to": "to",
+    "noHistory": "LOG_DIR is not configured — live logs only (no history)",
+    "empty": "No logs yet.",
+    "latest": "Latest",
+    "loadMore": "Load more history"
   },
   "login": {
     "heading": "Admin console",

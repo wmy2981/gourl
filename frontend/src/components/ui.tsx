@@ -78,8 +78,17 @@ export function Checkbox({
 
 /* ---------- Card ---------- */
 
-export function Card({ children, className = '' }: { children: ReactNode; className?: string }) {
-  return <div className={`glass ${className}`}>{children}</div>
+export function Card({
+  children,
+  className = '',
+  ref,
+  ...rest
+}: { children: ReactNode; className?: string; ref?: React.Ref<HTMLDivElement> } & React.HTMLAttributes<HTMLDivElement>) {
+  return (
+    <div ref={ref} className={`glass ${className}`} {...rest}>
+      {children}
+    </div>
+  )
 }
 
 /* ---------- Dialog ---------- */

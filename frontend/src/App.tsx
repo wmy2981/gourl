@@ -7,6 +7,7 @@ import { ToastProvider } from './components/ui'
 import Dashboard from './pages/Dashboard'
 import Links from './pages/Links'
 import Login from './pages/Login'
+import Logs from './pages/Logs'
 import Settings from './pages/Settings'
 
 // Apply the persisted theme before first paint.
@@ -34,6 +35,7 @@ export default function App() {
         <Route path="/admin" element={<Layout />}>
           <Route index element={<Dashboard />} />
           <Route path="links" element={<Links />} />
+          <Route path="logs" element={<Logs />} />
           <Route path="settings" element={<Settings />} />
         </Route>
         <Route path="*" element={<Navigate to="/admin" replace />} />

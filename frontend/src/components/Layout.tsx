@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { LayoutDashboard, Link2, LogOut, Menu, Moon, Settings, Sun, X } from 'lucide-react'
+import { LayoutDashboard, Link2, LogOut, Menu, Moon, ScrollText, Settings, Sun, X } from 'lucide-react'
 import { api } from '../lib/api'
 import { setLanguage } from '../lib/i18n'
 // Single source of truth for the brand icon (also embedded server-side and
@@ -66,6 +66,7 @@ export default function Layout() {
     <nav className="flex flex-col gap-1">
       <NavItem to="/admin" icon={<LayoutDashboard size={18} />} label={t('nav.dashboard')} onClick={closeMobile} />
       <NavItem to="/admin/links" icon={<Link2 size={18} />} label={t('nav.links')} onClick={closeMobile} />
+      <NavItem to="/admin/logs" icon={<ScrollText size={18} />} label={t('nav.logs')} onClick={closeMobile} />
       <NavItem to="/admin/settings" icon={<Settings size={18} />} label={t('nav.settings')} onClick={closeMobile} />
     </nav>
   )
