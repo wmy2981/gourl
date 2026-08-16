@@ -44,10 +44,14 @@ func (s *Server) logStream(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-Accel-Buffering", "no")
 	w.WriteHeader(http.StatusOK)
 
+	rc := http.NewResponseController(w)
+	// Push the headers out immediately; the client's request blocks on them
+	// until the first body write or flush otherwise.
+	rc.Flush()
+
 	ch, cancel := logx.Subscribe(256)
 	defer cancel()
 
-	rc := http.NewResponseController(w)
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 

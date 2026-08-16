@@ -40,12 +40,13 @@ type Server struct {
 	assetsDir string
 	startTime time.Time
 	now       func() int64 // injectable clock for tests
+	meta      *metaQueue
 }
 
 // NewServer creates a Server. Auth settings and the assets directory come
 // from the environment.
 func NewServer(st *store.Store, cfg *config.Manager, ctr *counter.Counter) *Server {
-	return &Server{
+	s := &Server{
 		store:     st,
 		cfg:       cfg,
 		counter:   ctr,
@@ -55,6 +56,10 @@ func NewServer(st *store.Store, cfg *config.Manager, ctr *counter.Counter) *Serv
 		startTime: time.Now(),
 		now:       func() int64 { return timeNow() },
 	}
+	// Async meta fetching: workers resolve s.fetcher at job time so tests can
+	// swap in a mock after construction.
+	s.meta = newMetaQueue(st, func() TitleFetcher { return s.fetcher }, 4)
+	return s
 }
 
 // Handler returns the root HTTP handler. Explicit routes (api, admin, ...)

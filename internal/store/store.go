@@ -52,6 +52,11 @@ func Open(path string) (*Store, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open sqlite: %w", err)
 	}
+	if path == ":memory:" {
+		// An in-memory database lives per-connection; pin a single connection
+		// so every goroutine (e.g. the async meta workers) sees the same data.
+		db.SetMaxOpenConns(1)
+	}
 	s := &Store{db: db}
 	if err := s.migrate(context.Background()); err != nil {
 		db.Close()
@@ -97,6 +102,10 @@ var migrations = []string{
 		note       TEXT NOT NULL DEFAULT '',
 		created_at INTEGER NOT NULL
 	);`,
+	// v2: query indexes for list ordering, expiry cleanup and daily stats.
+	`CREATE INDEX IF NOT EXISTS idx_links_created_at ON links(created_at);
+	CREATE INDEX IF NOT EXISTS idx_links_expires_at ON links(expires_at);
+	CREATE INDEX IF NOT EXISTS idx_daily_clicks_date ON daily_clicks(date);`,
 }
 
 // migrate applies pending migrations inside a transaction each, recording the
@@ -152,6 +161,46 @@ func (s *Store) CreateLink(ctx context.Context, l *Link) error {
 	}
 	if err != nil {
 		return fmt.Errorf("create link: %w", err)
+	}
+	return nil
+}
+
+// CreateLinks inserts many links in a single transaction (batch imports).
+// The returned slice mirrors CreateLink's semantics per item: ErrTaken for
+// codes that already exist. A non-constraint error aborts the whole batch.
+func (s *Store) CreateLinks(ctx context.Context, links []Link) ([]error, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	errs := make([]error, len(links))
+	for i := range links {
+		_, err := tx.ExecContext(ctx,
+			`INSERT INTO links (`+linkColumns+`) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+			links[i].Code, links[i].URL, links[i].Title, links[i].Description,
+			links[i].ExpiresAt, links[i].ClickCount, links[i].CreatedAt, links[i].UpdatedAt)
+		if isConstraint(err) {
+			errs[i] = ErrTaken
+			continue
+		}
+		if err != nil {
+			return nil, fmt.Errorf("create links: %w", err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return errs, nil
+}
+
+// UpdateMeta refreshes a link's title/description after an async meta fetch.
+func (s *Store) UpdateMeta(ctx context.Context, code, title, description string, updatedAt int64) error {
+	_, err := s.db.ExecContext(ctx,
+		`UPDATE links SET title = ?, description = ?, updated_at = ? WHERE code = ?`,
+		title, description, updatedAt, code)
+	if err != nil {
+		return fmt.Errorf("update meta: %w", err)
 	}
 	return nil
 }

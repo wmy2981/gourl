@@ -122,21 +122,29 @@ func TestLogStreamLive(t *testing.T) {
 	slog.Info("stream marker message")
 
 	scanner := bufio.NewScanner(resp.Body)
+	lines := make(chan string, 32)
+	go func() {
+		for scanner.Scan() {
+			lines <- scanner.Text()
+		}
+		close(lines)
+	}()
 	deadline := time.After(5 * time.Second)
 	got := ""
 	for got == "" {
 		select {
+		case line, ok := <-lines:
+			if !ok {
+				if err := scanner.Err(); err != nil {
+					t.Fatalf("stream read error: %v", err)
+				}
+				t.Fatal("stream closed before a log record arrived")
+			}
+			if strings.HasPrefix(line, "data: ") {
+				got = line
+			}
 		case <-deadline:
 			t.Fatal("timed out waiting for a streamed log record")
-		default:
-			if scanner.Scan() {
-				line := scanner.Text()
-				if strings.HasPrefix(line, "data: ") {
-					got = line
-				}
-			} else if err := scanner.Err(); err != nil {
-				t.Fatalf("stream read error: %v", err)
-			}
 		}
 	}
 	if !strings.Contains(got, "stream marker message") {

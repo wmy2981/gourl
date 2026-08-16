@@ -105,8 +105,6 @@ func (s *Server) createLink(w http.ResponseWriter, r *http.Request) {
 		CreatedAt: now,
 		UpdatedAt: now,
 	}
-	// Auto-fetch the title/description; a fetch failure never blocks creation.
-	s.attachMeta(r, link)
 	if err := s.store.CreateLink(r.Context(), link); err != nil {
 		if errors.Is(err, store.ErrTaken) {
 			writeError(w, http.StatusConflict, "code_taken", "code is already in use")
@@ -115,6 +113,9 @@ func (s *Server) createLink(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "internal_error", "failed to create link")
 		return
 	}
+	// Title/description are fetched in the background so a slow target site
+	// never delays the response; the meta lands on a later list refetch.
+	s.meta.enqueue(code, req.URL)
 	slog.Info("link created", "code", code, "url", req.URL, "actor", actorFrom(r))
 	writeJSON(w, http.StatusCreated, toLinkJSON(link, fullURLs(cfg, r, code)))
 }
@@ -162,17 +163,16 @@ func (s *Server) updateLink(w http.ResponseWriter, r *http.Request) {
 	}
 	cfg := s.cfg.Get()
 
+	// Changing the URL re-fetches the title/description (in the background),
+	// unless the caller overrides them explicitly in the same request.
+	refetchMeta := false
 	if req.URL != nil {
 		if !isAbsoluteHTTPURL(*req.URL) {
 			writeError(w, http.StatusBadRequest, "invalid_request", "url must be an absolute http(s) URL")
 			return
 		}
 		link.URL = *req.URL
-		// Changing the URL re-fetches the title/description, unless the
-		// caller overrides them explicitly in the same request.
-		if req.Title == nil && req.Description == nil {
-			s.attachMeta(r, link)
-		}
+		refetchMeta = req.Title == nil && req.Description == nil
 	}
 	if req.Title != nil {
 		link.Title = *req.Title
@@ -218,6 +218,9 @@ func (s *Server) updateLink(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "internal_error", "failed to update link")
 		return
 	}
+	if refetchMeta {
+		s.meta.enqueue(link.Code, link.URL)
+	}
 	slog.Info("link updated", "code", link.Code, "actor", actorFrom(r))
 	writeJSON(w, http.StatusOK, toLinkJSON(link, fullURLs(cfg, r, link.Code)))
 }
@@ -240,19 +243,3 @@ func (s *Server) deleteLink(w http.ResponseWriter, r *http.Request) {
 // pathCode normalizes a multi-level code captured by {code...}: the wildcard
 // preserves leading slashes, strip them for DB lookups.
 func pathCode(code string) string { return strings.TrimPrefix(code, "/") }
-
-// attachMeta fetches title/description for the link's URL and stores them.
-// Fetch failures are logged and leave the meta empty; they never fail the
-// surrounding operation.
-func (s *Server) attachMeta(r *http.Request, link *store.Link) {
-	if s.fetcher == nil {
-		return
-	}
-	title, desc, err := s.fetcher.Fetch(r.Context(), link.URL)
-	if err != nil {
-		slog.Debug("fetch meta failed, leaving empty", "url", link.URL, "error", err)
-		return
-	}
-	link.Title = title
-	link.Description = desc
-}

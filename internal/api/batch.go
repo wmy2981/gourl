@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"sort"
 
 	"github.com/wmy2981/gourl/internal/config"
 	"github.com/wmy2981/gourl/internal/shortcode"
@@ -36,6 +37,14 @@ func (s *Server) batchCreate(w http.ResponseWriter, r *http.Request) {
 	results := make([]map[string]any, 0, len(items))
 	created, failed := 0, 0
 
+	// Validate every item up front, then insert the valid ones in a single
+	// transaction (one commit instead of one per item).
+	type pending struct {
+		index int // original position in the request, reported to the client
+		item  createLinkRequest
+		code  string
+	}
+	var valid []pending
 	for i, item := range items {
 		res := map[string]any{"index": i, "url": item.URL}
 		code, err := s.resolveCode(item, cfg)
@@ -47,31 +56,44 @@ func (s *Server) batchCreate(w http.ResponseWriter, r *http.Request) {
 			results = append(results, res)
 			continue
 		}
-		link := &store.Link{
-			Code:      code,
-			URL:       item.URL,
-			ExpiresAt: item.ExpiresAt,
+		valid = append(valid, pending{index: i, item: item, code: code})
+	}
+
+	links := make([]store.Link, len(valid))
+	for i, p := range valid {
+		links[i] = store.Link{
+			Code:      p.code,
+			URL:       p.item.URL,
+			ExpiresAt: p.item.ExpiresAt,
 			CreatedAt: now,
 			UpdatedAt: now,
 		}
-		s.attachMeta(r, link)
-		if err := s.store.CreateLink(r.Context(), link); err != nil {
-			if errors.Is(err, store.ErrTaken) {
-				failed++
-				res["status"] = "error"
-				res["error_code"] = "code_taken"
-				res["error_message"] = "code is already in use"
-				results = append(results, res)
-				continue
-			}
-			writeError(w, http.StatusInternalServerError, "internal_error", "failed to create links")
-			return
+	}
+	errs, err := s.store.CreateLinks(r.Context(), links)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal_error", "failed to create links")
+		return
+	}
+	for i, err := range errs {
+		res := map[string]any{"index": valid[i].index, "url": valid[i].item.URL}
+		if errors.Is(err, store.ErrTaken) {
+			failed++
+			res["status"] = "error"
+			res["error_code"] = "code_taken"
+			res["error_message"] = "code is already in use"
+		} else {
+			created++
+			res["status"] = "created"
+			res["code"] = valid[i].code
+			s.meta.enqueue(valid[i].code, valid[i].item.URL)
 		}
-		created++
-		res["status"] = "created"
-		res["code"] = code
 		results = append(results, res)
 	}
+	// The response must echo the request order so the client can map results
+	// back to its input lines by index.
+	sort.SliceStable(results, func(a, b int) bool {
+		return results[a]["index"].(int) < results[b]["index"].(int)
+	})
 
 	slog.Info("links batch created", "created", created, "failed", failed, "actor", actorFrom(r))
 	writeJSON(w, http.StatusCreated, map[string]any{
