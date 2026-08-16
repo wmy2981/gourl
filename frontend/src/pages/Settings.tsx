@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { KeyRound, Plus, Trash2, Upload } from 'lucide-react'
 import { api, ApiError, type AppConfig } from '../lib/api'
+import { copyText } from '../lib/clipboard'
 import { Button, Card, Input, Label, Textarea, useToast } from '../components/ui'
 
 export default function Settings() {
@@ -265,9 +266,10 @@ function TokenSection({
       {newToken && (
         <div className="mb-4 rounded-xl border border-accent/40 bg-accent-soft p-3">
           <p className="short-code break-all text-sm">{newToken}</p>
-          <Button variant="ghost" className="mt-1 !p-1 text-xs" onClick={() => {
-            navigator.clipboard.writeText(newToken)
-            toast(t('links.copied'))
+          <Button variant="ghost" className="mt-1 !p-1 text-xs" onClick={async () => {
+            // Same multi-tier fallback chain as the link-row copy button.
+            const ok = await copyText(newToken)
+            toast(ok ? t('links.copied') : newToken, ok ? 'success' : 'error')
           }}>
             {t('links.copy')}
           </Button>
