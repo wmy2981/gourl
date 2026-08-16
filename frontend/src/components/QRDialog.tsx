@@ -10,10 +10,13 @@ export default function QRDialog({
   link,
   open,
   onClose,
+  initialIndex = 0,
 }: {
   link: Link | null
   open: boolean
   onClose: () => void
+  /** Base URL picked on the links row; the dialog opens on that variant. */
+  initialIndex?: number
 }) {
   const { t } = useTranslation()
   // The parent nulls the link on close; keep the last content so the QR does
@@ -24,6 +27,10 @@ export default function QRDialog({
   }, [link])
   const urls = shown?.urls ?? []
   const [index, setIndex] = useState(0)
+  useEffect(() => {
+    if (open && link) setIndex(Math.min(initialIndex, Math.max(urls.length - 1, 0)))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, link, initialIndex])
   const active = urls[Math.min(index, Math.max(urls.length - 1, 0))]
 
   return (
