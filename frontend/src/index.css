@@ -33,7 +33,10 @@
 
   /* Unified motion language: fast, fluid, subtle. Enter/ease-out for arrivals
      (cubic-bezier(0.16,1,0.3,1) ≈ easeOutExpo), fast ease-in for departures. */
-  --animate-fade-up: fade-up 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+  /* backwards (not both): after the animation the transform must go back to
+     none — a retained identity matrix would become the containing block of
+     the fixed-positioned dialogs rendered inside this wrapper. */
+  --animate-fade-up: fade-up 0.35s cubic-bezier(0.16, 1, 0.3, 1) backwards;
   --animate-pop-in: pop-in 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
   --animate-pop-out: pop-out 0.18s cubic-bezier(0.4, 0, 1, 1) both;
   --animate-toast-in: toast-in 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
