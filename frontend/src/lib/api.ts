@@ -77,10 +77,13 @@ export interface DashboardData {
 const JSON_HEADERS = { 'Content-Type': 'application/json' }
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  // FormData bodies must keep the browser-set multipart boundary; forcing the
+  // JSON content type would make the server reject the file field.
+  const isForm = typeof FormData !== 'undefined' && init.body instanceof FormData
   const res = await fetch(path, {
     credentials: 'same-origin',
     ...init,
-    headers: { ...JSON_HEADERS, ...(init.headers ?? {}) },
+    headers: isForm ? { ...(init.headers ?? {}) } : { ...JSON_HEADERS, ...(init.headers ?? {}) },
   })
   if (res.status === 401) {
     // Not authenticated (or session expired): back to login.
