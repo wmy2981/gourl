@@ -1,7 +1,13 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi, beforeAll } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import DateInput from '../components/DateInput'
+import i18n from '../lib/i18n'
+
+beforeAll(async () => {
+  // Pin the language so aria-labels match regardless of the test environment.
+  await i18n.changeLanguage('en')
+})
 
 function renderDate(value: string) {
   const onChange = vi.fn()
