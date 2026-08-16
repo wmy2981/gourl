@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 
 	"github.com/wmy2981/gourl/internal/config"
@@ -26,5 +27,6 @@ func (s *Server) updateConfig(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_config", err.Error())
 		return
 	}
+	slog.Info("config updated", "actor", actorFrom(r))
 	writeJSON(w, http.StatusOK, s.cfg.Get())
 }

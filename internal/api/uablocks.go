@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -47,6 +48,7 @@ func (s *Server) createUABlock(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_config", err.Error())
 		return
 	}
+	slog.Info("ua block added", "pattern", pattern, "actor", actorFrom(r))
 	writeJSON(w, http.StatusCreated, map[string]any{"id": len(cfg.UABlocks), "pattern": pattern})
 }
 
@@ -67,5 +69,6 @@ func (s *Server) deleteUABlock(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_config", err.Error())
 		return
 	}
+	slog.Info("ua block removed", "id", id, "actor", actorFrom(r))
 	w.WriteHeader(http.StatusNoContent)
 }

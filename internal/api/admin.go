@@ -1,12 +1,14 @@
 package api
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -98,9 +100,11 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if subtle.ConstantTimeCompare([]byte(body.Password), []byte(s.admin.password)) != 1 {
+		slog.Warn("admin login failed", "remote", r.RemoteAddr)
 		writeError(w, http.StatusUnauthorized, "unauthorized", "invalid password")
 		return
 	}
+	slog.Info("admin logged in", "remote", r.RemoteAddr)
 	token, err := s.admin.issueToken()
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "internal_error", "failed to issue session")
@@ -119,6 +123,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 
 // logout handles POST /api/v1/auth/logout.
 func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
+	slog.Info("admin logged out", "remote", r.RemoteAddr)
 	http.SetCookie(w, &http.Cookie{
 		Name: sessionCookie, Value: "", Path: "/",
 		HttpOnly: true, SameSite: http.SameSiteLaxMode, MaxAge: -1,
@@ -136,13 +141,31 @@ func (s *Server) validBearer(r *http.Request) bool {
 	return err == nil
 }
 
-// requireAuth gates admin endpoints behind a session or a management token.
+// requireAuth gates admin endpoints behind a session or a management token
+// and records how the request was authenticated so handlers can log it.
 func (s *Server) requireAuth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if s.admin.validSession(r) || s.validBearer(r) {
-			next(w, r)
+		var actor string
+		switch {
+		case s.admin.validSession(r):
+			actor = "session"
+		case s.validBearer(r):
+			actor = "token"
+		default:
+			writeError(w, http.StatusUnauthorized, "unauthorized", "authentication required")
 			return
 		}
-		writeError(w, http.StatusUnauthorized, "unauthorized", "authentication required")
+		next(w, r.WithContext(context.WithValue(r.Context(), actorKey{}, actor)))
 	}
+}
+
+// actorKey is the context key for the requireAuth actor.
+type actorKey struct{}
+
+// actorFrom returns how the request was authenticated ("session" or "token").
+func actorFrom(r *http.Request) string {
+	if a, ok := r.Context().Value(actorKey{}).(string); ok {
+		return a
+	}
+	return ""
 }

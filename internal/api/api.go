@@ -83,6 +83,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/v1/icon", s.requireAuth(s.uploadIcon))
 	mux.HandleFunc("DELETE /api/v1/icon", s.requireAuth(s.deleteIcon))
 	mux.HandleFunc("GET /api/v1/dashboard", s.requireAuth(s.dashboard))
+	mux.HandleFunc("GET /api/v1/logs", s.requireAuth(s.logHistory))
+	mux.HandleFunc("GET /api/v1/logs/stream", s.requireAuth(s.logStream))
 	mux.Handle("GET /assets/", s.assetsHandler())
 	mux.HandleFunc("GET /favicon.svg", s.favicon)
 	mux.Handle("GET /docs/", http.StripPrefix("/docs/", http.FileServer(http.FS(webui.Docs()))))
@@ -93,13 +95,15 @@ func (s *Server) Handler() http.Handler {
 	return s.logRequests(mux)
 }
 
-// logRequests logs every HTTP request at info level with status and latency.
+// logRequests logs every HTTP request at debug level with status and latency.
+// Access logging sits at debug so the info level carries business events only
+// (and the log page's default view stays readable).
 func (s *Server) logRequests(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		sw := &statusWriter{ResponseWriter: w, status: http.StatusOK}
 		next.ServeHTTP(sw, r)
-		slog.Info("http request",
+		slog.Debug("http request",
 			"method", r.Method,
 			"path", r.URL.Path,
 			"status", sw.status,
@@ -109,7 +113,8 @@ func (s *Server) logRequests(next http.Handler) http.Handler {
 	})
 }
 
-// statusWriter captures the response status code for request logging.
+// statusWriter captures the response status code for request logging. It also
+// forwards Flush so streaming handlers (the SSE log stream) work through it.
 type statusWriter struct {
 	http.ResponseWriter
 	status int
@@ -118,6 +123,12 @@ type statusWriter struct {
 func (w *statusWriter) WriteHeader(code int) {
 	w.status = code
 	w.ResponseWriter.WriteHeader(code)
+}
+
+func (w *statusWriter) Flush() {
+	if f, ok := w.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
 }
 
 // errorBody is the uniform error envelope.

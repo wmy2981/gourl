@@ -77,6 +77,7 @@ func (s *Server) uploadIcon(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "internal_error", "failed to update config")
 		return
 	}
+	slog.Info("icon uploaded", "ext", ext, "actor", actorFrom(r))
 	writeJSON(w, http.StatusOK, map[string]any{"icon": cfg.Icon})
 }
 
@@ -106,5 +107,6 @@ func (s *Server) deleteIcon(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "internal_error", "failed to update config")
 		return
 	}
+	slog.Info("icon deleted", "actor", actorFrom(r))
 	writeJSON(w, http.StatusOK, map[string]any{"icon": ""})
 }

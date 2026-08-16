@@ -32,6 +32,7 @@ func (s *Server) redirect(w http.ResponseWriter, r *http.Request) {
 		slog.Warn("ua block check failed", "code", code, "error", err)
 	} else if blocked {
 		// Blocked UAs get a bare 403 and are never counted.
+		slog.Info("ua blocked", "code", code, "remote", r.RemoteAddr)
 		w.WriteHeader(http.StatusForbidden)
 		return
 	}

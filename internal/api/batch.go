@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 
 	"github.com/wmy2981/gourl/internal/config"
@@ -72,6 +73,7 @@ func (s *Server) batchCreate(w http.ResponseWriter, r *http.Request) {
 		results = append(results, res)
 	}
 
+	slog.Info("links batch created", "created", created, "failed", failed, "actor", actorFrom(r))
 	writeJSON(w, http.StatusCreated, map[string]any{
 		"results": results,
 		"created": created,

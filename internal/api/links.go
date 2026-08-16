@@ -115,6 +115,7 @@ func (s *Server) createLink(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "internal_error", "failed to create link")
 		return
 	}
+	slog.Info("link created", "code", code, "url", req.URL, "actor", actorFrom(r))
 	writeJSON(w, http.StatusCreated, toLinkJSON(link, fullURLs(cfg, r, code)))
 }
 
@@ -217,12 +218,14 @@ func (s *Server) updateLink(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "internal_error", "failed to update link")
 		return
 	}
+	slog.Info("link updated", "code", link.Code, "actor", actorFrom(r))
 	writeJSON(w, http.StatusOK, toLinkJSON(link, fullURLs(cfg, r, link.Code)))
 }
 
 // deleteLink handles DELETE /api/v1/links/{code}.
 func (s *Server) deleteLink(w http.ResponseWriter, r *http.Request) {
-	if err := s.store.DeleteLink(r.Context(), pathCode(r.PathValue("code"))); err != nil {
+	code := pathCode(r.PathValue("code"))
+	if err := s.store.DeleteLink(r.Context(), code); err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "not_found", "link not found")
 			return
@@ -230,6 +233,7 @@ func (s *Server) deleteLink(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "internal_error", "failed to delete link")
 		return
 	}
+	slog.Info("link deleted", "code", code, "actor", actorFrom(r))
 	w.WriteHeader(http.StatusNoContent)
 }
 
