@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useReducer, useRef, useState } from 'react'
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, TextareaHTMLAttributes } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { AlertCircle, CheckCircle2, X } from 'lucide-react'
@@ -141,14 +141,19 @@ const ToastContext = createContext<{ toast: (message: string, kind?: 'success' |
 })
 
 // Cards stack as a pile: the newest is fully visible in front, older ones
-// peek 12px above it. Hovering the stack expands every card.
-const TOAST_H = 70 // fixed card height (line-clamped to two lines)
+// peek 12px above it. Hovering the stack expands every card. Cards size
+// themselves to their content; the overlap offset uses the measured height.
+const TOAST_FALLBACK_H = 64 // used until the first measured height arrives
 const PEEK = 12 // visible edge of each collapsed rear card
 const EXPAND_GAP = 8 // spacing between cards when expanded
 
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([])
   const [expanded, setExpanded] = useState(false)
+  // Measured heights per card: the pile overlap is (height - peek), and cards
+  // are content-sized so this can't be hardcoded.
+  const heights = useRef(new Map<number, number>())
+  const [, force] = useReducer((x: number) => x + 1, 0)
 
   const dismiss = useCallback((id: number) => {
     setToasts((ts) => ts.filter((t) => t.id !== id))
@@ -171,7 +176,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         onMouseEnter={() => setExpanded(true)}
         onMouseLeave={() => setExpanded(false)}
       >
-        <div className="pointer-events-auto flex w-80 flex-col">
+        <div className="pointer-events-auto flex flex-col">
           <AnimatePresence>
             {[...toasts].reverse().map((t, i, arr) => {
               // Newest renders last (bottom, front-most). Rear cards get a
@@ -179,17 +184,25 @@ export function ToastProvider({ children }: { children: ReactNode }) {
               // their lower half — only a 12px top edge of each stays visible,
               // a pile like the reference implementation. Hover expands them.
               const isFront = i === arr.length - 1
-              const marginBottom = isFront ? 0 : expanded ? EXPAND_GAP : PEEK - TOAST_H
+              const cardH = heights.current.get(t.id) ?? TOAST_FALLBACK_H
+              const marginBottom = isFront ? 0 : expanded ? EXPAND_GAP : PEEK - cardH
               return (
                 <motion.div
                   key={t.id}
                   layout
+                  ref={(el) => {
+                    // Cards are content-sized; record the rendered height so
+                    // the pile overlap tracks it (fires once per card).
+                    if (el && heights.current.get(t.id) !== el.offsetHeight) {
+                      heights.current.set(t.id, el.offsetHeight)
+                      force()
+                    }
+                  }}
                   initial={{ opacity: 0, y: 28, scale: 0.95 }}
                   animate={{ opacity: 1, y: 0, scale: 1, marginBottom }}
                   exit={{ opacity: 0, y: -14, scale: 0.95 }}
                   transition={{ type: 'spring', stiffness: 380, damping: 32 }}
-                  style={{ height: TOAST_H }}
-                  className={`flex select-none items-start gap-2.5 rounded-lg border px-3.5 py-3 text-sm font-medium shadow-[0_8px_30px_rgba(0,0,0,0.12)] ${
+                  className={`flex w-fit max-w-80 select-none items-start gap-2.5 rounded-lg border px-3.5 py-3 text-sm font-medium shadow-[0_8px_30px_rgba(0,0,0,0.12)] ${
                     t.kind === 'error'
                       ? 'border-danger/20 bg-[#fff7f6] text-danger dark:bg-[#2a1a1a] dark:text-red-300'
                       : 'border-accent/20 bg-[#fffaf0] text-accent-deep dark:bg-[#2a2015] dark:text-amber-300'
@@ -200,7 +213,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                   ) : (
                     <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-accent" />
                   )}
-                  <span className="min-w-0 flex-1 line-clamp-2">{t.message}</span>
+                  <span className="min-w-0 line-clamp-2">{t.message}</span>
                   <button
                     onClick={() => dismiss(t.id)}
                     aria-label="Dismiss"
