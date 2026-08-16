@@ -86,32 +86,8 @@ header/footer、随机短码位数、主 + 附加基址、额外保留字、UA �
 
 访问 http://localhost:8080/docs/ —— 覆盖全部端点的交互式 Swagger UI，
 随单个二进制内置（`/docs/openapi.yaml` 为原始 OpenAPI 3.0 规范）。
-
-## API
-
-基础路径 `/api/v1`。管理端点接受会话 Cookie 或
+API 基础路径 `/api/v1`；管理端点接受会话 Cookie 或
 `Authorization: Bearer <token>`（Token 在设置页创建）。
-
-| 方法 | 路径 | 说明 |
-|---|---|---|
-| GET | `/api/v1/health` | **公开**：名称、版本、uptime、redis/sqlite 探活 |
-| POST | `/api/v1/auth/login` | 密码登录 → 会话 Cookie |
-| GET/POST/DELETE | `/api/v1/links` | 列表（分页/搜索/过期筛选）/ 创建 / 按 codes 批量删除 |
-| POST | `/api/v1/links/batch` | 批量导入（单次 ≤500 条，`conflict` = error/skip/update） |
-| GET/DELETE | `/api/v1/links/expired` | 统计过期数量 / 一键清空过期链接 |
-| GET/PATCH/DELETE | `/api/v1/links/{code}` | 详情 / 更新 / 删除（点击历史保留） |
-| GET | `/api/v1/export.csv` | 导出全部链接（CSV，统一 7 字段，UTF-8 BOM） |
-| GET | `/api/v1/export.json` | 导出全部链接（JSON，与 CSV 相同 7 字段） |
-| GET | `/api/v1/logs` | 日志历史（从 LOG_DIR 文件读取，分页） |
-| GET | `/api/v1/logs/stream` | 日志实时流（Server-Sent Events） |
-| GET/POST/DELETE | `/api/v1/ua-blocks` | 屏蔽的 User-Agent（程序化使用；设置页经 config 管理） |
-| GET/POST/DELETE | `/api/v1/tokens` | API Token |
-| GET/PUT | `/api/v1/config` | 站点配置（热生效，写回 YAML） |
-| POST/DELETE | `/api/v1/icon` | 自定义图标上传 / 恢复默认 |
-| GET | `/api/v1/dashboard` | 聚合指标 + 14 天趋势 |
-
-跳转：`GET /{code}` → 302 到目标地址（`api`、`admin`、`expired` 等保留前缀
-永远不会与短码冲突）。
 
 ## 开发
 

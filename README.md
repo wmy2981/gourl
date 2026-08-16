@@ -94,33 +94,9 @@ custom icon.
 
 Open http://localhost:8080/docs/ — an interactive Swagger UI covering every
 endpoint, served from the single binary (`/docs/openapi.yaml` is the raw
-OpenAPI 3.0 spec).
-
-## API
-
-Base path `/api/v1`. Admin endpoints accept a session cookie or
-`Authorization: Bearer <token>` (tokens are created in Settings).
-
-| Method | Path | Description |
-|---|---|---|
-| GET | `/api/v1/health` | **Public**: name, version, uptime, redis/sqlite probes |
-| POST | `/api/v1/auth/login` | Password login → session cookie |
-| GET/POST/DELETE | `/api/v1/links` | List (paged, searchable, expiry-filterable) / create / batch delete by codes |
-| POST | `/api/v1/links/batch` | Batch import (≤500 per call, `conflict` = error/skip/update) |
-| GET/DELETE | `/api/v1/links/expired` | Count expired / clear all expired links |
-| GET/PATCH/DELETE | `/api/v1/links/{code}` | Detail / update / delete (click history is kept) |
-| GET | `/api/v1/export.csv` | Export all links as CSV (7 uniform fields, UTF-8 BOM) |
-| GET | `/api/v1/export.json` | Export all links as JSON (same 7 fields) |
-| GET | `/api/v1/logs` | Log history from the LOG_DIR file (paginated) |
-| GET | `/api/v1/logs/stream` | Live log stream (Server-Sent Events) |
-| GET/POST/DELETE | `/api/v1/ua-blocks` | Blocked User-Agent patterns (programmatic use; the settings page manages them via config) |
-| GET/POST/DELETE | `/api/v1/tokens` | API tokens |
-| GET/PUT | `/api/v1/config` | Site config (hot-applied, written back to YAML) |
-| POST/DELETE | `/api/v1/icon` | Custom icon upload / reset |
-| GET | `/api/v1/dashboard` | Aggregate metrics + 14-day trend |
-
-Redirect: `GET /{code}` → 302 to the target (reserved prefixes like
-`api`, `admin`, `expired` never collide with short codes).
+OpenAPI 3.0 spec). API base path is `/api/v1`; admin endpoints accept a
+session cookie or `Authorization: Bearer <token>` (tokens are created in
+Settings).
 
 ## Development
 
