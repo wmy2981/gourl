@@ -72,28 +72,31 @@ export function Dialog({
   children: ReactNode
   wide?: boolean
 }) {
-  // Exit animation: keep the dialog mounted for a beat after close so the
-  // pop-out/backdrop-out play, then unmount. Escape/backdrop/close all funnel
-  // through requestClose.
+  // Exit animation driven by the open prop: whatever triggers close (X,
+  // Escape, backdrop, or a form's cancel button calling onClose), the panel
+  // stays mounted for a beat to play pop-out/backdrop-out before unmounting.
+  const [rendered, setRendered] = useState(open)
   const [closing, setClosing] = useState(false)
-  const requestClose = () => {
-    if (closing) return
-    setClosing(true)
-    setTimeout(() => {
+
+  useEffect(() => {
+    if (open) {
+      setRendered(true)
       setClosing(false)
-      onClose()
-    }, 180)
-  }
+    } else if (rendered) {
+      setClosing(true)
+      const t = setTimeout(() => setRendered(false), 180)
+      return () => clearTimeout(t)
+    }
+  }, [open, rendered])
 
   useEffect(() => {
     if (!open) return
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && requestClose()
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, closing])
+  }, [open, onClose])
 
-  if (!open) return null
+  if (!rendered) return null
   return (
     // Outer scroller keeps tall dialogs reachable at the top (max-h centering
     // would clip the header off-screen); the panel itself is opaque so page
@@ -102,7 +105,7 @@ export function Dialog({
       <div className="flex min-h-full items-center justify-center p-4">
         <div
           className={`fixed inset-0 ${closing ? 'animate-backdrop-out' : 'animate-backdrop-in'} bg-black/30 backdrop-blur-sm`}
-          onClick={requestClose}
+          onClick={onClose}
         />
         <div
           role="dialog"
@@ -113,7 +116,7 @@ export function Dialog({
         >
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-lg font-semibold">{title}</h2>
-            <button onClick={requestClose} aria-label="Close" className="rounded-lg p-1 transition-colors hover:bg-black/5 dark:hover:bg-white/10">
+            <button onClick={onClose} aria-label="Close" className="rounded-lg p-1 transition-colors hover:bg-black/5 dark:hover:bg-white/10">
               <X size={18} />
             </button>
           </div>
