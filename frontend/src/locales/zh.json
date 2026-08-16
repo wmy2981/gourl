@@ -70,6 +70,7 @@
     "importResults": "成功 {{created}} 条，失败 {{failed}} 条",
     "note": "备注",
     "invalidUrl": "目标必须是完整的 http(s) URL",
+    "invalidDate": "日期无效，请使用 yyyy/MM/dd 格式",
     "invalidCode": "短码格式无效",
     "codeTaken": "该短码已被占用",
     "reserved": "该短码是系统保留路径",

@@ -70,6 +70,7 @@
     "importResults": "Created {{created}}, failed {{failed}}",
     "note": "Note",
     "invalidUrl": "Destination must be an absolute http(s) URL",
+    "invalidDate": "Invalid date — use yyyy/MM/dd",
     "invalidCode": "Invalid short code",
     "codeTaken": "This short code is already in use",
     "reserved": "This short code is a reserved system path",

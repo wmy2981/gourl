@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api, ApiError, type Link } from '../lib/api'
 import { Button, Dialog, Input, Label, useToast } from './ui'
+import DateInput from './DateInput'
 
 export default function LinkFormDialog({
   link,
@@ -18,8 +19,9 @@ export default function LinkFormDialog({
   const { toast } = useToast()
   const [url, setUrl] = useState('')
   const [code, setCode] = useState('')
-  // Expiry as a calendar date (yyyy-mm-dd); empty means never expires.
-  const [expiresDate, setExpiresDate] = useState('')
+  // Expiry as a calendar date (yyyy-mm-dd); null while the typed text is not
+  // a valid date; empty string means never expires.
+  const [expiresDate, setExpiresDate] = useState<string | null>('')
   const [busy, setBusy] = useState(false)
 
   // unix seconds → local yyyy-mm-dd for the date input ('' when never).
@@ -46,6 +48,10 @@ export default function LinkFormDialog({
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (busy) return
+    if (expiresDate === null) {
+      toast(t('form.invalidDate'), 'error')
+      return
+    }
     setBusy(true)
     try {
       const expires = toUnix(expiresDate)
@@ -103,11 +109,11 @@ export default function LinkFormDialog({
         </div>
         <div>
           <Label htmlFor="link-expires">{t('form.expiresAt')}</Label>
-          <Input
+          <DateInput
             id="link-expires"
-            type="date"
-            value={expiresDate}
-            onChange={(e) => setExpiresDate(e.target.value)}
+            value={expiresDate ?? ''}
+            onChange={setExpiresDate}
+            ariaLabel={t('form.expiresAt')}
           />
         </div>
         <div className="mt-1 flex justify-end gap-2">

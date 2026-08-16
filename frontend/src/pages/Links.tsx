@@ -27,7 +27,9 @@ const PAGE_SIZE = 20
 
 function formatDate(unix: number, t: (k: string) => string): string {
   if (unix <= 0) return t('common.never')
-  return new Date(unix * 1000).toLocaleString()
+  const d = new Date(unix * 1000)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}/${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
 export default function Links() {
