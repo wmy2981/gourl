@@ -80,20 +80,22 @@ export default function Layout() {
         </div>
       </div>
       {nav}
-      <div className="mt-auto flex flex-col gap-1">
+      {/* Bottom padding clears the fixed footer that spans the viewport. */}
+      <div className="mt-auto flex flex-col gap-1 pb-12">
+        {/* Buttons show the CURRENT mode/language, not the toggle target. */}
         <button
           onClick={toggle}
           className="flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm text-muted transition-colors hover:bg-black/5 dark:hover:bg-white/10"
         >
-          {dark ? <Sun size={18} /> : <Moon size={18} />}
-          {dark ? 'Light' : 'Dark'}
+          {dark ? <Moon size={18} /> : <Sun size={18} />}
+          {dark ? t('app.dark') : t('app.light')}
         </button>
         <button
           onClick={switchLang}
           className="flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm text-muted transition-colors hover:bg-black/5 dark:hover:bg-white/10"
         >
-          <span className="w-[18px] text-center text-xs font-semibold">{lang === 'zh' ? 'EN' : '中'}</span>
-          {lang === 'zh' ? 'English' : '中文'}
+          <span className="w-[18px] text-center text-xs font-semibold">{lang === 'zh' ? '中' : 'EN'}</span>
+          {lang === 'zh' ? '中文' : 'English'}
         </button>
         <button
           onClick={logout}
