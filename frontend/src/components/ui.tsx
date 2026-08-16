@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react'
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, TextareaHTMLAttributes } from 'react'
-import { X } from 'lucide-react'
+import { AnimatePresence, motion } from 'motion/react'
+import { AlertCircle, CheckCircle2, X } from 'lucide-react'
 
 /* ---------- Button ---------- */
 
@@ -133,53 +134,85 @@ interface Toast {
   id: number
   message: string
   kind: 'success' | 'error'
-  closing?: boolean
 }
 
 const ToastContext = createContext<{ toast: (message: string, kind?: 'success' | 'error') => void }>({
   toast: () => {},
 })
 
+// Cards stack as a pile: the newest is fully visible in front, older ones
+// peek 12px above it. Hovering the stack expands every card.
+const TOAST_H = 70 // fixed card height (line-clamped to two lines)
+const PEEK = 12 // visible edge of each collapsed rear card
+const EXPAND_GAP = 8 // spacing between cards when expanded
+
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([])
+  const [expanded, setExpanded] = useState(false)
 
-  // Fade out first (marks closing), then unmount after the exit animation.
-  const dismiss = (id: number) => {
-    setToasts((ts) => ts.map((t) => (t.id === id ? { ...t, closing: true } : t)))
-    setTimeout(() => setToasts((ts) => ts.filter((t) => t.id !== id)), 240)
-  }
+  const dismiss = useCallback((id: number) => {
+    setToasts((ts) => ts.filter((t) => t.id !== id))
+  }, [])
 
   const toast = useCallback((message: string, kind: 'success' | 'error' = 'success') => {
     const id = Date.now() + Math.random()
     // Errors deserve more reading time; successes dismiss quickly.
     const ttl = kind === 'error' ? 6000 : 3200
-    // Stack newest on top, cap at 5 visible at once.
-    setToasts((ts) => [...ts.slice(-4), { id, message, kind }])
+    // Newest first: index 0 is the front card, older ones stack above it.
+    setToasts((ts) => [{ id, message, kind }, ...ts].slice(0, 5))
     setTimeout(() => dismiss(id), ttl)
-  }, [])
+  }, [dismiss])
 
   return (
     <ToastContext.Provider value={{ toast }}>
       {children}
-      {/* Bottom-right stacked toasts: compact, out of the way, layered */}
-      <div className="pointer-events-none fixed bottom-6 right-6 z-[70] flex max-w-sm flex-col items-end gap-2">
-        {toasts.map((t) => (
-          <div
-            key={t.id}
-            className={`pointer-events-auto flex max-w-full items-center gap-2 rounded-xl border border-hairline bg-white px-3.5 py-2.5 text-sm font-medium shadow-[0_12px_40px_rgba(0,0,0,0.18)] dark:bg-[#1c1c1e] ${
-              t.kind === 'error' ? '!border-danger/25 !text-danger' : ''
-            } ${t.closing ? 'animate-toast-out' : 'animate-toast-in'}`}
-          >
-            <span className="min-w-0 truncate">{t.message}</span>
-            <button
-              onClick={() => dismiss(t.id)}
-              aria-label="Dismiss"
-              className="shrink-0 rounded-md p-0.5 text-muted transition-colors hover:text-ink dark:hover:text-ink-dark"
-            >
-              <X size={14} />
-            </button>
-          </div>
-        ))}
+      <div
+        className="pointer-events-none fixed bottom-6 right-6 z-[70]"
+        onMouseEnter={() => setExpanded(true)}
+        onMouseLeave={() => setExpanded(false)}
+      >
+        <div className="pointer-events-auto flex w-80 flex-col">
+          <AnimatePresence>
+            {[...toasts].reverse().map((t, i, arr) => {
+              // Newest renders last (bottom, front-most). Rear cards get a
+              // negative bottom margin so they rise and the front card covers
+              // their lower half — only a 12px top edge of each stays visible,
+              // a pile like the reference implementation. Hover expands them.
+              const isFront = i === arr.length - 1
+              const marginBottom = isFront ? 0 : expanded ? EXPAND_GAP : PEEK - TOAST_H
+              return (
+                <motion.div
+                  key={t.id}
+                  layout
+                  initial={{ opacity: 0, y: 28, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1, marginBottom }}
+                  exit={{ opacity: 0, y: -14, scale: 0.95 }}
+                  transition={{ type: 'spring', stiffness: 380, damping: 32 }}
+                  style={{ height: TOAST_H }}
+                  className={`flex select-none items-start gap-2.5 rounded-lg border px-3.5 py-3 text-sm font-medium shadow-[0_8px_30px_rgba(0,0,0,0.12)] ${
+                    t.kind === 'error'
+                      ? 'border-danger/20 bg-[#fff7f6] text-danger dark:bg-[#2a1a1a] dark:text-red-300'
+                      : 'border-accent/20 bg-[#fffaf0] text-accent-deep dark:bg-[#2a2015] dark:text-amber-300'
+                  }`}
+                >
+                  {t.kind === 'error' ? (
+                    <AlertCircle size={16} className="mt-0.5 shrink-0 text-danger" fill="currentColor" stroke="white" />
+                  ) : (
+                    <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-accent" />
+                  )}
+                  <span className="min-w-0 flex-1 line-clamp-2">{t.message}</span>
+                  <button
+                    onClick={() => dismiss(t.id)}
+                    aria-label="Dismiss"
+                    className="shrink-0 rounded-md p-0.5 text-muted/70 transition-colors hover:text-ink dark:hover:text-ink-dark"
+                  >
+                    <X size={14} />
+                  </button>
+                </motion.div>
+              )
+            })}
+          </AnimatePresence>
+        </div>
       </div>
     </ToastContext.Provider>
   )
