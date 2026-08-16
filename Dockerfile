@@ -38,17 +38,17 @@ RUN CGO_ENABLED=0 go build -trimpath \
 # ---------- runtime ----------
 FROM alpine:3.21
 # redis-server for single-container deployments (embedded Redis on
-# 127.0.0.1:6379 unless REDIS_ADDR points elsewhere).
-RUN apk add --no-cache redis tzdata && adduser -D -u 10001 gourl
+# 127.0.0.1:6379 unless REDIS_ADDR points elsewhere). su-exec lets the
+# entrypoint fix mount-point ownership as root, then drop privileges.
+RUN apk add --no-cache redis tzdata su-exec && adduser -D -u 10001 gourl
 # Default timezone for daily click buckets and expiry; compose overrides it
 # with TZ from its .env. tzdata makes the zone resolvable in the image.
 ENV TZ=Asia/Shanghai
-# entrypoint.sh: start the embedded Redis unless REDIS_ADDR is set, then run
-# gourl. chmod runs as root (before USER) because the binary dir is root-owned
-# and git mode bits are unreliable across platforms.
+# entrypoint.sh runs as root (no USER directive below) so freshly created
+# bind mounts can be chowned to gourl, then Redis and gourl both run via
+# su-exec as the unprivileged user.
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
-USER gourl
 WORKDIR /app
 COPY --from=build /gourl /usr/local/bin/gourl
 

@@ -55,6 +55,11 @@ Open http://localhost:8080 — you'll be redirected to the admin console.
 Data (SQLite, uploaded icons, embedded Redis rdb, rotating logs) persists in
 `./data`, config in `./config` (the settings page writes back to it).
 
+First deployment needs nothing extra: the entrypoint runs as root only long
+enough to chown the freshly created `./data` and `./config` bind mounts to
+the unprivileged gourl user, then drops privileges (su-exec) for Redis and
+gourl. The Redis "vm.overcommit_memory" warning is harmless in containers.
+
 Images are built and published by GitHub Actions on [GHCR](https://github.com/wmy2981/gourl/pkgs/container/gourl):
 `ghcr.io/wmy2981/gourl:latest` (releases, main branch) or `:dev` (pre-releases).
 To deploy a pre-release: `GOURL_IMAGE=ghcr.io/wmy2981/gourl:dev docker compose up -d`.

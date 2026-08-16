@@ -1,11 +1,18 @@
 #!/bin/sh
 # Single-container entrypoint: starts the embedded Redis on 127.0.0.1:6379
 # unless REDIS_ADDR points at an external instance, then runs gourl.
+#
+# The entrypoint runs as root on purpose: freshly created bind mounts (a first
+# deployment with no ./data directory yet) inherit the host's root ownership,
+# which the gourl user could never write to. chown the mount points first,
+# then drop privileges with su-exec for both Redis and gourl.
 set -e
+
+chown -R gourl:gourl /app/data /app/config
 
 if [ -z "$REDIS_ADDR" ]; then
   echo "starting embedded redis on 127.0.0.1:6379"
-  redis-server --daemonize yes \
+  su-exec gourl redis-server --daemonize yes \
     --bind 127.0.0.1 --port 6379 \
     --dir /app/data --dbfilename redis.rdb \
     --appendonly yes --appendfilename redis.aof
@@ -14,4 +21,4 @@ else
   echo "using external redis at $REDIS_ADDR"
 fi
 
-exec gourl
+exec su-exec gourl gourl

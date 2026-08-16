@@ -52,6 +52,10 @@ docker compose up -d
 访问 http://localhost:8080 会自动跳转管理后台。数据（SQLite、上传图标、
 内置 Redis 的 rdb、轮转日志）持久化在 `./data`，配置在 `./config`（设置页会写回其中）。
 
+首次部署无需额外操作：入口脚本仅以 root 运行片刻，把新建的 `./data` 与
+`./config` 挂载目录 chown 给非特权 gourl 用户，随后用 su-exec 降权运行
+Redis 与 gourl。容器内的 Redis "vm.overcommit_memory" 警告无害可忽略。
+
 镜像由 GitHub Actions 构建发布到 [GHCR](https://github.com/wmy2981/gourl/pkgs/container/gourl)：
 `ghcr.io/wmy2981/gourl:latest`（正式版，main 分支）或 `:dev`（预发行）。
 部署预发行版：`GOURL_IMAGE=ghcr.io/wmy2981/gourl:dev docker compose up -d`。
