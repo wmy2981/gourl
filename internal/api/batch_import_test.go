@@ -59,6 +59,54 @@ func TestBatchImportLenientParsing(t *testing.T) {
 	}
 }
 
+// TestBatchImportSkipsDeletedItems: items flagged deleted (re-imported export
+// dumps) are skipped without touching the database, whatever their other
+// fields; the flag parses leniently (bool or "true"/"false" strings).
+func TestBatchImportSkipsDeletedItems(t *testing.T) {
+	s, _ := newTestServer(t)
+	rec := do(t, s, http.MethodPost, "/api/v1/links/batch", map[string]any{
+		"items": []map[string]any{
+			{"url": "https://example.com/x", "code": "skipx", "deleted": true},
+			{"url": "not-a-valid-url-at-all", "code": "skipbad", "deleted": "true"},
+			{"url": "https://example.com/y", "code": "keepy"},
+			{"url": "https://example.com/z", "code": "keepz", "deleted": false},
+		},
+	})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d, body %s", rec.Code, rec.Body.String())
+	}
+	var resp struct {
+		Created int      `json:"created"`
+		Skipped int      `json:"skipped"`
+		Failed  int      `json:"failed"`
+		Results []struct {
+			Status string `json:"status"`
+			Code   string `json:"code"`
+		} `json:"results"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatal(err)
+	}
+	if resp.Created != 2 || resp.Skipped != 2 || resp.Failed != 0 {
+		t.Fatalf("counts = created %d skipped %d failed %d, want 2/2/0",
+			resp.Created, resp.Skipped, resp.Failed)
+	}
+	// A deleted flag must be honored even when the rest of the item is broken.
+	statuses := map[string]string{}
+	for _, r := range resp.Results {
+		statuses[r.Code] = r.Status
+	}
+	if statuses["skipx"] != "skipped" || statuses["skipbad"] != "skipped" ||
+		statuses["keepy"] != "created" || statuses["keepz"] != "created" {
+		t.Fatalf("per-item statuses = %v", statuses)
+	}
+	for _, code := range []string{"keepy", "keepz"} {
+		if _, err := s.store.GetLink(context.Background(), code); err != nil {
+			t.Errorf("GetLink(%s): %v", code, err)
+		}
+	}
+}
+
 // TestBatchImportLenientDateStrings: unix timestamps and yyyy-mm-dd still
 // work, including their string forms.
 func TestBatchImportLenientDateStrings(t *testing.T) {

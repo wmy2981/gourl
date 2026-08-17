@@ -126,7 +126,7 @@ export interface BatchCreateResponse {
   results: BatchCreateResult[]
 }
 
-/** Import item: url is required; the rest is optional and mirrors the export fields. click_count is dropped on import. */
+/** Import item: url is required; the rest is optional and mirrors the export fields. click_count is dropped on import; deleted: true skips the item (re-imported export dumps). */
 export interface ImportItem {
   url: string
   code?: string
@@ -134,6 +134,7 @@ export interface ImportItem {
   description?: string
   expires_at?: number | string
   created_at?: number
+  deleted?: boolean
 }
 
 const JSON_HEADERS = { 'Content-Type': 'application/json' }

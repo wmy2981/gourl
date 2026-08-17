@@ -68,6 +68,16 @@ func (s *Server) batchCreate(w http.ResponseWriter, r *http.Request) {
 	var valid []pending
 	for i, item := range items {
 		res := map[string]any{"index": i, "url": item.URL}
+		// Items flagged deleted (e.g. re-imported export dumps) are skipped
+		// without touching the database, exactly like an existing-code skip.
+		if item.Deleted {
+			skipped++
+			skippedCodes = append(skippedCodes, item.Code)
+			res["status"] = "skipped"
+			res["code"] = item.Code
+			results = append(results, res)
+			continue
+		}
 		code, verr := s.resolveCode(item, cfg, r)
 		if verr != nil {
 			failed++
@@ -269,6 +279,12 @@ func lenientItem(m map[string]any) (createLinkRequest, error) {
 			item.CreatedAt = &n
 		case "click_count":
 			// Deliberately dropped: imports must never fabricate click history.
+		case "deleted":
+			b, err := asBool(v)
+			if err != nil {
+				return item, fmt.Errorf("deleted must be a boolean")
+			}
+			item.Deleted = b
 		}
 	}
 	if item.URL == "" {
@@ -306,6 +322,33 @@ func asInt64(v any) (int64, error) {
 		return 0, nil
 	default:
 		return 0, fmt.Errorf("must be a number")
+	}
+}
+
+// asBool coerces booleans, "true"/"false" strings and 0/1 numbers; null
+// yields false.
+func asBool(v any) (bool, error) {
+	switch t := v.(type) {
+	case bool:
+		return t, nil
+	case string:
+		b, err := strconv.ParseBool(t)
+		if err != nil {
+			return false, fmt.Errorf("must be a boolean")
+		}
+		return b, nil
+	case json.Number:
+		if t.String() == "1" {
+			return true, nil
+		}
+		if t.String() == "0" {
+			return false, nil
+		}
+		return false, fmt.Errorf("must be a boolean")
+	case nil:
+		return false, nil
+	default:
+		return false, fmt.Errorf("must be a boolean")
 	}
 }
 

@@ -187,6 +187,9 @@ type createLinkRequest struct {
 	Description string       `json:"description"`
 	ExpiresAt   *expiryValue `json:"expires_at"`
 	CreatedAt   *int64       `json:"created_at"`
+	// Deleted marks an import item for skipping (re-imported export dumps
+	// carry it); single creates ignore it.
+	Deleted bool `json:"deleted"`
 }
 
 // createLink handles POST /api/v1/links.

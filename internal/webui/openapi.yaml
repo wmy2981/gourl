@@ -487,6 +487,7 @@ components:
             - type: integer
               description: Unix seconds; 0 = never
             - type: string
+        deleted: { type: boolean, description: "Skip this item on import (re-imported export dumps carry it); soft-deleted codes in the database are treated as free" }
               description: "yyyy-MM-dd calendar date, parsed at local midnight"
         click_count:
           type: integer
