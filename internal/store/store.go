@@ -33,7 +33,7 @@ type Link struct {
 
 // ListOptions controls listing.
 type ListOptions struct {
-	Query    string // substring match on code/url/title
+	Query    string // substring match on code/url/title/description
 	Page     int    // 1-based
 	PageSize int    // default 20, max 100
 	Sort     string // created_at (default) | clicks | code
@@ -399,9 +399,9 @@ func (s *Store) ListLinks(ctx context.Context, opts ListOptions) ([]Link, int, e
 	var args []any
 	if opts.Query != "" {
 		// Parens keep AND-joined expiry filters from binding inside the ORs.
-		conds = append(conds, `(code LIKE ? OR url LIKE ? OR title LIKE ?)`)
+		conds = append(conds, `(code LIKE ? OR url LIKE ? OR title LIKE ? OR description LIKE ?)`)
 		like := "%" + opts.Query + "%"
-		args = []any{like, like, like}
+		args = []any{like, like, like, like}
 	}
 	switch opts.Expires {
 	case "expired":

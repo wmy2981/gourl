@@ -166,17 +166,26 @@ func TestListLinksPaginationAndSearch(t *testing.T) {
 		l := sampleLink(code)
 		l.CreatedAt = int64(i)
 		l.UpdatedAt = int64(i)
+		l.Description = "docs for " + code
 		if err := s.CreateLink(ctx, l); err != nil {
 			t.Fatal(err)
 		}
 	}
-	// Search.
+	// Search by url.
 	links, total, err := s.ListLinks(ctx, ListOptions{Query: "example.com/bb"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if total != 1 || len(links) != 1 || links[0].Code != "bbb" {
-		t.Errorf("search: got %d total, %d rows, %v", total, len(links), links)
+		t.Errorf("url search: got %d total, %d rows, %v", total, len(links), links)
+	}
+	// Search by description.
+	links, total, err = s.ListLinks(ctx, ListOptions{Query: "docs for dd"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if total != 1 || len(links) != 1 || links[0].Code != "ddd" {
+		t.Errorf("description search: got %d total, %d rows, %v", total, len(links), links)
 	}
 	// Pagination, default sort = created_at desc.
 	page1, total, err := s.ListLinks(ctx, ListOptions{Page: 1, PageSize: 2})
