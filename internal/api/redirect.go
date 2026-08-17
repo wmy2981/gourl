@@ -28,12 +28,11 @@ func (s *Server) redirect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if blocked, err := s.uaBlocked(r); err != nil {
-		slog.Warn("ua block check failed", "code", code, "error", err)
-	} else if blocked {
-		// Blocked UAs get a bare 403 and are never counted.
-		slog.Info("ua blocked", "code", code, "remote", r.RemoteAddr)
-		w.WriteHeader(http.StatusForbidden)
+	if p := s.uaBlocked(r); p != "" {
+		// Blocked UAs get a 403 page naming the matched pattern and are
+		// never counted.
+		slog.Info("ua blocked", "code", code, "remote", r.RemoteAddr, "pattern", p)
+		s.renderBlocked(w, r, "ua", p)
 		return
 	}
 
@@ -62,17 +61,18 @@ func (s *Server) redirect(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, link.URL, http.StatusFound)
 }
 
-// uaBlocked reports whether the request UA matches any configured block
-// pattern (case-insensitive substring match). Patterns come from config.yaml.
-func (s *Server) uaBlocked(r *http.Request) (bool, error) {
+// uaBlocked returns the first UA block pattern matched by the request UA
+// (case-insensitive substring match), or "" when not blocked. Patterns come
+// from config.yaml.
+func (s *Server) uaBlocked(r *http.Request) string {
 	ua := strings.ToLower(r.UserAgent())
 	if ua == "" {
-		return false, nil
+		return ""
 	}
 	for _, p := range s.cfg.Get().UABlocks {
 		if strings.Contains(ua, strings.ToLower(p)) {
-			return true, nil
+			return p
 		}
 	}
-	return false, nil
+	return ""
 }

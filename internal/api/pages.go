@@ -86,6 +86,31 @@ func (s *Server) renderNotFound(w http.ResponseWriter, r *http.Request) {
 	s.renderPage(w, http.StatusNotFound, lang, heading, message, "", cfg.Site.Title, cfg.Site.Description)
 }
 
+// renderBlocked renders the 403 page explaining why the request was blocked,
+// in the request language. kind is "ua" (matched User-Agent keyword) or "ip"
+// (matched IP rule); detail carries the matched value.
+func (s *Server) renderBlocked(w http.ResponseWriter, r *http.Request, kind, detail string) {
+	cfg := s.cfg.Get()
+	lang := langOf(r)
+	var heading, msg string
+	if lang == "zh" {
+		heading = "访问被拦截"
+		if kind == "ua" {
+			msg = "您的请求被本服务拦截。命中的 User-Agent 关键词：" + detail
+		} else {
+			msg = "您的请求被本服务拦截。命中的 IP 规则：" + detail
+		}
+	} else {
+		heading = "Access blocked"
+		if kind == "ua" {
+			msg = "Your request was blocked. Matched User-Agent keyword: " + detail
+		} else {
+			msg = "Your request was blocked. Matched IP rule: " + detail
+		}
+	}
+	s.renderPage(w, http.StatusForbidden, lang, heading, msg, "", cfg.Site.Title, cfg.Site.Description)
+}
+
 // renderPage renders the page template from the live site config.
 func (s *Server) renderPage(w http.ResponseWriter, status int, lang, heading, message, detail, title, description string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")

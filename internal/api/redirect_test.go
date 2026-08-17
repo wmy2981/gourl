@@ -78,6 +78,9 @@ func TestRedirectUABlockedNotCounted(t *testing.T) {
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("blocked UA status = %d, want 403", rec.Code)
 	}
+	if !strings.Contains(rec.Body.String(), "Googlebot") {
+		t.Errorf("403 page must name the matched keyword, body: %s", rec.Body.String())
+	}
 	total, _ := counter.Keys("abc", "")
 	if _, err := mr.Get(total); err == nil {
 		t.Error("blocked UA must not be counted")
