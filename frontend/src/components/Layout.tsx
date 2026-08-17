@@ -49,7 +49,12 @@ export default function Layout() {
   const DRAWER_W = 256 // w-64
   const [dragX, setDragX] = useState<number | null>(null)
   const [settleTo, setSettleTo] = useState<number | null>(null)
-  const dragStartRef = useRef<number | null>(null)
+  // Gesture state lives in refs so rapid touchmove bursts never read stale
+  // state before a re-render lands.
+  const dragActiveRef = useRef(false)
+  const gestureCommittedRef = useRef(false)
+  const dragOriginRef = useRef({ x: 0, y: 0 })
+  const dragBaseRef = useRef(DRAWER_W)
   const settleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => () => {
     if (settleTimerRef.current) clearTimeout(settleTimerRef.current)
@@ -60,36 +65,68 @@ export default function Layout() {
     // Trigger zone: the right 24px of the viewport, phones only (the drawer
     // exists only below md).
     if (!touch || window.innerWidth >= 768 || touch.clientX < window.innerWidth - 24) return
+    // Abort any running close animation so the gesture starts settled (also
+    // stops its timer from flashing the backdrop back open/closed later).
     if (settleTimerRef.current) {
       clearTimeout(settleTimerRef.current)
       settleTimerRef.current = null
     }
+    dragOriginRef.current = { x: touch.clientX, y: touch.clientY }
+    dragBaseRef.current = mobileOpen ? 0 : DRAWER_W
+    dragActiveRef.current = true
+    gestureCommittedRef.current = false
+    setMobileClosing(false)
     setSettleTo(null)
-    dragStartRef.current = touch.clientX
-    setDragX(mobileOpen ? 0 : DRAWER_W)
+    setDragX(dragBaseRef.current)
   }
 
   const onDrawerTouchMove = (e: React.TouchEvent) => {
-    if (dragX === null || dragStartRef.current === null) return
-    const start = mobileOpen ? 0 : DRAWER_W
-    const dx = dragStartRef.current - e.touches[0].clientX // >0 = dragging left
-    setDragX(Math.max(0, Math.min(DRAWER_W, start + dx)))
+    if (!dragActiveRef.current) return
+    const touch = e.touches[0]
+    const dx = dragOriginRef.current.x - touch.clientX // >0 = dragging left
+    const dy = dragOriginRef.current.y - touch.clientY
+    // Vertical scrolls on the right edge must keep scrolling the page: commit
+    // to the drawer gesture only once the motion is clearly horizontal.
+    if (!gestureCommittedRef.current) {
+      if (Math.abs(dx) < 8 || Math.abs(dy) > Math.abs(dx)) return
+      gestureCommittedRef.current = true
+      // Mount the drawer now so the swipe has something to follow — it used
+      // to mount only on release, so a swipe that never passed the halfway
+      // mark visibly opened nothing.
+      setMobileOpen(true)
+    }
+    // Swiping left (dx > 0) opens the drawer: its translateX shrinks from
+    // the closed position towards 0. (The old `base + dx` clamped at
+    // DRAWER_W, so a closed drawer never moved at all.)
+    setDragX(Math.max(0, Math.min(DRAWER_W, dragBaseRef.current - dx)))
   }
 
   const finishDrawerGesture = () => {
-    if (dragX === null) return
-    dragStartRef.current = null
-    const open = dragX < DRAWER_W / 2
+    if (!dragActiveRef.current) return
+    dragActiveRef.current = false
+    if (!gestureCommittedRef.current) {
+      // Tap or vertical scroll on the edge: restore the pre-gesture state
+      // without mounting or unmounting the drawer.
+      setDragX(null)
+      setSettleTo(null)
+      return
+    }
+    gestureCommittedRef.current = false
+    const open = (dragX ?? dragBaseRef.current) < DRAWER_W / 2
     setSettleTo(open ? 0 : DRAWER_W)
     setDragX(null)
     if (open) {
       setMobileOpen(true)
-      settleTimerRef.current = setTimeout(() => setSettleTo(null), 320)
+      settleTimerRef.current = setTimeout(() => {
+        settleTimerRef.current = null
+        setSettleTo(null)
+      }, 320)
     } else {
       // Close: keep the drawer mounted while the slide-out plays, exactly
       // like the X button path.
       setMobileClosing(true)
-      setTimeout(() => {
+      settleTimerRef.current = setTimeout(() => {
+        settleTimerRef.current = null
         setMobileClosing(false)
         setMobileOpen(false)
         setSettleTo(null)
@@ -102,7 +139,8 @@ export default function Layout() {
     if (mobileClosing) return
     setMobileClosing(true)
     setSettleTo(DRAWER_W)
-    setTimeout(() => {
+    settleTimerRef.current = setTimeout(() => {
+      settleTimerRef.current = null
       setMobileClosing(false)
       setMobileOpen(false)
       setSettleTo(null)
@@ -168,8 +206,11 @@ export default function Layout() {
   )
 
   return (
+    // touch-pan-y keeps vertical scrolling on the page while handing
+    // horizontal swipes to the drawer gesture (no preventDefault possible:
+    // React touch listeners are passive).
     <div
-      className="flex min-h-screen"
+      className="flex min-h-screen touch-pan-y"
       onTouchStart={onDrawerTouchStart}
       onTouchMove={onDrawerTouchMove}
       onTouchEnd={finishDrawerGesture}
