@@ -116,6 +116,7 @@ cd frontend && npm run e2e
 
 # Build the full binary (builds frontend, embeds it)
 powershell -File scripts/build-frontend.ps1 && go build ./cmd/gourl
+# POSIX shells: ./scripts/build-frontend.sh && go build ./cmd/gourl
 ```
 
 ## License

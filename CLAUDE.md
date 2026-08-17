@@ -8,7 +8,7 @@ Feature surface beyond the basics: batch create/delete, clear-expired, expiry fi
 
 ## Commands
 
-- Build: `go build ./cmd/gourl` (requires `internal/webui/dist` — run `powershell -File scripts/build-frontend.ps1` first)
+- Build: `go build ./cmd/gourl` (requires `internal/webui/dist` — run `powershell -File scripts/build-frontend.ps1` or `./scripts/build-frontend.sh` on POSIX first)
 - Test: `go test ./...` (Go tests use miniredis, no real Redis needed)
 - Vet: `go vet ./...`
 - Frontend: `cd frontend && npm ci && npm run typecheck && npm run test`

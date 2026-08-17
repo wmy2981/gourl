@@ -107,6 +107,7 @@ cd frontend && npm run e2e
 
 # 构建完整二进制（先构建前端并内嵌）
 powershell -File scripts/build-frontend.ps1 && go build ./cmd/gourl
+# POSIX 环境：./scripts/build-frontend.sh && go build ./cmd/gourl
 ```
 
 ## 许可证
