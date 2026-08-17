@@ -48,7 +48,7 @@ test('blocks matching user agents with 403 and does not count them', async ({ re
     .toBe(1)
 })
 
-test('shows an expired page with bilingual copy', async ({ request, page }) => {
+test('expired codes behave like missing ones (404, bilingual copy)', async ({ request, page }) => {
   await createLinkApi(request, {
     url: 'https://example.com/expired-target',
     code: 'expire-me',
@@ -56,12 +56,12 @@ test('shows an expired page with bilingual copy', async ({ request, page }) => {
   })
 
   const pageEn = await page.request.get('/expire-me')
-  expect(pageEn.status()).toBe(200)
-  expect((await pageEn.text()).toLowerCase()).toContain('this link has expired')
+  expect(pageEn.status()).toBe(404)
+  expect((await pageEn.text()).toLowerCase()).toContain('page not found')
 
   const pageZh = await page.request.get('/expire-me?lang=zh')
-  expect(pageZh.status()).toBe(200)
-  expect((await pageZh.text())).toContain('链接已过期')
+  expect(pageZh.status()).toBe(404)
+  expect((await pageZh.text())).toContain('页面不存在')
 })
 
 test('serves a 404 page for unknown codes and reserved prefixes', async ({ request }) => {
