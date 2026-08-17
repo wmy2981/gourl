@@ -1,6 +1,4 @@
 services:
-  # Single-container deployment: the image embeds a Redis instance that
-  # starts automatically unless REDIS_ADDR points elsewhere.
   app:
     # Override with GOURL_IMAGE=ghcr.io/wmy2981/gourl:dev to deploy a
     # pre-release build; latest only exists after a main release.
@@ -9,28 +7,8 @@ services:
     ports:
       - "8080:8080"
     environment:
-      # Variables come from the .env file next to this compose file (loaded
-      # automatically), e.g.:
-      #   SESSION_SECRET=$(openssl rand -hex 32)
-      # Without SESSION_SECRET the server generates an ephemeral secret on
-      # startup (sessions then do not survive a restart).
-      # The admin password is NOT set here: with no password_hash in the
-      # config file the first visitor configures it through the /admin/setup
-      # flow (or a legacy ADMIN_PASSWORD is migrated once into config.yaml).
-      # Business config lives in the mounted ./config directory (create
-      # config/config.yaml from config.yaml.example; the built-in defaults,
-      # which point at ./config and ./data — /app/… inside the container —
-      # work without it).
-      # Uncomment to use an external Redis instead of the embedded one:
-      # REDIS_ADDR: redis:6379
-      # Local timezone: daily click buckets and expires_at are interpreted in it.
       TZ: ${TZ:-Asia/Shanghai}
     volumes:
-      # Directory mounts only: Docker creates missing file mounts as
-      # directories, which would break CONFIG_PATH. Writable so the settings
-      # page can hot-apply config changes.
       - ./config:/app/config
-      # SQLite database, uploaded icons and the embedded Redis rdb/aof live
-      # in the repository-local data directory (no named volumes).
       - ./data:/app/data
     restart: unless-stopped
