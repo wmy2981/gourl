@@ -132,6 +132,7 @@
     "invalidDate": "日期无效，请使用 yyyy/MM/dd 格式",
     "invalidCode": "短码格式无效",
     "descriptionTooLong": "描述最多 500 个字符",
+    "selfLinkTarget": "目标 URL 指向本实例的短链",
     "codeTaken": "该短码已被占用",
     "reserved": "该短码是系统保留路径",
     "importFromFile": "从文件导入"

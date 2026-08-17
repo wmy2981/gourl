@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -12,6 +13,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/wmy2981/gourl/internal/config"
 	"github.com/wmy2981/gourl/internal/shortcode"
 	"github.com/wmy2981/gourl/internal/store"
 )
@@ -34,6 +36,74 @@ func checkDescription(description string) (message string, ok bool) {
 		return "description must be at most 500 characters", false
 	}
 	return "", true
+}
+
+// selfLinkTarget reports whether the http(s) target points at this instance's
+// own short links: the host:port matches a configured base URL (or the
+// request's own host when base_url is unset) and the first path segment is
+// not a reserved code — every other path is short-link space, whether or not
+// a link with that code exists yet. Non-http(s) targets are never checked.
+func selfLinkTarget(cfg *config.Config, r *http.Request, target string) bool {
+	u, err := url.Parse(target)
+	if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
+		return false
+	}
+	bases := make([]string, 0, 1+len(cfg.ExtraBaseURLs))
+	if cfg.BaseURL != "" {
+		bases = append(bases, cfg.BaseURL)
+	} else {
+		bases = append(bases, inferredBaseURL(r))
+	}
+	bases = append(bases, cfg.ExtraBaseURLs...)
+	hostMatch := false
+	for _, b := range bases {
+		bu, err := url.Parse(b)
+		if err != nil || bu.Host == "" {
+			continue
+		}
+		if hostPort(bu) == hostPort(u) {
+			hostMatch = true
+			break
+		}
+	}
+	if !hostMatch {
+		return false
+	}
+	seg := strings.TrimPrefix(u.Path, "/")
+	if i := strings.IndexByte(seg, '/'); i >= 0 {
+		seg = seg[:i]
+	}
+	return seg != "" && !shortcode.IsReserved(seg, cfg.ReservedCodes)
+}
+
+// hostPort resolves the effective port (80 for http, 443 for https) so an
+// explicit :80 matches an implied one, while http vs https — different
+// ports — never match each other; hostnames compare case-insensitively.
+func hostPort(u *url.URL) string {
+	h := strings.ToLower(u.Hostname())
+	p := u.Port()
+	if p == "" {
+		if u.Scheme == "https" {
+			p = "443"
+		} else {
+			p = "80"
+		}
+	}
+	return net.JoinHostPort(h, p)
+}
+
+// inferredBaseURL derives the site's base URL from the request when the
+// config's base_url is unset: X-Forwarded-Proto (reverse proxy) or the TLS
+// state decides the scheme, r.Host the authority.
+func inferredBaseURL(r *http.Request) string {
+	scheme := "http"
+	if r.TLS != nil {
+		scheme = "https"
+	}
+	if proto := r.Header.Get("X-Forwarded-Proto"); proto == "http" || proto == "https" {
+		scheme = proto
+	}
+	return scheme + "://" + r.Host
 }
 
 // listLinks handles GET /api/v1/links.
@@ -132,6 +202,10 @@ func (s *Server) createLink(w http.ResponseWriter, r *http.Request) {
 	}
 
 	cfg := s.cfg.Get()
+	if selfLinkTarget(cfg, r, req.URL) {
+		writeError(w, http.StatusBadRequest, "self_link_target", "target URL points at this instance's own short links")
+		return
+	}
 	code := req.Code
 	if code == "" {
 		generated, err := shortcode.Random(cfg.ShortCodeLength)
@@ -228,6 +302,10 @@ func (s *Server) updateLink(w http.ResponseWriter, r *http.Request) {
 	if req.URL != nil {
 		if !isAbsoluteHTTPURL(*req.URL) {
 			writeError(w, http.StatusBadRequest, "invalid_request", "url must be an absolute http(s) URL")
+			return
+		}
+		if selfLinkTarget(cfg, r, *req.URL) {
+			writeError(w, http.StatusBadRequest, "self_link_target", "target URL points at this instance's own short links")
 			return
 		}
 		link.URL = *req.URL

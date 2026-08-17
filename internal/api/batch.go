@@ -68,7 +68,7 @@ func (s *Server) batchCreate(w http.ResponseWriter, r *http.Request) {
 	var valid []pending
 	for i, item := range items {
 		res := map[string]any{"index": i, "url": item.URL}
-		code, verr := s.resolveCode(item, cfg)
+		code, verr := s.resolveCode(item, cfg, r)
 		if verr != nil {
 			failed++
 			failedCodes = append(failedCodes, item.Code)
@@ -369,9 +369,12 @@ type codeError struct {
 
 // resolveCode validates the item and returns the code to use (custom or
 // generated). It does not check DB uniqueness, which is handled per insert.
-func (s *Server) resolveCode(item createLinkRequest, cfg *config.Config) (string, *codeError) {
+func (s *Server) resolveCode(item createLinkRequest, cfg *config.Config, r *http.Request) (string, *codeError) {
 	if !isAbsoluteHTTPURL(item.URL) {
 		return "", &codeError{"invalid_request", "url must be an absolute http(s) URL"}
+	}
+	if selfLinkTarget(cfg, r, item.URL) {
+		return "", &codeError{"self_link_target", "target URL points at this instance's own short links"}
 	}
 	if msg, ok := checkDescription(item.Description); !ok {
 		return "", &codeError{"description_too_long", msg}

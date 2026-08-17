@@ -133,7 +133,7 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/SetupRequired" }
         "201": { description: Created, returns the link }
-        "400": { description: "Invalid url/code, reserved code, or description_too_long (over 500 characters)" }
+        "400": { description: "Invalid url/code, reserved code, description_too_long (over 500 characters), or self_link_target (target points at this instance's own short links)" }
         "409": { description: Code already in use }
     delete:
       tags: [links]

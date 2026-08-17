@@ -81,7 +81,9 @@ export default function LinkFormDialog({
                   ? t('form.invalidUrl')
                   : err.code === 'description_too_long'
                     ? t('form.descriptionTooLong')
-                    : err.message,
+                    : err.code === 'self_link_target'
+                      ? t('form.selfLinkTarget')
+                      : err.message,
           'error',
         )
       } else {
