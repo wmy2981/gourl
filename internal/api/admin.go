@@ -7,12 +7,14 @@ import (
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"log/slog"
 	"net/http"
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/wmy2981/gourl/internal/config"
@@ -34,9 +36,22 @@ type adminAuth struct {
 	secret       []byte
 }
 
+// ephemeralSecret is generated once per process when SESSION_SECRET is unset.
+// Token signatures are cryptographically strong, but the secret never
+// persists, so sessions do not survive a restart — the warning nudges
+// operators to configure a stable SESSION_SECRET instead.
+var ephemeralSecret = sync.OnceValue(func() string {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		panic("crypto/rand unavailable") // unrecoverable at startup
+	}
+	slog.Warn("SESSION_SECRET not set; generated an ephemeral secret, sessions will not survive a restart")
+	return hex.EncodeToString(b)
+})
+
 func newAdminAuth(passwordHash, secret string) *adminAuth {
 	if secret == "" {
-		secret = "insecure-dev-secret"
+		secret = ephemeralSecret()
 	}
 	return &adminAuth{passwordHash: passwordHash, secret: []byte(secret)}
 }
@@ -65,9 +80,10 @@ func resolveAdminAuth(cfg *config.Manager) *adminAuth {
 	return newAdminAuth("", os.Getenv("SESSION_SECRET"))
 }
 
-// sessionEnabled reports whether an admin password has been set. With no
-// password the API runs in setup mode (management endpoints stay open so the
-// first visitor can configure one).
+// sessionEnabled reports whether an admin password has been set. Without one
+// the API runs in setup mode: management endpoints refuse with
+// setup_required (bearer tokens still authenticate) until the setup flow
+// configures the first password.
 func (a *adminAuth) sessionEnabled() bool { return a.passwordHash != "" }
 
 // verifyPassword compares a candidate password against the stored bcrypt
@@ -116,11 +132,12 @@ func (a *adminAuth) verifyToken(token string) bool {
 	return subtle.ConstantTimeCompare(got, want) == 1
 }
 
-// validSession accepts requests in trusted-network mode, or with a valid
-// session cookie.
+// validSession accepts requests with a valid session cookie. Setup mode
+// grants nothing here: with no admin password there is nothing to sign in to,
+// and management endpoints stay closed until the setup flow configures one.
 func (a *adminAuth) validSession(r *http.Request) bool {
 	if !a.sessionEnabled() {
-		return true
+		return false
 	}
 	c, err := r.Cookie(sessionCookie)
 	if err != nil {
@@ -262,6 +279,12 @@ func (s *Server) requireAuth(next http.HandlerFunc) http.HandlerFunc {
 			actor = "session"
 		case s.validBearer(r):
 			actor = "token"
+		case !s.admin.sessionEnabled():
+			// No admin password yet: the management API is locked until the
+			// setup flow configures one (bearer tokens keep working, so
+			// scripted access is unaffected).
+			writeError(w, http.StatusForbidden, "setup_required", "admin password not configured, complete the setup flow first")
+			return
 		default:
 			writeError(w, http.StatusUnauthorized, "unauthorized", "authentication required")
 			return

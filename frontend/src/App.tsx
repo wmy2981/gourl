@@ -24,16 +24,20 @@ export default function App() {
   // Unconfigured servers route the SPA to the one-time setup page; once a
   // password exists the setup page is unreachable again.
   const { data: authStatus } = useQuery({ queryKey: ['authStatus'], queryFn: api.authStatus })
+  // Public identity for the auth-page tab title: the config API refuses
+  // requests while no admin password exists, so the health endpoint carries
+  // the service name there.
+  const { data: health } = useQuery({ queryKey: ['health'], queryFn: api.health })
 
   useEffect(() => {
     // The login/setup tab shows the service name, the console the site title;
     // the favicon follows the uploaded custom icon (the query string
     // cache-busts so the tab updates at once).
     const isAuthPage = location.pathname === '/admin/login' || location.pathname === '/admin/setup'
-    document.title = isAuthPage ? cfg?.site.name || 'gourl' : cfg?.site.title || 'gourl'
+    document.title = isAuthPage ? health?.name || 'gourl' : cfg?.site.title || 'gourl'
     const link = document.querySelector<HTMLLinkElement>('link[rel="icon"]')
     if (link) link.href = `/favicon.svg?t=${cfg?.icon ? 'custom' : 'default'}`
-  }, [cfg, location.pathname])
+  }, [cfg, health, location.pathname])
 
   return (
     <ToastProvider>
@@ -46,7 +50,16 @@ export default function App() {
           path="/admin/setup"
           element={authStatus && authStatus.configured ? <Navigate to="/admin/login" replace /> : <Setup />}
         />
-        <Route path="/admin" element={<Layout />}>
+        <Route
+          path="/admin"
+          element={
+            authStatus && !authStatus.configured ? (
+              <Navigate to="/admin/setup" replace />
+            ) : (
+              <Layout />
+            )
+          }
+        >
           <Route index element={<Dashboard />} />
           <Route path="links" element={<Links />} />
           <Route path="logs" element={<Logs />} />

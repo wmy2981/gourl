@@ -23,9 +23,9 @@ function mockFetch(status: number, body: unknown) {
   vi.stubGlobal(
     'fetch',
     vi.fn(async (url: string | URL) => {
-      // The login page loads the site config for the brand line.
-      if (String(url).endsWith('/api/v1/config')) {
-        return new Response(JSON.stringify({ site: { name: 'My Service' } }), {
+      // The login page loads the service name from the public health endpoint.
+      if (String(url).endsWith('/api/v1/health')) {
+        return new Response(JSON.stringify({ name: 'My Service' }), {
           status: 200,
           headers: { 'Content-Type': 'application/json' },
         })
@@ -57,7 +57,7 @@ describe('Login', () => {
     await userEvent.click(screen.getByRole('button', { name: /sign in/i }))
 
     const calls = (fetch as ReturnType<typeof vi.fn>).mock.calls as [string, RequestInit][]
-    expect(calls.length).toBeGreaterThanOrEqual(2) // config + login
+    expect(calls.length).toBeGreaterThanOrEqual(2) // health + login
     const loginCall = calls.find(([url]) => String(url).endsWith('/api/v1/auth/login'))
     expect(loginCall).toBeDefined()
     expect(loginCall![1].body).toContain('secret')

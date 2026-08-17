@@ -171,7 +171,7 @@ export const api = {
       body: JSON.stringify({ password }),
     }),
   authStatus: () => request<{ configured: boolean }>('/api/v1/auth/status'),
-  health: () => request<Record<string, unknown>>('/api/v1/health'),
+  health: () => request<{ name: string }>('/api/v1/health'),
 
   listLinks: (params: Record<string, string | number | undefined>) => {
     const q = new URLSearchParams()

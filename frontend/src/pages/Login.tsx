@@ -10,8 +10,10 @@ export default function Login() {
   const { t } = useTranslation()
   const { toast } = useToast()
   const navigate = useNavigate()
-  // The configured service name replaces the gourl brand in the brand line.
-  const { data: cfg } = useQuery({ queryKey: ['config'], queryFn: api.getConfig })
+  // The configured service name replaces the gourl brand in the brand line;
+  // it comes from the public health endpoint so it works before any admin
+  // password exists (the config API refuses requests in setup mode).
+  const { data: health } = useQuery({ queryKey: ['health'], queryFn: api.health })
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
 
@@ -43,7 +45,7 @@ export default function Login() {
           </div>
           <h1 className="text-xl font-semibold">{t('login.heading')}</h1>
           <p className="mt-1 text-sm text-muted">
-            {cfg?.site.name || __APP_NAME__} <span className="short-code">v{__APP_VERSION__}</span>
+            {health?.name || __APP_NAME__} <span className="short-code">v{__APP_VERSION__}</span>
           </p>
         </div>
 
