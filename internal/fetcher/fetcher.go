@@ -1,6 +1,6 @@
 // Package fetcher retrieves page titles and descriptions from user-supplied
-// URLs with SSRF protection: every address (initial and each redirect hop)
-// is validated against private/reserved ranges before the request goes out.
+// URLs. Any reachable host is allowed (internal networks included); each hop
+// is still checked to be an absolute http(s) URL.
 package fetcher
 
 import (
@@ -26,26 +26,17 @@ const (
 	browserUA             = "Mozilla/5.0 (compatible; gourl/0.1 +https://github.com/wmy2981/gourl)"
 )
 
-// Options tune the fetcher.
-type Options struct {
-	// AllowPrivateIPs disables SSRF address checks. Never set in
-	// production; used by tests that fetch from loopback servers.
-	AllowPrivateIPs bool
-}
-
 // Fetcher downloads and parses the title and description of a page.
 type Fetcher struct {
-	client        *http.Client
-	allowPrivate  bool
-	titleLimit    int
+	client         *http.Client
+	titleLimit     int
 	descriptionMax int
 }
 
-// New creates a Fetcher with default limits and SSRF protection.
-func New(opts Options) *Fetcher {
+// New creates a Fetcher with default limits.
+func New() *Fetcher {
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	f := &Fetcher{
-		allowPrivate:   opts.AllowPrivateIPs,
 		titleLimit:     defaultTitleLimit,
 		descriptionMax: defaultDescriptionMax,
 	}
@@ -56,10 +47,8 @@ func New(opts Options) *Fetcher {
 			if len(via) >= defaultMaxRedirects {
 				return errors.New("too many redirects")
 			}
-			if !f.allowPrivate {
-				if err := validateURL(req.Context(), req.URL.String()); err != nil {
-					return fmt.Errorf("redirect rejected: %w", err)
-				}
+			if err := validateFetchURL(req.URL.String()); err != nil {
+				return fmt.Errorf("redirect rejected: %w", err)
 			}
 			return nil
 		},
@@ -72,10 +61,8 @@ func New(opts Options) *Fetcher {
 // callers should treat errors as "no title available" and continue.
 func (f *Fetcher) Fetch(ctx context.Context, rawURL string) (title, description string, err error) {
 	slog.Debug("fetching title", "url", rawURL)
-	if !f.allowPrivate {
-		if err := validateURL(ctx, rawURL); err != nil {
-			return "", "", err
-		}
+	if err := validateFetchURL(rawURL); err != nil {
+		return "", "", err
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)

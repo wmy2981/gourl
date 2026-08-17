@@ -8,11 +8,8 @@ import (
 	"testing"
 )
 
-func newTestFetcher(t *testing.T, allowPrivate bool) *Fetcher {
-	t.Helper()
-	return New(Options{AllowPrivateIPs: allowPrivate})
-}
-
+// The fetcher reaches any host — internal networks included — so the
+// loopback test servers below fetch directly without extra options.
 func TestFetchExtractsTitleAndDescription(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -25,7 +22,7 @@ func TestFetchExtractsTitleAndDescription(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	f := newTestFetcher(t, true)
+	f := New()
 	title, desc, err := f.Fetch(context.Background(), srv.URL)
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
@@ -45,7 +42,7 @@ func TestFetchRejectsNonHTML(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	f := newTestFetcher(t, true)
+	f := New()
 	if _, _, err := f.Fetch(context.Background(), srv.URL); err == nil {
 		t.Fatal("expected error for non-html content")
 	}
@@ -58,7 +55,7 @@ func TestFetchRejectsOversizeBody(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	f := newTestFetcher(t, true)
+	f := New()
 	if _, _, err := f.Fetch(context.Background(), srv.URL); err == nil {
 		t.Fatal("expected error for oversize body")
 	}
@@ -76,7 +73,7 @@ func TestFetchFollowsRedirectsWithValidation(t *testing.T) {
 	}))
 	defer hop.Close()
 
-	f := newTestFetcher(t, true)
+	f := New()
 	title, _, err := f.Fetch(context.Background(), hop.URL)
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
@@ -92,43 +89,34 @@ func TestFetchRejectsTooManyRedirects(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	f := newTestFetcher(t, true)
+	f := New()
 	if _, _, err := f.Fetch(context.Background(), srv.URL); err == nil {
 		t.Fatal("expected error for redirect loop")
 	}
 }
 
-func TestSSRFBlocksLoopback(t *testing.T) {
+// The old SSRF tests (loopback/private refusal) are replaced by this: private
+// and loopback addresses are fetchable — title fetching must support internal
+// networks end to end.
+func TestFetchReachesPrivateAddresses(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("<title>secret</title>"))
+		w.Header().Set("Content-Type", "text/html")
+		w.Write([]byte("<title>internal</title>"))
 	}))
 	defer srv.Close()
 
-	// Default fetcher (protection on) must refuse the loopback address.
-	f := newTestFetcher(t, false)
-	if _, _, err := f.Fetch(context.Background(), srv.URL); err == nil {
-		t.Fatal("expected SSRF rejection of loopback address")
+	f := New()
+	title, _, err := f.Fetch(context.Background(), srv.URL) // 127.0.0.1 loopback
+	if err != nil {
+		t.Fatalf("Fetch loopback: %v", err)
 	}
-}
-
-func TestSSRFBlocksPrivateRanges(t *testing.T) {
-	f := newTestFetcher(t, false)
-	for _, u := range []string{
-		"http://10.0.0.1/",
-		"http://172.16.0.1/",
-		"http://192.168.1.1/",
-		"http://169.254.169.254/latest/meta-data/",
-		"http://127.0.0.1:8080/",
-		"http://[::1]/",
-	} {
-		if _, _, err := f.Fetch(context.Background(), u); err == nil {
-			t.Errorf("expected SSRF rejection for %s", u)
-		}
+	if title != "internal" {
+		t.Errorf("title = %q, want internal", title)
 	}
 }
 
 func TestFetchRejectsNonHTTP(t *testing.T) {
-	f := newTestFetcher(t, true)
+	f := New()
 	for _, u := range []string{"ftp://example.com/x", "file:///etc/passwd", "not-a-url"} {
 		if _, _, err := f.Fetch(context.Background(), u); err == nil {
 			t.Errorf("expected error for %s", u)
