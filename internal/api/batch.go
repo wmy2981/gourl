@@ -55,7 +55,8 @@ func (s *Server) batchCreate(w http.ResponseWriter, r *http.Request) {
 	cfg := s.cfg.Get()
 	now := s.now()
 	results := make([]map[string]any, 0, len(items))
-	created, failed := 0, 0
+	created, failed, skipped, updated := 0, 0, 0, 0
+	var failedCodes, skippedCodes, updatedCodes []string
 
 	// Validate every item up front, then insert the valid ones in a single
 	// transaction (one commit instead of one per item).
@@ -70,6 +71,7 @@ func (s *Server) batchCreate(w http.ResponseWriter, r *http.Request) {
 		code, verr := s.resolveCode(item, cfg)
 		if verr != nil {
 			failed++
+			failedCodes = append(failedCodes, item.Code)
 			res["status"] = "error"
 			res["error_code"] = verr.code
 			res["error_message"] = verr.message
@@ -108,18 +110,24 @@ func (s *Server) batchCreate(w http.ResponseWriter, r *http.Request) {
 			// Refresh the existing link with the imported fields.
 			if uerr := s.applyConflictUpdate(r, valid[i].item, valid[i].code); uerr != nil {
 				failed++
+				failedCodes = append(failedCodes, valid[i].code)
 				res["status"] = "error"
 				res["error_code"] = "internal_error"
 				res["error_message"] = uerr.Error()
 			} else {
+				updated++
+				updatedCodes = append(updatedCodes, valid[i].code)
 				res["status"] = "updated"
 				res["code"] = valid[i].code
 			}
 		case errors.Is(err, store.ErrTaken) && req.Conflict == "skip":
+			skipped++
+			skippedCodes = append(skippedCodes, valid[i].code)
 			res["status"] = "skipped"
 			res["code"] = valid[i].code
 		case errors.Is(err, store.ErrTaken):
 			failed++
+			failedCodes = append(failedCodes, valid[i].code)
 			res["status"] = "error"
 			res["error_code"] = "code_taken"
 			res["error_message"] = "code is already in use"
@@ -137,11 +145,19 @@ func (s *Server) batchCreate(w http.ResponseWriter, r *http.Request) {
 		return results[a]["index"].(int) < results[b]["index"].(int)
 	})
 
-	slog.Info("links batch created", "created", created, "failed", failed, "actor", actorFrom(r))
+	// Legacy counts stay for compatibility; the per-status lists are what the
+	// UI reports ("created N, skipped N, updated N, failed N").
+	slog.Info("links batch created", "created", created, "skipped", skipped, "updated", updated, "failed", failed, "actor", actorFrom(r))
 	writeJSON(w, http.StatusCreated, map[string]any{
-		"results": results,
-		"created": created,
-		"failed":  failed,
+		"results":       results,
+		"created":       created,
+		"failed":        failed,
+		"succeeded":     created,
+		"skipped":       skipped,
+		"updated":       updated,
+		"failed_codes":  failedCodes,
+		"skipped_codes": skippedCodes,
+		"updated_codes": updatedCodes,
 	})
 }
 

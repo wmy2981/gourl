@@ -40,7 +40,8 @@ export default function ImportDialog({
           // Number = unix seconds; anything else (a yyyy-MM-dd string) is
           // passed through — the backend accepts both.
           if (r.expires_at) item.expires_at = Number(r.expires_at) || r.expires_at
-          if (r.click_count) item.click_count = Number(r.click_count)
+          // click_count is deliberately dropped: imports never fabricate
+          // click history.
           if (r.created_at) item.created_at = Number(r.created_at)
           return item
         })
@@ -61,7 +62,14 @@ export default function ImportDialog({
       const parsed = JSON.parse(text)
       if (!Array.isArray(parsed)) throw new Error('not an array')
       const res = await api.batchCreate(parsed as ImportItem[], conflict)
-      toast(t('form.importResults', { created: res.created, failed: res.failed }))
+      toast(
+        t('form.importResults', {
+          created: res.succeeded,
+          skipped: res.skipped,
+          updated: res.updated,
+          failed: res.failed,
+        }),
+      )
       setText('')
       onImported()
       onClose()

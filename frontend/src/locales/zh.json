@@ -112,7 +112,7 @@
     "createTitle": "创建链接",
     "importTitle": "批量导入",
     "importHint": "每行一个 JSON 对象：{\"url\": \"https://…\", \"code\": \"x\"}",
-    "importResults": "成功 {{created}} 条，失败 {{failed}} 条",
+    "importResults": "成功 {{created}} 条，跳过 {{skipped}} 条，覆盖 {{updated}} 条，失败 {{failed}} 条",
     "importConflict": "短码已存在时",
     "conflictError": "报错",
     "conflictSkip": "跳过",

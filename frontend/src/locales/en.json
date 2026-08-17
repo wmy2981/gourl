@@ -112,7 +112,7 @@
     "createTitle": "Create link",
     "importTitle": "Import links",
     "importHint": "One JSON array per line: {\"url\": \"https://…\", \"code\": \"x\"}",
-    "importResults": "Created {{created}}, failed {{failed}}",
+    "importResults": "Created {{created}}, skipped {{skipped}}, updated {{updated}}, failed {{failed}}",
     "importConflict": "When a code already exists",
     "conflictError": "Fail",
     "conflictSkip": "Skip",

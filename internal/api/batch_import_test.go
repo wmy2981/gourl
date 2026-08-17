@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"strings"
 	"testing"
@@ -111,6 +112,66 @@ func TestBatchImportBadURLFailsTheItem(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), `"error"`) {
 		t.Errorf("item must report an error, body: %s", rec.Body.String())
+	}
+}
+
+// TestBatchImportResponseCounts: the response carries per-status counts and
+// the code lists for failed/skipped/updated items.
+func TestBatchImportResponseCounts(t *testing.T) {
+	s, _ := newTestServer(t)
+	createLink(t, s, "exist1", "https://example.com/exist1")
+
+	rec := do(t, s, http.MethodPost, "/api/v1/links/batch", map[string]any{
+		"conflict": "update",
+		"items": []map[string]any{
+			{"url": "https://example.com/new1", "code": "new1"},
+			{"url": "https://example.com/new2", "code": "new2"},
+			{"url": "https://example.com/upd1", "code": "exist1"},
+			{"url": "not-a-url", "code": "badv1"},
+		},
+	})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d, body %s", rec.Code, rec.Body.String())
+	}
+	var body struct {
+		Succeeded    int      `json:"succeeded"`
+		Skipped      int      `json:"skipped"`
+		Updated      int      `json:"updated"`
+		Failed       int      `json:"failed"`
+		FailedCodes  []string `json:"failed_codes"`
+		SkippedCodes []string `json:"skipped_codes"`
+		UpdatedCodes []string `json:"updated_codes"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Succeeded != 2 || body.Failed != 1 || body.Updated != 1 {
+		t.Errorf("counts = %+v", body)
+	}
+	if len(body.UpdatedCodes) != 1 || body.UpdatedCodes[0] != "exist1" {
+		t.Errorf("updated codes = %v", body.UpdatedCodes)
+	}
+	if len(body.FailedCodes) != 1 || body.FailedCodes[0] != "badv1" {
+		t.Errorf("failed codes = %v", body.FailedCodes)
+	}
+	// The bare error path also lists the offending code.
+	rec = do(t, s, http.MethodPost, "/api/v1/links/batch", map[string]any{
+		"items": []map[string]any{{"url": "not-a-url", "code": "badv2"}},
+	})
+	body = struct {
+		Succeeded    int      `json:"succeeded"`
+		Skipped      int      `json:"skipped"`
+		Updated      int      `json:"updated"`
+		Failed       int      `json:"failed"`
+		FailedCodes  []string `json:"failed_codes"`
+		SkippedCodes []string `json:"skipped_codes"`
+		UpdatedCodes []string `json:"updated_codes"`
+	}{}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if len(body.FailedCodes) != 1 || body.FailedCodes[0] != "badv2" {
+		t.Errorf("error-path failed codes = %v", body.FailedCodes)
 	}
 }
 

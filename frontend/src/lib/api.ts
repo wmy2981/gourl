@@ -100,17 +100,23 @@ export interface BatchCreateResult {
 export interface BatchCreateResponse {
   created: number
   failed: number
+  /** Per-status counts and code lists: created, skipped, updated, failed. */
+  succeeded: number
+  skipped: number
+  updated: number
+  failed_codes: string[]
+  skipped_codes: string[]
+  updated_codes: string[]
   results: BatchCreateResult[]
 }
 
-/** Import item: url is required; the rest is optional and mirrors the export fields. */
+/** Import item: url is required; the rest is optional and mirrors the export fields. click_count is dropped on import. */
 export interface ImportItem {
   url: string
   code?: string
   title?: string
   description?: string
   expires_at?: number | string
-  click_count?: number
   created_at?: number
 }
 
