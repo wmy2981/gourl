@@ -46,6 +46,10 @@ type Config struct {
 	// LinkRatePerSecond caps short-link redirects across all codes (a shared
 	// token bucket). 0 disables.
 	LinkRatePerSecond int `yaml:"link_rate_per_second" json:"link_rate_per_second"`
+	// PasswordHash is the bcrypt hash of the admin password, set through the
+	// setup flow (or migrated from the legacy ADMIN_PASSWORD env var). It is
+	// never exposed to the frontend.
+	PasswordHash string `yaml:"password_hash" json:"-"`
 }
 
 // Default returns a usable default configuration.

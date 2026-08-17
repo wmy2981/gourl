@@ -158,6 +158,12 @@ export const api = {
     }),
   logout: () =>
     request<{ ok: boolean }>('/api/v1/auth/logout', { method: 'POST' }),
+  setupAdmin: (password: string) =>
+    request<{ ok: boolean }>('/api/v1/auth/setup', {
+      method: 'POST',
+      body: JSON.stringify({ password }),
+    }),
+  authStatus: () => request<{ configured: boolean }>('/api/v1/auth/status'),
   health: () => request<Record<string, unknown>>('/api/v1/health'),
 
   listLinks: (params: Record<string, string | number | undefined>) => {

@@ -11,9 +11,10 @@ services:
     environment:
       # Variables come from the .env file next to this compose file (loaded
       # automatically), e.g.:
-      #   ADMIN_PASSWORD=change-me
       #   SESSION_SECRET=$(openssl rand -hex 32)
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set ADMIN_PASSWORD}
+      # The admin password is NOT set here: with no password_hash in the
+      # config file the first visitor configures it through the /admin/setup
+      # flow (or a legacy ADMIN_PASSWORD is migrated once into config.yaml).
       SESSION_SECRET: ${SESSION_SECRET:-please-change-me}
       # Business config inside the mounted ./config directory (create
       # config/config.yaml from config.yaml.example; defaults work without it).

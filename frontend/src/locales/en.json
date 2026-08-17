@@ -34,6 +34,15 @@
     "wrongPassword": "Invalid password",
     "authDisabled": "Authentication is not configured"
   },
+  "setup": {
+    "heading": "Set admin password",
+    "sub": "This server has no admin password yet. Choose one to secure the admin console.",
+    "password": "New password",
+    "confirm": "Confirm password",
+    "setup": "Set password",
+    "mismatch": "Passwords do not match",
+    "weak": "Password must be at least 8 characters"
+  },
   "dashboard": {
     "heading": "Dashboard",
     "totalLinks": "Total links",

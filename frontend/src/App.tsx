@@ -9,6 +9,7 @@ import Links from './pages/Links'
 import Login from './pages/Login'
 import Logs from './pages/Logs'
 import Settings from './pages/Settings'
+import Setup from './pages/Setup'
 
 // Apply the persisted theme before first paint.
 const savedTheme = localStorage.getItem('gourl-theme')
@@ -19,6 +20,9 @@ if (savedTheme === 'dark' || (!savedTheme && prefersDark)) {
 
 export default function App() {
   const { data: cfg } = useQuery({ queryKey: ['config'], queryFn: api.getConfig })
+  // Unconfigured servers route the SPA to the one-time setup page; once a
+  // password exists the setup page is unreachable again.
+  const { data: authStatus } = useQuery({ queryKey: ['authStatus'], queryFn: api.authStatus })
 
   useEffect(() => {
     // The site title drives the browser tab; the favicon follows the uploaded
@@ -31,7 +35,14 @@ export default function App() {
   return (
     <ToastProvider>
       <Routes>
-        <Route path="/admin/login" element={<Login />} />
+        <Route
+          path="/admin/login"
+          element={authStatus && !authStatus.configured ? <Navigate to="/admin/setup" replace /> : <Login />}
+        />
+        <Route
+          path="/admin/setup"
+          element={authStatus && authStatus.configured ? <Navigate to="/admin/login" replace /> : <Setup />}
+        />
         <Route path="/admin" element={<Layout />}>
           <Route index element={<Dashboard />} />
           <Route path="links" element={<Links />} />

@@ -54,6 +54,37 @@ paths:
         "200": { description: Session cookie set }
         "401": { description: Invalid password }
         "403": { description: Authentication not configured }
+  /auth/setup:
+    post:
+      tags: [auth]
+      summary: Set the admin password while the server is in setup mode (no password_hash configured); logs the caller in
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                password: { type: string, minLength: 8 }
+      responses:
+        "200": { description: Password set and session cookie issued }
+        "400": { description: Weak password or invalid body }
+        "409": { description: already_configured — password already set }
+  /auth/status:
+    get:
+      tags: [auth]
+      summary: Report whether an admin password is configured (routes the SPA to /admin/setup when not)
+      security: []
+      responses:
+        "200":
+          description: Auth status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  configured: { type: boolean }
   /auth/logout:
     post:
       tags: [auth]

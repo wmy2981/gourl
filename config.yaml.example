@@ -1,7 +1,12 @@
 # gourl business configuration.
 # Copy to config.yaml (ignored by git) and adjust. Runtime settings and
-# secrets (PORT, DB_PATH, REDIS_ADDR, ADMIN_PASSWORD, SESSION_SECRET, TZ...)
-# are provided via environment variables, not here.
+# secrets (PORT, DB_PATH, REDIS_ADDR, SESSION_SECRET, TZ...) are provided via
+# environment variables, not here.
+#
+# The admin password is stored as a bcrypt hash in the `password_hash` field
+# below (written by the /admin/setup flow; never edit it by hand). On first
+# start with no hash and no ADMIN_PASSWORD env var, the server runs in setup
+# mode and the first visitor sets the password.
 site:
   # Service name used in health responses, page footer, admin title and expired pages.
   name: gourl

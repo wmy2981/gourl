@@ -57,7 +57,7 @@ func NewServer(st *store.Store, cfg *config.Manager, ctr *counter.Counter) *Serv
 		cfg:       cfg,
 		counter:   ctr,
 		fetcher:   fetcher.New(fetcher.Options{}),
-		admin:     newAdminAuth(os.Getenv("ADMIN_PASSWORD"), os.Getenv("SESSION_SECRET")),
+		admin:     resolveAdminAuth(cfg),
 		loginRate: newLoginLimiter(),
 		assetsDir: envOr("ASSETS_DIR", "data/assets"),
 		startTime: time.Now(),
@@ -75,6 +75,8 @@ func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/v1/auth/login", s.login)
 	mux.HandleFunc("POST /api/v1/auth/logout", s.logout)
+	mux.HandleFunc("POST /api/v1/auth/setup", s.setupAdmin)
+	mux.HandleFunc("GET /api/v1/auth/status", s.authStatus)
 	mux.HandleFunc("GET /api/v1/health", s.health)
 	mux.HandleFunc("GET /api/v1/links", s.requireAuth(s.listLinks))
 	mux.HandleFunc("POST /api/v1/links", s.requireAuth(s.createLink))
