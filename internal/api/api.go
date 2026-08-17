@@ -126,6 +126,7 @@ func (s *Server) logRequests(next http.Handler) http.Handler {
 			"status", sw.status,
 			"duration_ms", time.Since(start).Milliseconds(),
 			"remote", r.RemoteAddr,
+			"ua", r.UserAgent(),
 		)
 	})
 }

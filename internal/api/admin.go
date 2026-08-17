@@ -234,7 +234,7 @@ func (s *Server) setupAdmin(w http.ResponseWriter, r *http.Request) {
 
 // logout handles POST /api/v1/auth/logout.
 func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
-	slog.Info("admin logged out", "remote", r.RemoteAddr)
+	slog.Info("admin logged out", "remote", r.RemoteAddr, "ip", clientIP(r))
 	http.SetCookie(w, &http.Cookie{
 		Name: sessionCookie, Value: "", Path: "/",
 		HttpOnly: true, SameSite: http.SameSiteLaxMode, MaxAge: -1,
