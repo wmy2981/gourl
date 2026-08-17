@@ -46,6 +46,12 @@ describe('QRDialog', () => {
     expect(activeHost()).toBe('b.example')
   })
 
+  it('renders a download button next to the close button', () => {
+    const link = makeLink('abc', ['a.example'])
+    render(<QRDialog link={link} open={true} onClose={() => {}} />)
+    expect(screen.getByRole('button', { name: /download qr code/i })).toBeInTheDocument()
+  })
+
   it('re-clamps the index against the new link when reopened', () => {
     const first = makeLink('abc', ['a.example', 'b.example'])
     const { rerender } = render(

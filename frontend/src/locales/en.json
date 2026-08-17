@@ -72,6 +72,7 @@
     "copy": "Copy",
     "copied": "Copied",
     "qr": "QR code",
+    "qrDownload": "Download QR code (JPEG)",
     "edit": "Edit",
     "delete": "Delete",
     "deleteConfirm": "Delete this link? This cannot be undone.",

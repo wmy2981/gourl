@@ -182,12 +182,15 @@ export function Dialog({
   title,
   children,
   wide = false,
+  headerActions,
 }: {
   open: boolean
   onClose: () => void
   title: string
   children: ReactNode
   wide?: boolean
+  /** Extra buttons rendered next to the close button in the header. */
+  headerActions?: ReactNode
 }) {
   // Exit animation driven by the open prop: whatever triggers close (X,
   // Escape, backdrop, or a form's cancel button calling onClose), the panel
@@ -245,9 +248,12 @@ export function Dialog({
         >
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-lg font-semibold">{title}</h2>
-            <button onClick={onClose} aria-label={t('common.close')} className="rounded-lg p-1 transition-colors hover:bg-black/5 dark:hover:bg-white/10">
-              <X size={18} />
-            </button>
+            <div className="flex items-center gap-1">
+              {headerActions}
+              <button onClick={onClose} aria-label={t('common.close')} className="rounded-lg p-1 transition-colors hover:bg-black/5 dark:hover:bg-white/10">
+                <X size={18} />
+              </button>
+            </div>
           </div>
           {children}
         </div>
