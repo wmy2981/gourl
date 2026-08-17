@@ -142,6 +142,22 @@ var migrations = []string{
 	CREATE UNIQUE INDEX idx_links_code_active ON links(code) WHERE deleted = 0;
 	CREATE INDEX idx_links_created_at ON links(created_at);
 	CREATE INDEX idx_links_expires_at ON links(expires_at);`,
+	// v4: backups stores one immutable snapshot per edit of a link (every
+	// edit appends a new row, never overwrites). b_id is a global counter
+	// starting at 1 — the "b-1, b-2, …" ids surfaced by exports.
+	`CREATE TABLE backups (
+		b_id        INTEGER PRIMARY KEY,
+		link_id     INTEGER NOT NULL,
+		code        TEXT NOT NULL,
+		url         TEXT NOT NULL,
+		title       TEXT NOT NULL DEFAULT '',
+		description TEXT NOT NULL DEFAULT '',
+		expires_at  INTEGER NOT NULL DEFAULT 0,
+		click_count INTEGER NOT NULL DEFAULT 0,
+		created_at  INTEGER NOT NULL,
+		updated_at  INTEGER NOT NULL,
+		backed_at   INTEGER NOT NULL
+	);`,
 }
 
 // migrate applies pending migrations inside a transaction each, recording the

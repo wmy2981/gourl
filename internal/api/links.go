@@ -304,6 +304,17 @@ func (s *Server) updateLink(w http.ResponseWriter, r *http.Request) {
 	}
 	cfg := s.cfg.Get()
 
+	// Any mutation first snapshots the pre-edit state (old code, old fields,
+	// current click count) into the append-only backups table.
+	mutating := req.URL != nil || req.Title != nil || req.Description != nil ||
+		req.ExpiresAt != nil || (req.Code != nil && *req.Code != oldCode)
+	if mutating {
+		if _, err := s.store.BackupLink(r.Context(), link, s.now()); err != nil {
+			writeError(w, http.StatusInternalServerError, "internal_error", "failed to backup link")
+			return
+		}
+	}
+
 	// Changing the URL re-fetches the title/description (in the background),
 	// unless the caller overrides them explicitly in the same request.
 	refetchMeta := false

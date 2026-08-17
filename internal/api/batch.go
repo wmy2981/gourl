@@ -338,10 +338,14 @@ func asExpiry(v any) (expiryValue, error) {
 	}
 }
 
-// applyConflictUpdate merges an imported item into the existing link.
+// applyConflictUpdate merges an imported item into the existing link. The
+// pre-edit snapshot is backed up first, like a manual edit.
 func (s *Server) applyConflictUpdate(r *http.Request, item createLinkRequest, code string) error {
 	link, err := s.store.GetLink(r.Context(), code)
 	if err != nil {
+		return err
+	}
+	if _, err := s.store.BackupLink(r.Context(), link, s.now()); err != nil {
 		return err
 	}
 	link.URL = item.URL
