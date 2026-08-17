@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useReducer, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, TextareaHTMLAttributes } from 'react'
 import { useTranslation } from 'react-i18next'
 import { AnimatePresence, motion } from 'motion/react'
@@ -91,6 +92,10 @@ export function Checkbox({
 
 // Custom dropdown replacing the native <select>: same amber-on-graphite
 // language as the rest of the UI, pop-in options panel, theme-aware.
+// The options panel renders through a portal with fixed positioning: glass
+// cards create their own stacking contexts (backdrop-blur), so an absolutely
+// positioned panel inside a card is covered by the next card — only a
+// top-level layer escapes that.
 export function Select({
   value,
   onChange,
@@ -105,26 +110,54 @@ export function Select({
   className?: string
 }) {
   const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
+  const [pos, setPos] = useState<{ top: number; left: number; width: number } | null>(null)
+  const btnRef = useRef<HTMLButtonElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
+
+  const toggle = () => {
+    if (open) {
+      setOpen(false)
+      return
+    }
+    const r = btnRef.current?.getBoundingClientRect()
+    if (r) setPos({ top: r.bottom + 6, left: r.left, width: r.width })
+    setOpen(true)
+  }
 
   useEffect(() => {
     if (!open) return
     const onDown = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+      const t = e.target as Node
+      if (btnRef.current?.contains(t) || panelRef.current?.contains(t)) return
+      setOpen(false)
     }
     document.addEventListener('mousedown', onDown)
     return () => document.removeEventListener('mousedown', onDown)
   }, [open])
 
+  // The panel is position: fixed — scrolling or resizing under it would
+  // detach it from the button, so close instead of drifting.
+  useEffect(() => {
+    if (!open) return
+    const close = () => setOpen(false)
+    window.addEventListener('scroll', close, true)
+    window.addEventListener('resize', close)
+    return () => {
+      window.removeEventListener('scroll', close, true)
+      window.removeEventListener('resize', close)
+    }
+  }, [open])
+
   const current = options.find((o) => o.value === value)
 
   return (
-    <div ref={ref} className={`relative ${className}`}>
+    <div className={className}>
       <button
+        ref={btnRef}
         type="button"
         aria-label={ariaLabel}
         aria-expanded={open}
-        onClick={() => setOpen((o) => !o)}
+        onClick={toggle}
         className="flex h-9 w-full items-center justify-between gap-2 rounded-xl border border-hairline bg-white/70 px-3 text-sm text-ink transition focus:border-accent focus:ring-2 focus:ring-accent/30 dark:bg-white/[0.07] dark:text-ink-dark"
       >
         <span className="truncate">{current?.label}</span>
@@ -133,28 +166,35 @@ export function Select({
           className={`shrink-0 text-muted transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
         />
       </button>
-      {open && (
-        <div className="absolute z-50 mt-1 w-full overflow-hidden rounded-xl border border-hairline bg-white p-1 shadow-[0_12px_40px_rgba(0,0,0,0.18)] dark:bg-[#1c1c1e] animate-pop-in">
-          {options.map((o) => (
-            <button
-              key={o.value}
-              type="button"
-              onClick={() => {
-                onChange(o.value)
-                setOpen(false)
-              }}
-              className={`flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm transition-colors ${
-                o.value === value
-                  ? 'bg-accent-soft font-medium text-accent-deep dark:text-accent'
-                  : 'text-ink hover:bg-black/5 dark:text-ink-dark dark:hover:bg-white/10'
-              }`}
-            >
-              <span className="truncate">{o.label}</span>
-              {o.value === value && <Check size={14} className="shrink-0 text-accent" />}
-            </button>
-          ))}
-        </div>
-      )}
+      {open &&
+        pos &&
+        createPortal(
+          <div
+            ref={panelRef}
+            style={{ top: pos.top, left: pos.left, width: pos.width }}
+            className="fixed z-50 overflow-hidden rounded-xl border border-hairline bg-white p-1 shadow-[0_12px_40px_rgba(0,0,0,0.18)] dark:bg-[#1c1c1e] animate-pop-in"
+          >
+            {options.map((o) => (
+              <button
+                key={o.value}
+                type="button"
+                onClick={() => {
+                  onChange(o.value)
+                  setOpen(false)
+                }}
+                className={`flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm transition-colors ${
+                  o.value === value
+                    ? 'bg-accent-soft font-medium text-accent-deep dark:text-accent'
+                    : 'text-ink hover:bg-black/5 dark:text-ink-dark dark:hover:bg-white/10'
+                }`}
+              >
+                <span className="truncate">{o.label}</span>
+                {o.value === value && <Check size={14} className="shrink-0 text-accent" />}
+              </button>
+            ))}
+          </div>,
+          document.body,
+        )}
     </div>
   )
 }
