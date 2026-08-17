@@ -17,6 +17,7 @@ export class ApiError extends Error {
 }
 
 export interface Link {
+  id: number
   code: string
   url: string
   title: string

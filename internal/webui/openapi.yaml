@@ -465,6 +465,7 @@ components:
     Link:
       type: object
       properties:
+        id: { type: integer, description: "Stable autoincrement id, 1-based, assigned in created_at order on migration; new links keep increasing" }
         code: { type: string, description: "Short URL code; full URLs are assembled client-side from the config" }
         url: { type: string }
         title: { type: string }

@@ -20,8 +20,11 @@ var (
 	ErrTaken    = errors.New("code already taken")
 )
 
-// Link is a short link record.
+// Link is a short link record. ID is the stable autoincrement identity
+// (assigned in created_at order during the v3 migration; 1-based); Code stays
+// the user-facing short code and may be renamed.
 type Link struct {
+	ID          int64
 	Code        string
 	URL         string
 	Title       string
@@ -30,6 +33,7 @@ type Link struct {
 	ClickCount  int64
 	CreatedAt   int64
 	UpdatedAt   int64
+	Deleted     bool
 }
 
 // ListOptions controls listing.
@@ -114,6 +118,30 @@ var migrations = []string{
 	`CREATE INDEX IF NOT EXISTS idx_links_created_at ON links(created_at);
 	CREATE INDEX IF NOT EXISTS idx_links_expires_at ON links(expires_at);
 	CREATE INDEX IF NOT EXISTS idx_daily_clicks_date ON daily_clicks(date);`,
+	// v3: links gain a surrogate autoincrement id (codes stay unique among
+	// non-deleted rows via a partial index) and a soft-delete flag. Existing
+	// ids are assigned in created_at order (rowid breaks ties), so the
+	// oldest link gets id 1 and new ids keep increasing from there.
+	`CREATE TABLE links_new (
+		id          INTEGER PRIMARY KEY AUTOINCREMENT,
+		code        TEXT NOT NULL,
+		url         TEXT NOT NULL,
+		title       TEXT NOT NULL DEFAULT '',
+		description TEXT NOT NULL DEFAULT '',
+		expires_at  INTEGER NOT NULL DEFAULT 0,
+		click_count INTEGER NOT NULL DEFAULT 0,
+		created_at  INTEGER NOT NULL,
+		updated_at  INTEGER NOT NULL,
+		deleted     INTEGER NOT NULL DEFAULT 0
+	);
+	INSERT INTO links_new (code, url, title, description, expires_at, click_count, created_at, updated_at, deleted)
+	SELECT code, url, title, description, expires_at, click_count, created_at, updated_at, 0
+	FROM links ORDER BY created_at, rowid;
+	DROP TABLE links;
+	ALTER TABLE links_new RENAME TO links;
+	CREATE UNIQUE INDEX idx_links_code_active ON links(code) WHERE deleted = 0;
+	CREATE INDEX idx_links_created_at ON links(created_at);
+	CREATE INDEX idx_links_expires_at ON links(expires_at);`,
 }
 
 // migrate applies pending migrations inside a transaction each, recording the
@@ -148,21 +176,25 @@ func (s *Store) migrate(ctx context.Context) error {
 	return nil
 }
 
-const linkColumns = `code, url, title, description, expires_at, click_count, created_at, updated_at`
+const linkColumns = `id, code, url, title, description, expires_at, click_count, created_at, updated_at`
 
 func scanLink(row interface{ Scan(...any) error }) (*Link, error) {
 	var l Link
-	if err := row.Scan(&l.Code, &l.URL, &l.Title, &l.Description,
+	if err := row.Scan(&l.ID, &l.Code, &l.URL, &l.Title, &l.Description,
 		&l.ExpiresAt, &l.ClickCount, &l.CreatedAt, &l.UpdatedAt); err != nil {
 		return nil, err
 	}
 	return &l, nil
 }
 
+// createLinkSQL is the INSERT shared by CreateLink and CreateLinks. The id is
+// autoincremented; the caller reads it back via LastInsertId.
+const createLinkSQL = `INSERT INTO links (code, url, title, description, expires_at, click_count, created_at, updated_at)
+	VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+
 // CreateLink inserts a link. Returns ErrTaken if the code already exists.
 func (s *Store) CreateLink(ctx context.Context, l *Link) error {
-	_, err := s.db.ExecContext(ctx,
-		`INSERT INTO links (`+linkColumns+`) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+	res, err := s.db.ExecContext(ctx, createLinkSQL,
 		l.Code, l.URL, l.Title, l.Description, l.ExpiresAt, l.ClickCount, l.CreatedAt, l.UpdatedAt)
 	if isConstraint(err) {
 		slog.Debug("store: create link failed", "code", l.Code, "error", ErrTaken)
@@ -172,8 +204,11 @@ func (s *Store) CreateLink(ctx context.Context, l *Link) error {
 		slog.Debug("store: create link failed", "code", l.Code, "error", err)
 		return fmt.Errorf("create link: %w", err)
 	}
+	if id, err := res.LastInsertId(); err == nil {
+		l.ID = id
+	}
 	s.cache.set(l.Code, l)
-	slog.Debug("store: link created", "code", l.Code)
+	slog.Debug("store: link created", "code", l.Code, "id", l.ID)
 	return nil
 }
 
@@ -188,8 +223,7 @@ func (s *Store) CreateLinks(ctx context.Context, links []Link) ([]error, error) 
 	defer tx.Rollback()
 	errs := make([]error, len(links))
 	for i := range links {
-		_, err := tx.ExecContext(ctx,
-			`INSERT INTO links (`+linkColumns+`) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		res, err := tx.ExecContext(ctx, createLinkSQL,
 			links[i].Code, links[i].URL, links[i].Title, links[i].Description,
 			links[i].ExpiresAt, links[i].ClickCount, links[i].CreatedAt, links[i].UpdatedAt)
 		if isConstraint(err) {
@@ -198,6 +232,9 @@ func (s *Store) CreateLinks(ctx context.Context, links []Link) ([]error, error) 
 		}
 		if err != nil {
 			return nil, fmt.Errorf("create links: %w", err)
+		}
+		if id, err := res.LastInsertId(); err == nil {
+			links[i].ID = id
 		}
 	}
 	if err := tx.Commit(); err != nil {

@@ -115,6 +115,9 @@ func TestCreateAndGetLink(t *testing.T) {
 	if l.Code != "abc" || l.URL != "https://example.com/very/long/path" || l.CreatedAt != 1700000000 {
 		t.Errorf("unexpected link: %+v", l)
 	}
+	if l.ID <= 0 {
+		t.Errorf("link id = %d, want a positive autoincrement id", l.ID)
+	}
 
 	rec = do(t, s, http.MethodGet, "/api/v1/links/abc", nil)
 	if rec.Code != http.StatusOK {

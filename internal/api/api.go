@@ -280,8 +280,9 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 
 // linkJSON is the wire representation of a link. Short URLs are assembled
 // client-side from the config (base_url + extra_base_urls); the API carries
-// only the code.
+// only the code plus the stable id.
 type linkJSON struct {
+	ID          int64  `json:"id"`
 	Code        string `json:"code"`
 	URL         string `json:"url"`
 	Title       string `json:"title"`
@@ -294,6 +295,7 @@ type linkJSON struct {
 
 func toLinkJSON(l *store.Link) linkJSON {
 	return linkJSON{
+		ID:          l.ID,
 		Code:        l.Code,
 		URL:         l.URL,
 		Title:       l.Title,

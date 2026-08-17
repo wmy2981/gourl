@@ -19,6 +19,7 @@ export async function apiLogin(request: APIRequestContext) {
 }
 
 export interface Link {
+  id: number
   code: string
   url: string
   title: string

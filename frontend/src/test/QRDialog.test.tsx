@@ -7,6 +7,7 @@ import '../lib/i18n'
 
 function makeLink(code: string, hosts: string[]): Link {
   return {
+    id: 1,
     code,
     url: `https://${hosts[0]}/${code}`,
     title: '',
