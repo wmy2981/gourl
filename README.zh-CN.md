@@ -20,7 +20,7 @@
 - **实时日志页** — SSE 实时流 + 级别/关键字/时间筛选 + `.log` 导出；历史来自 LOG_DIR 文件
 - **短链有效期** — 每条链接可设 `expires_at`（0 为永不过期），过期短码与不存在一样返回 404
 - **REST API** — 完整 JSON API，Bearer Token 认证，便于二次开发
-- **Setup 初始化流程** — 首次启动无密码时，第一个访问者在 `/admin/setup` 设置密码；bcrypt 哈希保存在 `config.yaml`，不再依赖环境变量
+- **Setup 初始化流程** — 首次启动无密码时管理 API 保持锁定（403 `setup_required`，Bearer Token 仍可用），第一个访问者在 `/admin/setup` 设置密码；bcrypt 哈希保存在 `config.yaml`，不再依赖环境变量
 - **限流防护** — 登录按 IP 锁定（默认错 10 次锁 300 秒）与短链访问每秒上限（默认 100 次/秒），均可配置
 - **自定义站点** — 服务名称、标题、关键词、描述、上传图标（SVG/PNG，一键恢复默认）
 - **多基址** — 附加基址并排展示，链接行可选择展示或复制的基址
@@ -72,15 +72,15 @@ Redis 与 gourl。容器内的 Redis "vm.overcommit_memory" 警告无害可忽�
 | 环境变量 | 默认值 | 用途 |
 |---|---|---|
 | `ADMIN_PASSWORD` | — | 旧版环境变量密码。若已设置且 `config.yaml` 无 `password_hash`，启动时一次性迁移（哈希写回配置文件）后即被忽略。优先使用 Setup 流程。 |
-| `SESSION_SECRET` | 不安全默认值 | 会话 Cookie 签名 —— **生产环境务必设置** |
+| `SESSION_SECRET` | 自动生成 | 会话 Cookie 签名。未设置时启动自动生成强随机密钥（仅内存，重启后会话失效）；**生产环境务必设置**，使会话跨重启保持 |
 | `REDIS_ADDR` | `localhost:6379` | 点击计数缓冲 |
-| `DB_PATH` | `data/gourl.db` | SQLite 文件 |
+| `DB_PATH` | `./data/gourl.db` | SQLite 文件 |
 | `PORT` | `8080` | HTTP 监听端口 |
-| `CONFIG_PATH` | `config.yaml` | 业务配置（站点信息、基址等） |
-| `ASSETS_DIR` | `data/assets` | 上传图标存储 |
+| `CONFIG_PATH` | `./config/config.yaml` | 业务配置（站点信息、基址等） |
+| `ASSETS_DIR` | `./data/assets` | 上传图标存储 |
 | `TZ` | 容器默认 | 每日统计切日与过期时间按此时区解释 |
 | `LOG_FORMAT` | `text` | `json` 结构化输出（日志走 stderr）。日志**等级**在 `config.yaml` 的 `log_level` 中配置（设置页），不再使用环境变量 |
-| `LOG_DIR` | — | 可选：日志镜像写入该目录的轮转文件（如挂载卷 `/app/data/log`；10 MB × 5 份 × 30 天，gzip） |
+| `LOG_DIR` | `./data/log` | 日志镜像写入该目录的轮转文件（容器内解析为 `/app/data/log`；10 MB × 5 份 × 30 天，gzip） |
 
 业务配置在 `config.yaml`（见 `config.yaml.example`）：服务名称/标题/关键词/描述、
 随机短码位数、主 + 附加基址、额外保留字、UA 屏蔽规则、IP 屏蔽规则、登录限流、

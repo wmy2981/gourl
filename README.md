@@ -19,7 +19,7 @@ plus Redis — that's all it takes to run your own short links.
 - **UA & IP blocking** — User-Agent patterns and IP rules (exact IP, CIDR, `192.168.*.*` wildcards) get a 403 naming the matched rule and are never counted; IP bans cover every route
 - **Expiry** — per-link `expires_at` (0 = never); expired codes behave like missing ones (plain 404)
 - **REST API** — full JSON API with bearer tokens for integration
-- **Setup flow** — on first start with no password the first visitor sets one via `/admin/setup`; the bcrypt hash lives in `config.yaml`, never in the environment
+- **Setup flow** — on first start with no password the management API stays locked (403 `setup_required`, bearer tokens still work) and the first visitor sets one via `/admin/setup`; the bcrypt hash lives in `config.yaml`, never in the environment
 - **Rate limiting** — per-IP login lockout (default 10 failures / 300 s) and a shared per-second redirect budget (default 100/s), both configurable
 - **Customization** — site name, title, keywords, description, uploaded icon (SVG/PNG, one-click reset)
 - **Multi-base URLs** — extra base URLs are served side by side; pick which one a link row shows or copies
@@ -78,15 +78,15 @@ version.
 | Variable | Default | Purpose |
 |---|---|---|
 | `ADMIN_PASSWORD` | — | Legacy env password. If set and `config.yaml` has no `password_hash`, it is migrated once — hashed and written back to the config file — and ignored afterwards. Prefer the setup flow. |
-| `SESSION_SECRET` | insecure default | Signs admin session cookies — **set it in production** |
+| `SESSION_SECRET` | auto-generated | Signs admin session cookies. When unset a strong random secret is generated at startup (in memory only — sessions then do not survive a restart); **set it in production** so sessions persist across restarts |
 | `REDIS_ADDR` | `localhost:6379` | Click-counter buffer |
-| `DB_PATH` | `data/gourl.db` | SQLite file |
+| `DB_PATH` | `./data/gourl.db` | SQLite file |
 | `PORT` | `8080` | HTTP listen port |
-| `CONFIG_PATH` | `config.yaml` | Business config (site info, base URLs, …) |
-| `ASSETS_DIR` | `data/assets` | Uploaded icon storage |
+| `CONFIG_PATH` | `./config/config.yaml` | Business config (site info, base URLs, …) |
+| `ASSETS_DIR` | `./data/assets` | Uploaded icon storage |
 | `TZ` | container default | Daily click buckets and expiry are interpreted in it |
 | `LOG_FORMAT` | `text` | `json` for structured output (logs go to stderr). The log **level** lives in `config.yaml` (`log_level`, settings page) — no env var |
-| `LOG_DIR` | — | Optional directory for a rotating file mirror of the logs (e.g. `/app/data/log` on the mounted volume; 10 MB × 5 backups × 30 days, gzip) |
+| `LOG_DIR` | `./data/log` | Directory for a rotating file mirror of the logs (resolved under the container's `/app/data`; 10 MB × 5 backups × 30 days, gzip) |
 
 Business settings live in `config.yaml` (see `config.yaml.example`): site
 name/title/keywords/description, random code length, primary + extra base
