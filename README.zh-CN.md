@@ -109,10 +109,6 @@ cd frontend && npm run e2e
 powershell -File scripts/build-frontend.ps1 && go build ./cmd/gourl
 ```
 
-约定：Conventional Commits（一个逻辑改动一个提交，自带测试）；`main` 发正式版、
-`dev` 发预发行；版本号手动维护在根目录 `VERSION` 文件——CI 校验只前进，并自动
-生成发行说明。
-
 ## 许可证
 
 [MIT](LICENSE)

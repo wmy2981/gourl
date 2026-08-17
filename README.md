@@ -118,11 +118,6 @@ cd frontend && npm run e2e
 powershell -File scripts/build-frontend.ps1 && go build ./cmd/gourl
 ```
 
-Conventions: Conventional Commits (one logical change = one commit, tests
-included), `main` releases / `dev` pre-releases, version maintained manually
-in the root `VERSION` file — CI validates forward-only progression and
-generates release notes automatically.
-
 ## License
 
 [MIT](LICENSE)
