@@ -25,16 +25,17 @@ func TestStatsOverviewKeepsClicksAfterDelete(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Before deletion: one link, ten clicks across two days.
+	// Before deletion: one link, seven clicks across two days (the "gone"
+	// clicks target no live link and are dropped under id-keyed counting).
 	links, total, daily, err := s.StatsOverview(ctx, "2026-08-03")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if links != 1 || total != 10 {
-		t.Fatalf("before delete: links=%d total=%d, want 1/10", links, total)
+	if links != 1 || total != 7 {
+		t.Fatalf("before delete: links=%d total=%d, want 1/7", links, total)
 	}
-	if len(daily) != 2 || daily[0].Count+daily[1].Count != 10 {
-		t.Fatalf("daily = %+v, want 2 days summing to 10", daily)
+	if len(daily) != 2 || daily[0].Count+daily[1].Count != 7 {
+		t.Fatalf("daily = %+v, want 2 days summing to 7", daily)
 	}
 
 	// Delete the link; the historical totals must survive.
@@ -45,10 +46,10 @@ func TestStatsOverviewKeepsClicksAfterDelete(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if links != 0 || total != 10 {
-		t.Fatalf("after delete: links=%d total=%d, want 0/10", links, total)
+	if links != 0 || total != 7 {
+		t.Fatalf("after delete: links=%d total=%d, want 0/7", links, total)
 	}
-	if len(daily) != 2 || daily[0].Count+daily[1].Count != 10 {
-		t.Fatalf("daily after delete = %+v, want 2 days summing to 10", daily)
+	if len(daily) != 2 || daily[0].Count+daily[1].Count != 7 {
+		t.Fatalf("daily after delete = %+v, want 2 days summing to 7", daily)
 	}
 }

@@ -20,8 +20,11 @@ var (
 	ErrTaken    = errors.New("code already taken")
 )
 
-// Link is a short link record.
+// Link is a short link record. ID is the stable autoincrement identity
+// (assigned in created_at order during the v3 migration; 1-based); Code stays
+// the user-facing short code and may be renamed.
 type Link struct {
+	ID          int64
 	Code        string
 	URL         string
 	Title       string
@@ -30,6 +33,7 @@ type Link struct {
 	ClickCount  int64
 	CreatedAt   int64
 	UpdatedAt   int64
+	Deleted     bool
 }
 
 // ListOptions controls listing.
@@ -114,6 +118,65 @@ var migrations = []string{
 	`CREATE INDEX IF NOT EXISTS idx_links_created_at ON links(created_at);
 	CREATE INDEX IF NOT EXISTS idx_links_expires_at ON links(expires_at);
 	CREATE INDEX IF NOT EXISTS idx_daily_clicks_date ON daily_clicks(date);`,
+	// v3: links gain a surrogate autoincrement id (codes stay unique among
+	// non-deleted rows via a partial index) and a soft-delete flag. Existing
+	// ids are assigned in created_at order (rowid breaks ties), so the
+	// oldest link gets id 1 and new ids keep increasing from there.
+	`CREATE TABLE links_new (
+		id          INTEGER PRIMARY KEY AUTOINCREMENT,
+		code        TEXT NOT NULL,
+		url         TEXT NOT NULL,
+		title       TEXT NOT NULL DEFAULT '',
+		description TEXT NOT NULL DEFAULT '',
+		expires_at  INTEGER NOT NULL DEFAULT 0,
+		click_count INTEGER NOT NULL DEFAULT 0,
+		created_at  INTEGER NOT NULL,
+		updated_at  INTEGER NOT NULL,
+		deleted     INTEGER NOT NULL DEFAULT 0
+	);
+	INSERT INTO links_new (code, url, title, description, expires_at, click_count, created_at, updated_at, deleted)
+	SELECT code, url, title, description, expires_at, click_count, created_at, updated_at, 0
+	FROM links ORDER BY created_at, rowid;
+	DROP TABLE links;
+	ALTER TABLE links_new RENAME TO links;
+	CREATE UNIQUE INDEX idx_links_code_active ON links(code) WHERE deleted = 0;
+	CREATE INDEX idx_links_created_at ON links(created_at);
+	CREATE INDEX idx_links_expires_at ON links(expires_at);`,
+	// v4: backups stores one immutable snapshot per edit of a link (every
+	// edit appends a new row, never overwrites). b_id is a global counter
+	// starting at 1 — the "b-1, b-2, …" ids surfaced by exports.
+	`CREATE TABLE backups (
+		b_id        INTEGER PRIMARY KEY,
+		link_id     INTEGER NOT NULL,
+		code        TEXT NOT NULL,
+		url         TEXT NOT NULL,
+		title       TEXT NOT NULL DEFAULT '',
+		description TEXT NOT NULL DEFAULT '',
+		expires_at  INTEGER NOT NULL DEFAULT 0,
+		click_count INTEGER NOT NULL DEFAULT 0,
+		created_at  INTEGER NOT NULL,
+		updated_at  INTEGER NOT NULL,
+		backed_at   INTEGER NOT NULL
+	);`,
+	// v5: soft deletion everywhere and daily clicks keyed by link id, so a
+	// reused short code starts counting from zero. Rows whose link was hard
+	// deleted before v5 migrate with a NULL link_id and still feed the global
+	// totals (permanent history).
+	`ALTER TABLE api_tokens ADD COLUMN deleted INTEGER NOT NULL DEFAULT 0;
+	CREATE TABLE daily_clicks_new (
+		link_id INTEGER,
+		code    TEXT NOT NULL,
+		date    TEXT NOT NULL,
+		count   INTEGER NOT NULL DEFAULT 0,
+		PRIMARY KEY (link_id, date)
+	);
+	INSERT INTO daily_clicks_new (link_id, code, date, count)
+	SELECT l.id, d.code, d.date, d.count
+	FROM daily_clicks d LEFT JOIN links l ON l.code = d.code;
+	DROP TABLE daily_clicks;
+	ALTER TABLE daily_clicks_new RENAME TO daily_clicks;
+	CREATE INDEX idx_daily_clicks_date ON daily_clicks(date);
+	CREATE INDEX idx_daily_clicks_link ON daily_clicks(link_id);`,
 }
 
 // migrate applies pending migrations inside a transaction each, recording the
@@ -148,21 +211,25 @@ func (s *Store) migrate(ctx context.Context) error {
 	return nil
 }
 
-const linkColumns = `code, url, title, description, expires_at, click_count, created_at, updated_at`
+const linkColumns = `id, code, url, title, description, expires_at, click_count, created_at, updated_at, deleted`
 
 func scanLink(row interface{ Scan(...any) error }) (*Link, error) {
 	var l Link
-	if err := row.Scan(&l.Code, &l.URL, &l.Title, &l.Description,
-		&l.ExpiresAt, &l.ClickCount, &l.CreatedAt, &l.UpdatedAt); err != nil {
+	if err := row.Scan(&l.ID, &l.Code, &l.URL, &l.Title, &l.Description,
+		&l.ExpiresAt, &l.ClickCount, &l.CreatedAt, &l.UpdatedAt, &l.Deleted); err != nil {
 		return nil, err
 	}
 	return &l, nil
 }
 
+// createLinkSQL is the INSERT shared by CreateLink and CreateLinks. The id is
+// autoincremented; the caller reads it back via LastInsertId.
+const createLinkSQL = `INSERT INTO links (code, url, title, description, expires_at, click_count, created_at, updated_at)
+	VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+
 // CreateLink inserts a link. Returns ErrTaken if the code already exists.
 func (s *Store) CreateLink(ctx context.Context, l *Link) error {
-	_, err := s.db.ExecContext(ctx,
-		`INSERT INTO links (`+linkColumns+`) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+	res, err := s.db.ExecContext(ctx, createLinkSQL,
 		l.Code, l.URL, l.Title, l.Description, l.ExpiresAt, l.ClickCount, l.CreatedAt, l.UpdatedAt)
 	if isConstraint(err) {
 		slog.Debug("store: create link failed", "code", l.Code, "error", ErrTaken)
@@ -172,8 +239,11 @@ func (s *Store) CreateLink(ctx context.Context, l *Link) error {
 		slog.Debug("store: create link failed", "code", l.Code, "error", err)
 		return fmt.Errorf("create link: %w", err)
 	}
+	if id, err := res.LastInsertId(); err == nil {
+		l.ID = id
+	}
 	s.cache.set(l.Code, l)
-	slog.Debug("store: link created", "code", l.Code)
+	slog.Debug("store: link created", "code", l.Code, "id", l.ID)
 	return nil
 }
 
@@ -188,8 +258,7 @@ func (s *Store) CreateLinks(ctx context.Context, links []Link) ([]error, error) 
 	defer tx.Rollback()
 	errs := make([]error, len(links))
 	for i := range links {
-		_, err := tx.ExecContext(ctx,
-			`INSERT INTO links (`+linkColumns+`) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		res, err := tx.ExecContext(ctx, createLinkSQL,
 			links[i].Code, links[i].URL, links[i].Title, links[i].Description,
 			links[i].ExpiresAt, links[i].ClickCount, links[i].CreatedAt, links[i].UpdatedAt)
 		if isConstraint(err) {
@@ -198,6 +267,9 @@ func (s *Store) CreateLinks(ctx context.Context, links []Link) ([]error, error) 
 		}
 		if err != nil {
 			return nil, fmt.Errorf("create links: %w", err)
+		}
+		if id, err := res.LastInsertId(); err == nil {
+			links[i].ID = id
 		}
 	}
 	if err := tx.Commit(); err != nil {
@@ -217,7 +289,7 @@ func (s *Store) CreateLinks(ctx context.Context, links []Link) ([]error, error) 
 // UpdateMeta refreshes a link's title/description after an async meta fetch.
 func (s *Store) UpdateMeta(ctx context.Context, code, title, description string, updatedAt int64) error {
 	_, err := s.db.ExecContext(ctx,
-		`UPDATE links SET title = ?, description = ?, updated_at = ? WHERE code = ?`,
+		`UPDATE links SET title = ?, description = ?, updated_at = ? WHERE code = ? AND deleted = 0`,
 		title, description, updatedAt, code)
 	if err != nil {
 		slog.Debug("store: update meta failed", "code", code, "error", err)
@@ -235,7 +307,7 @@ func (s *Store) GetLink(ctx context.Context, code string) (*Link, error) {
 	if l := s.cache.get(code); l != nil {
 		return l, nil
 	}
-	row := s.db.QueryRowContext(ctx, `SELECT `+linkColumns+` FROM links WHERE code = ?`, code)
+	row := s.db.QueryRowContext(ctx, `SELECT `+linkColumns+` FROM links WHERE code = ? AND deleted = 0`, code)
 	l, err := scanLink(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
@@ -251,7 +323,7 @@ func (s *Store) GetLink(ctx context.Context, code string) (*Link, error) {
 // The code is not changeable through this method.
 func (s *Store) UpdateLink(ctx context.Context, l *Link) error {
 	res, err := s.db.ExecContext(ctx,
-		`UPDATE links SET url = ?, title = ?, description = ?, expires_at = ?, updated_at = ? WHERE code = ?`,
+		`UPDATE links SET url = ?, title = ?, description = ?, expires_at = ?, updated_at = ? WHERE code = ? AND deleted = 0`,
 		l.URL, l.Title, l.Description, l.ExpiresAt, l.UpdatedAt, l.Code)
 	if err != nil {
 		slog.Debug("store: update link failed", "code", l.Code, "error", err)
@@ -279,7 +351,7 @@ func (s *Store) RenameLink(ctx context.Context, oldCode, newCode string, now int
 	defer tx.Rollback()
 
 	res, err := tx.ExecContext(ctx,
-		`UPDATE links SET code = ?, updated_at = ? WHERE code = ?`, newCode, now, oldCode)
+		`UPDATE links SET code = ?, updated_at = ? WHERE code = ? AND deleted = 0`, newCode, now, oldCode)
 	if err != nil {
 		if isConstraint(err) {
 			return ErrTaken
@@ -305,17 +377,14 @@ func (s *Store) RenameLink(ctx context.Context, oldCode, newCode string, now int
 	return nil
 }
 
-// DeleteLink removes a link row. Its daily click records are deliberately
-// kept: the dashboard totals and trend chart count history even for links
-// that no longer exist. Returns ErrNotFound if the code was absent.
+// DeleteLink soft-deletes a link (deleted = 1): the row, its id and its daily
+// click records are kept — the dashboard totals and trend count history even
+// for links that no longer exist — but the code is freed for reuse (the
+// partial unique index only covers non-deleted rows). Returns ErrNotFound if
+// the code was absent (or already deleted).
 func (s *Store) DeleteLink(ctx context.Context, code string) error {
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-
-	res, err := tx.ExecContext(ctx, `DELETE FROM links WHERE code = ?`, code)
+	res, err := s.db.ExecContext(ctx,
+		`UPDATE links SET deleted = 1 WHERE code = ? AND deleted = 0`, code)
 	if err != nil {
 		return fmt.Errorf("delete link: %w", err)
 	}
@@ -327,17 +396,13 @@ func (s *Store) DeleteLink(ctx context.Context, code string) error {
 		slog.Debug("store: delete link failed", "code", code, "error", ErrNotFound)
 		return ErrNotFound
 	}
-	if err := tx.Commit(); err != nil {
-		return err
-	}
 	s.cache.del(code)
 	slog.Debug("store: link deleted", "code", code)
 	return nil
 }
 
-// DeleteLinks removes many links in one transaction, returning how many rows
-// were actually deleted (absent codes are simply skipped). Daily click
-// records are deliberately kept, as in DeleteLink.
+// DeleteLinks soft-deletes many links in one transaction, returning how many
+// rows were actually deleted (absent or already-deleted codes are skipped).
 func (s *Store) DeleteLinks(ctx context.Context, codes []string) (int64, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -346,7 +411,8 @@ func (s *Store) DeleteLinks(ctx context.Context, codes []string) (int64, error) 
 	defer tx.Rollback()
 	var deleted int64
 	for _, code := range codes {
-		res, err := tx.ExecContext(ctx, `DELETE FROM links WHERE code = ?`, code)
+		res, err := tx.ExecContext(ctx,
+			`UPDATE links SET deleted = 1 WHERE code = ? AND deleted = 0`, code)
 		if err != nil {
 			return 0, fmt.Errorf("delete links: %w", err)
 		}
@@ -371,18 +437,18 @@ func (s *Store) DeleteLinks(ctx context.Context, codes []string) (int64, error) 
 func (s *Store) CountExpired(ctx context.Context, now int64) (int64, error) {
 	var n int64
 	err := s.db.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM links WHERE expires_at > 0 AND expires_at < ?`, now).Scan(&n)
+		`SELECT COUNT(*) FROM links WHERE deleted = 0 AND expires_at > 0 AND expires_at < ?`, now).Scan(&n)
 	if err != nil {
 		return 0, fmt.Errorf("count expired: %w", err)
 	}
 	return n, nil
 }
 
-// DeleteExpired removes every expired link in one transaction and returns
-// how many were deleted.
+// DeleteExpired soft-deletes every expired link in one transaction and
+// returns how many were deleted.
 func (s *Store) DeleteExpired(ctx context.Context, now int64) (int64, error) {
 	res, err := s.db.ExecContext(ctx,
-		`DELETE FROM links WHERE expires_at > 0 AND expires_at < ?`, now)
+		`UPDATE links SET deleted = 1 WHERE deleted = 0 AND expires_at > 0 AND expires_at < ?`, now)
 	if err != nil {
 		return 0, fmt.Errorf("delete expired: %w", err)
 	}
@@ -417,7 +483,7 @@ func (s *Store) ListLinks(ctx context.Context, opts ListOptions) ([]Link, int, e
 		order = "ASC"
 	}
 
-	var conds []string
+	conds := []string{`deleted = 0`}
 	var args []any
 	if opts.Query != "" {
 		// Parens keep AND-joined expiry filters from binding inside the ORs.
@@ -462,11 +528,11 @@ func (s *Store) ListLinks(ctx context.Context, opts ListOptions) ([]Link, int, e
 	return links, total, rows.Err()
 }
 
-// ListAllLinks returns every link, newest first (no pagination; used by
-// exports).
+// ListAllLinks returns every link, newest first (no pagination; used by the
+// API exports, which exclude soft-deleted links like every other read path).
 func (s *Store) ListAllLinks(ctx context.Context) ([]Link, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT `+linkColumns+` FROM links ORDER BY created_at DESC, rowid DESC`)
+		`SELECT `+linkColumns+` FROM links WHERE deleted = 0 ORDER BY created_at DESC, rowid DESC`)
 	if err != nil {
 		return nil, fmt.Errorf("list all links: %w", err)
 	}

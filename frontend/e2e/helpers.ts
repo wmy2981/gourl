@@ -19,6 +19,7 @@ export async function apiLogin(request: APIRequestContext) {
 }
 
 export interface Link {
+  id: number
   code: string
   url: string
   title: string
@@ -27,7 +28,6 @@ export interface Link {
   click_count: number
   created_at: number
   updated_at: number
-  urls: string[]
 }
 
 export async function createLinkApi(

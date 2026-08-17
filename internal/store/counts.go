@@ -28,7 +28,7 @@ func (s *Store) ApplyCounts(ctx context.Context, totals map[string]int64, dailie
 			continue
 		}
 		if _, err := tx.ExecContext(ctx,
-			`UPDATE links SET click_count = click_count + ?, updated_at = ? WHERE code = ?`,
+			`UPDATE links SET click_count = click_count + ?, updated_at = ? WHERE code = ? AND deleted = 0`,
 			n, now, code); err != nil {
 			return fmt.Errorf("apply total for %s: %w", code, err)
 		}
@@ -37,10 +37,14 @@ func (s *Store) ApplyCounts(ctx context.Context, totals map[string]int64, dailie
 		if d.Count <= 0 {
 			continue
 		}
+		// Daily rows key on the link id, resolved from the live code: a reused
+		// short code starts counting from zero (its old rows keep the old id),
+		// and clicks for links that no longer exist are dropped.
 		if _, err := tx.ExecContext(ctx,
-			`INSERT INTO daily_clicks (code, date, count) VALUES (?, ?, ?)
-			 ON CONFLICT(code, date) DO UPDATE SET count = count + excluded.count`,
-			d.Code, d.Date, d.Count); err != nil {
+			`INSERT INTO daily_clicks (link_id, code, date, count)
+			 SELECT id, ?, ?, ? FROM links WHERE code = ? AND deleted = 0
+			 ON CONFLICT(link_id, date) DO UPDATE SET count = count + excluded.count`,
+			d.Code, d.Date, d.Count, d.Code); err != nil {
 			return fmt.Errorf("apply daily for %s/%s: %w", d.Code, d.Date, err)
 		}
 	}

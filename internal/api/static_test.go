@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/wmy2981/gourl/internal/webui"
+	"gopkg.in/yaml.v3"
 )
 
 // TestSPAAssetsAreServed verifies the embedded build artifacts are reachable
@@ -69,6 +70,16 @@ func TestSwaggerUIServed(t *testing.T) {
 	rec = get(t, s, "/docs/openapi.yaml", nil)
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "openapi: 3.0") {
 		t.Fatalf("/docs/openapi.yaml status = %d, want spec", rec.Code)
+	}
+	// The spec must parse as YAML: SwaggerUI refuses to render a definition
+	// with a broken indentation and then complains about the missing version
+	// field, so verify both in one shot.
+	var doc map[string]any
+	if err := yaml.Unmarshal(rec.Body.Bytes(), &doc); err != nil {
+		t.Fatalf("openapi.yaml is not valid YAML: %v", err)
+	}
+	if doc["openapi"] == nil {
+		t.Fatal("openapi.yaml is missing the openapi version field")
 	}
 	rec = get(t, s, "/docs/swagger-ui-bundle.js", nil)
 	if rec.Code != http.StatusOK {

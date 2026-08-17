@@ -254,6 +254,14 @@ export function Dialog({
   const { t } = useTranslation()
   const [rendered, setRendered] = useState(open)
   const [closing, setClosing] = useState(false)
+  // Content snapshot: parents usually null their data in the same render that
+  // closes (the QR link, the row being deleted, …), which would shrink the
+  // panel before pop-out starts. Keep the last open-state content so the
+  // window holds its size while it animates away.
+  const [snap, setSnap] = useState(children)
+  useEffect(() => {
+    if (open) setSnap(children)
+  }, [open, children])
 
   useEffect(() => {
     if (open) {
@@ -311,7 +319,7 @@ export function Dialog({
               </button>
             </div>
           </div>
-          {children}
+          {open ? children : snap}
         </div>
       </div>
     </div>

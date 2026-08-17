@@ -68,7 +68,17 @@ func (s *Server) batchCreate(w http.ResponseWriter, r *http.Request) {
 	var valid []pending
 	for i, item := range items {
 		res := map[string]any{"index": i, "url": item.URL}
-		code, verr := s.resolveCode(item, cfg)
+		// Items flagged deleted (e.g. re-imported export dumps) are skipped
+		// without touching the database, exactly like an existing-code skip.
+		if item.Deleted {
+			skipped++
+			skippedCodes = append(skippedCodes, item.Code)
+			res["status"] = "skipped"
+			res["code"] = item.Code
+			results = append(results, res)
+			continue
+		}
+		code, verr := s.resolveCode(item, cfg, r)
 		if verr != nil {
 			failed++
 			failedCodes = append(failedCodes, item.Code)
@@ -269,6 +279,12 @@ func lenientItem(m map[string]any) (createLinkRequest, error) {
 			item.CreatedAt = &n
 		case "click_count":
 			// Deliberately dropped: imports must never fabricate click history.
+		case "deleted":
+			b, err := asBool(v)
+			if err != nil {
+				return item, fmt.Errorf("deleted must be a boolean")
+			}
+			item.Deleted = b
 		}
 	}
 	if item.URL == "" {
@@ -309,6 +325,33 @@ func asInt64(v any) (int64, error) {
 	}
 }
 
+// asBool coerces booleans, "true"/"false" strings and 0/1 numbers; null
+// yields false.
+func asBool(v any) (bool, error) {
+	switch t := v.(type) {
+	case bool:
+		return t, nil
+	case string:
+		b, err := strconv.ParseBool(t)
+		if err != nil {
+			return false, fmt.Errorf("must be a boolean")
+		}
+		return b, nil
+	case json.Number:
+		if t.String() == "1" {
+			return true, nil
+		}
+		if t.String() == "0" {
+			return false, nil
+		}
+		return false, fmt.Errorf("must be a boolean")
+	case nil:
+		return false, nil
+	default:
+		return false, fmt.Errorf("must be a boolean")
+	}
+}
+
 // asExpiry accepts a unix-seconds number, a yyyy-mm-dd calendar date (local
 // midnight), an RFC3339 timestamp, or the string form of any of those.
 func asExpiry(v any) (expiryValue, error) {
@@ -338,10 +381,14 @@ func asExpiry(v any) (expiryValue, error) {
 	}
 }
 
-// applyConflictUpdate merges an imported item into the existing link.
+// applyConflictUpdate merges an imported item into the existing link. The
+// pre-edit snapshot is backed up first, like a manual edit.
 func (s *Server) applyConflictUpdate(r *http.Request, item createLinkRequest, code string) error {
 	link, err := s.store.GetLink(r.Context(), code)
 	if err != nil {
+		return err
+	}
+	if _, err := s.store.BackupLink(r.Context(), link, s.now()); err != nil {
 		return err
 	}
 	link.URL = item.URL
@@ -369,9 +416,15 @@ type codeError struct {
 
 // resolveCode validates the item and returns the code to use (custom or
 // generated). It does not check DB uniqueness, which is handled per insert.
-func (s *Server) resolveCode(item createLinkRequest, cfg *config.Config) (string, *codeError) {
-	if !isAbsoluteHTTPURL(item.URL) {
-		return "", &codeError{"invalid_request", "url must be an absolute http(s) URL"}
+func (s *Server) resolveCode(item createLinkRequest, cfg *config.Config, r *http.Request) (string, *codeError) {
+	if !isAbsoluteURL(item.URL) {
+		return "", &codeError{"invalid_request", "url must be an absolute URL with a scheme"}
+	}
+	if selfLinkTarget(cfg, r, item.URL) {
+		return "", &codeError{"self_link_target", "target URL points at this instance's own short links"}
+	}
+	if msg, ok := checkDescription(item.Description); !ok {
+		return "", &codeError{"description_too_long", msg}
 	}
 	if item.ExpiresAt != nil && *item.ExpiresAt < 0 {
 		return "", &codeError{"invalid_request", "expires_at must be >= 0"}

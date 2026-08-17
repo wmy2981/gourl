@@ -31,11 +31,12 @@ func (s *Store) CreateToken(ctx context.Context, token, note string, now int64) 
 	return id, nil
 }
 
-// GetToken returns the token record. Returns ErrNotFound if absent.
+// GetToken returns the token record. Soft-deleted tokens no longer match
+// (revocation takes effect immediately). Returns ErrNotFound if absent.
 func (s *Store) GetToken(ctx context.Context, token string) (*Token, error) {
 	var t Token
 	err := s.db.QueryRowContext(ctx,
-		`SELECT id, token, note, created_at FROM api_tokens WHERE token = ?`, token).
+		`SELECT id, token, note, created_at FROM api_tokens WHERE token = ? AND deleted = 0`, token).
 		Scan(&t.ID, &t.Token, &t.Note, &t.CreatedAt)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -46,10 +47,11 @@ func (s *Store) GetToken(ctx context.Context, token string) (*Token, error) {
 	return &t, nil
 }
 
-// ListTokens returns all tokens, newest first.
+// ListTokens returns all tokens, newest first. Soft-deleted tokens are
+// excluded (the UI never shows them).
 func (s *Store) ListTokens(ctx context.Context) ([]Token, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT id, token, note, created_at FROM api_tokens ORDER BY id DESC`)
+		`SELECT id, token, note, created_at FROM api_tokens WHERE deleted = 0 ORDER BY id DESC`)
 	if err != nil {
 		return nil, fmt.Errorf("list tokens: %w", err)
 	}
@@ -65,9 +67,12 @@ func (s *Store) ListTokens(ctx context.Context) ([]Token, error) {
 	return tokens, rows.Err()
 }
 
-// DeleteToken revokes a token by id. Returns ErrNotFound if absent.
+// DeleteToken soft-deletes a token (deleted = 1), keeping the row for
+// exports. The key stays permanently taken: the UNIQUE constraint still
+// applies, so a new token cannot reuse it. Returns ErrNotFound if absent.
 func (s *Store) DeleteToken(ctx context.Context, id int64) error {
-	res, err := s.db.ExecContext(ctx, `DELETE FROM api_tokens WHERE id = ?`, id)
+	res, err := s.db.ExecContext(ctx,
+		`UPDATE api_tokens SET deleted = 1 WHERE id = ? AND deleted = 0`, id)
 	if err != nil {
 		return fmt.Errorf("delete token: %w", err)
 	}

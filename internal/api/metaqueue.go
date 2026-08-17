@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"log/slog"
+	"net/url"
 	"time"
 
 	"github.com/wmy2981/gourl/internal/store"
@@ -38,14 +39,25 @@ func newMetaQueue(st *store.Store, fetcher func() TitleFetcher, workers int) *me
 	return q
 }
 
-// enqueue schedules a meta fetch. A full queue drops the job — the link just
-// stays without meta, and an edit can always retrigger a fetch.
+// enqueue schedules a meta fetch. Targets that can never yield a title
+// (tcp://, openapp:// …) are dropped here; a full queue also drops the job —
+// the link just stays without meta, and an edit can always retrigger a fetch.
 func (q *metaQueue) enqueue(code, url string) {
+	if !fetchableScheme(url) {
+		return
+	}
 	select {
 	case q.ch <- metaJob{code: code, url: url}:
 	default:
 		slog.Debug("meta queue full, skipping fetch", "code", code)
 	}
+}
+
+// fetchableScheme reports whether a target could yield a title: only
+// http/https are fetchable.
+func fetchableScheme(raw string) bool {
+	u, err := url.Parse(raw)
+	return err == nil && (u.Scheme == "http" || u.Scheme == "https")
 }
 
 func (q *metaQueue) loop() {

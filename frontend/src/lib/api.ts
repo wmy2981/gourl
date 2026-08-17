@@ -17,6 +17,7 @@ export class ApiError extends Error {
 }
 
 export interface Link {
+  id: number
   code: string
   url: string
   title: string
@@ -25,7 +26,21 @@ export interface Link {
   click_count: number
   created_at: number
   updated_at: number
-  urls: string[]
+}
+
+// linkUrls assembles every complete short URL for a code from the config
+// (mirroring the old backend fullURLs): the base URL — or the current
+// location when unset — plus every extra base URL, deduplicated, trailing
+// slashes trimmed.
+export function linkUrls(code: string, cfg: AppConfig): string[] {
+  const bases: string[] = []
+  const push = (base: string) => {
+    const trimmed = base.trim().replace(/\/+$/, '')
+    if (trimmed && !bases.includes(trimmed)) bases.push(trimmed)
+  }
+  push(cfg.base_url || `${location.protocol}//${location.host}`)
+  for (const extra of cfg.extra_base_urls) push(extra)
+  return bases.map((b) => `${b}/${code}`)
 }
 
 export interface LinkListResponse {
@@ -111,7 +126,7 @@ export interface BatchCreateResponse {
   results: BatchCreateResult[]
 }
 
-/** Import item: url is required; the rest is optional and mirrors the export fields. click_count is dropped on import. */
+/** Import item: url is required; the rest is optional and mirrors the export fields. click_count is dropped on import; deleted: true skips the item (re-imported export dumps). */
 export interface ImportItem {
   url: string
   code?: string
@@ -119,6 +134,7 @@ export interface ImportItem {
   description?: string
   expires_at?: number | string
   created_at?: number
+  deleted?: boolean
 }
 
 const JSON_HEADERS = { 'Content-Type': 'application/json' }

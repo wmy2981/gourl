@@ -14,8 +14,11 @@ plus Redis — that's all it takes to run your own short links.
 - **Short links** — custom or auto-generated codes, multi-level paths (`link1/link2`), configurable length
 - **Link management** — modern admin console (Apple-style glassmorphism, responsive, dark mode)
 - **Delayed counting** — clicks buffered in Redis, flushed to SQLite every 30s to absorb bursts; lookups are served from an in-memory TTL cache
-- **History preserved** — click totals and the trend chart keep counting even after a link is deleted
-- **Auto titles** — fetches `title`/`description` when creating a link, with SSRF protection
+- **History preserved, deletions soft** — click totals and the trend chart keep counting even after a link is deleted; deletions only flag the row (never remove it), so a freed short code can be reused while the new link counts from zero
+- **Auto titles** — asynchronously fetches `title`/`description` for any reachable host, internal networks included
+- **Stable ids & edit snapshots** — every link carries a stable autoincrement id; each edit appends an immutable snapshot to the backups table (`b-1, b-2, …`), and the db-export script dumps links (soft-deleted included), tokens, daily clicks and backups as JSON arrays (the export dialog links to its GitHub download)
+- **Any-scheme targets** — destinations may be `tcp://`, `openapp://`, `mailto:` … (non-http(s) targets skip title fetching); the form's http/https buttons fill or swap the prefix
+- **Self-link guard** — targets pointing at this instance's own short links are rejected on create, edit and import
 - **UA & IP blocking** — User-Agent patterns and IP rules (exact IP, CIDR, `192.168.*.*` wildcards) get a 403 naming the matched rule and are never counted; IP bans cover every route
 - **Expiry** — per-link `expires_at` (0 = never); expired codes behave like missing ones (plain 404)
 - **REST API** — full JSON API with bearer tokens for integration
