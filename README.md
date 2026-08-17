@@ -29,7 +29,7 @@ plus Redis — that's all it takes to run your own short links.
 - **Live log page** — Server-Sent Events stream with level/keyword/time filters and `.log` export; history from the mirrored file
 - **Chinese short codes** — custom codes may contain simplified Chinese characters; extra reserved codes too (multi-segment entries reserve their whole subtree)
 - **API documentation** — interactive Swagger UI at `/docs/`
-- **Structured logging** — slog with 4 levels (debug/info/warning/error), text or JSON, optionally mirrored to a rotating file on the data volume
+- **Structured logging** — slog with 4 levels (debug/info/warning/error), text or JSON, mirrored to a rotating file in `./data/log`; every API request is logged with status, latency and a response-body summary (errors/warnings follow the HTTP status)
 
 ## Stack
 
