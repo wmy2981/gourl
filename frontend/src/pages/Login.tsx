@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { ArrowRight, KeyRound } from 'lucide-react'
 import { api, ApiError } from '../lib/api'
@@ -9,6 +10,8 @@ export default function Login() {
   const { t } = useTranslation()
   const { toast } = useToast()
   const navigate = useNavigate()
+  // The configured service name replaces the gourl brand in the brand line.
+  const { data: cfg } = useQuery({ queryKey: ['config'], queryFn: api.getConfig })
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
 
@@ -40,7 +43,7 @@ export default function Login() {
           </div>
           <h1 className="text-xl font-semibold">{t('login.heading')}</h1>
           <p className="mt-1 text-sm text-muted">
-            {__APP_NAME__} <span className="short-code">v{__APP_VERSION__}</span>
+            {cfg?.site.name || __APP_NAME__} <span className="short-code">v{__APP_VERSION__}</span>
           </p>
         </div>
 

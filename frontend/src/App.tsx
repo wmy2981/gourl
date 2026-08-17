@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Navigate, Route, Routes } from 'react-router-dom'
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { api } from './lib/api'
 import Layout from './components/Layout'
 import { ToastProvider } from './components/ui'
@@ -19,18 +19,21 @@ if (savedTheme === 'dark' || (!savedTheme && prefersDark)) {
 }
 
 export default function App() {
+  const location = useLocation()
   const { data: cfg } = useQuery({ queryKey: ['config'], queryFn: api.getConfig })
   // Unconfigured servers route the SPA to the one-time setup page; once a
   // password exists the setup page is unreachable again.
   const { data: authStatus } = useQuery({ queryKey: ['authStatus'], queryFn: api.authStatus })
 
   useEffect(() => {
-    // The site title drives the browser tab; the favicon follows the uploaded
-    // custom icon (the query string cache-busts so the tab updates at once).
-    document.title = cfg?.site.title || 'gourl'
+    // The login/setup tab shows the service name, the console the site title;
+    // the favicon follows the uploaded custom icon (the query string
+    // cache-busts so the tab updates at once).
+    const isAuthPage = location.pathname === '/admin/login' || location.pathname === '/admin/setup'
+    document.title = isAuthPage ? cfg?.site.name || 'gourl' : cfg?.site.title || 'gourl'
     const link = document.querySelector<HTMLLinkElement>('link[rel="icon"]')
     if (link) link.href = `/favicon.svg?t=${cfg?.icon ? 'custom' : 'default'}`
-  }, [cfg])
+  }, [cfg, location.pathname])
 
   return (
     <ToastProvider>
