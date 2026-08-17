@@ -265,15 +265,15 @@ export default function Links() {
           <table className="w-full min-w-[900px] text-left text-sm">
             <thead>
               <tr className="border-b border-hairline text-xs uppercase tracking-wide text-muted">
-                <th className="w-12 px-5 py-3">
+                <th className="w-12 whitespace-nowrap px-5 py-3">
                   <Checkbox checked={allPageSelected} onChange={togglePage} aria-label={t('links.selectAll')} />
                 </th>
-                <th className="px-5 py-3 font-medium">{t('links.shortUrl')}</th>
-                <th className="px-5 py-3 font-medium">{t('links.destination')}</th>
-                <th className="px-5 py-3 font-medium">{t('links.description')}</th>
-                <th className="px-5 py-3 text-right font-medium">{t('links.clicks')}</th>
-                <th className="px-5 py-3 font-medium">{t('links.expires')}</th>
-                <th className="px-5 py-3 font-medium">{t('links.actions')}</th>
+                <th className="whitespace-nowrap px-5 py-3 font-medium">{t('links.shortUrl')}</th>
+                <th className="whitespace-nowrap px-5 py-3 font-medium">{t('links.destination')}</th>
+                <th className="whitespace-nowrap px-5 py-3 font-medium">{t('links.description')}</th>
+                <th className="whitespace-nowrap px-5 py-3 text-right font-medium">{t('links.clicks')}</th>
+                <th className="whitespace-nowrap px-5 py-3 font-medium">{t('links.expires')}</th>
+                <th className="whitespace-nowrap px-5 py-3 font-medium">{t('links.actions')}</th>
               </tr>
             </thead>
             <tbody>
