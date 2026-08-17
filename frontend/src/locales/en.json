@@ -120,6 +120,7 @@
     "conflictUpdate": "Update",
     "description": "Description",
     "descriptionPlaceholder": "Optional note about this link",
+    "schemeHint": "Scheme:",
     "batchTitle": "Batch create links",
     "batchHint": "One item per line: [code](2026/12/31)https://… (short code and expiry are optional, empty = never expires; # starts a comment)",
     "urlRequired": "Destination URL is required",

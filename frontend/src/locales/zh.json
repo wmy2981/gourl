@@ -120,6 +120,7 @@
     "conflictUpdate": "更新",
     "description": "说明",
     "descriptionPlaceholder": "选填，说明这个链接的用途",
+    "schemeHint": "协议：",
     "batchTitle": "批量创建",
     "batchHint": "每行一项：[code](2026/12/31)https://…（短码和截止日期均可省略，留空 = 永不过期；# 开头为注释）",
     "urlRequired": "请填写目标 URL",
