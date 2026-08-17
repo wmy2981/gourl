@@ -54,6 +54,8 @@ export default function Settings() {
       site: form.site,
       short_code_length: form.short_code_length,
       base_url: form.base_url,
+      login_rate_max_attempts: form.login_rate_max_attempts,
+      login_rate_lock_seconds: form.login_rate_lock_seconds,
       icon: form.icon,
       extra_base_urls: extraUrlsText
         .split('\n')
@@ -149,6 +151,28 @@ export default function Settings() {
               <Label htmlFor='cfg-reserved'>{t('settings.reservedCodes')}</Label>
               <Textarea id='cfg-reserved' rows={3} value={reservedText} onChange={(e) => setReservedText(e.target.value)} />
               <p className="mt-1 text-xs text-muted">{t('settings.reservedCodesHint')}</p>
+            </div>
+            <div>
+              <Label htmlFor='cfg-login-attempts'>{t('settings.loginRateAttempts')}</Label>
+              <Input
+                id='cfg-login-attempts'
+                type="number"
+                min={0}
+                value={form.login_rate_max_attempts}
+                onChange={(e) => set('login_rate_max_attempts', Number(e.target.value))}
+              />
+              <p className="mt-1 text-xs text-muted">{t('settings.loginRateHint')}</p>
+            </div>
+            <div>
+              <Label htmlFor='cfg-login-lock'>{t('settings.loginRateLock')}</Label>
+              <Input
+                id='cfg-login-lock'
+                type="number"
+                min={0}
+                value={form.login_rate_lock_seconds}
+                onChange={(e) => set('login_rate_lock_seconds', Number(e.target.value))}
+              />
+              <p className="mt-1 text-xs text-muted">{t('settings.loginRateLockHint')}</p>
             </div>
           </div>
         </Card>

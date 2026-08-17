@@ -92,6 +92,16 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusForbidden, "auth_disabled", "admin authentication is not configured")
 		return
 	}
+	ip := clientIP(r)
+	cfg := s.cfg.Get()
+	now := time.Unix(s.now(), 0)
+	// Locked-out IPs are refused before any password work. The limiter is
+	// enabled only when both thresholds are set (0 disables it).
+	if cfg.LoginRateMaxAttempts > 0 && cfg.LoginRateLockSeconds > 0 && s.loginRate.locked(ip, now) {
+		slog.Warn("admin login rate limited", "remote", r.RemoteAddr)
+		writeError(w, http.StatusTooManyRequests, "rate_limited", "too many failed attempts, try again later")
+		return
+	}
 	var body struct {
 		Password string `json:"password"`
 	}
@@ -100,11 +110,13 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if subtle.ConstantTimeCompare([]byte(body.Password), []byte(s.admin.password)) != 1 {
-		slog.Warn("admin login failed", "remote", r.RemoteAddr)
+		s.loginRate.recordFailure(ip, cfg.LoginRateMaxAttempts, cfg.LoginRateLockSeconds, now)
+		slog.Warn("admin login failed", "remote", r.RemoteAddr, "ip", ip)
 		writeError(w, http.StatusUnauthorized, "unauthorized", "invalid password")
 		return
 	}
-	slog.Info("admin logged in", "remote", r.RemoteAddr)
+	s.loginRate.clear(ip)
+	slog.Info("admin logged in", "remote", r.RemoteAddr, "ip", ip)
 	token, err := s.admin.issueToken()
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "internal_error", "failed to issue session")

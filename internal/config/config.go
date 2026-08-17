@@ -39,13 +39,19 @@ type Config struct {
 	UABlocks        []string `yaml:"ua_blocks" json:"ua_blocks"`
 	IPBlocks        []string `yaml:"ip_blocks" json:"ip_blocks"`
 	Icon            string   `yaml:"icon" json:"icon"`
+	// LoginRateMaxAttempts / LoginRateLockSeconds limit failed logins per IP:
+	// N failures in a row lock the address for the window. 0 disables.
+	LoginRateMaxAttempts int `yaml:"login_rate_max_attempts" json:"login_rate_max_attempts"`
+	LoginRateLockSeconds int `yaml:"login_rate_lock_seconds" json:"login_rate_lock_seconds"`
 }
 
 // Default returns a usable default configuration.
 func Default() *Config {
 	return &Config{
-		Site:            Site{Name: "gourl", Title: "gourl - Short Links"},
-		ShortCodeLength: 6,
+		Site:                 Site{Name: "gourl", Title: "gourl - Short Links"},
+		ShortCodeLength:      6,
+		LoginRateMaxAttempts: 10,
+		LoginRateLockSeconds: 300,
 	}
 }
 
@@ -93,6 +99,9 @@ func (c *Config) Validate() error {
 		if err := validIPBlock(b); err != nil {
 			return err
 		}
+	}
+	if c.LoginRateMaxAttempts < 0 || c.LoginRateLockSeconds < 0 {
+		return fmt.Errorf("login rate limits must not be negative (0 disables)")
 	}
 	return nil
 }

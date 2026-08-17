@@ -63,6 +63,8 @@ export interface AppConfig {
   reserved_codes: string[]
   ua_blocks: string[]
   ip_blocks: string[]
+  login_rate_max_attempts: number
+  login_rate_lock_seconds: number
   icon: string
 }
 

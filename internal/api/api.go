@@ -37,6 +37,7 @@ type Server struct {
 	counter   *counter.Counter
 	fetcher   TitleFetcher
 	admin     *adminAuth
+	loginRate *loginLimiter
 	assetsDir string
 	startTime time.Time
 	now       func() int64 // injectable clock for tests
@@ -52,6 +53,7 @@ func NewServer(st *store.Store, cfg *config.Manager, ctr *counter.Counter) *Serv
 		counter:   ctr,
 		fetcher:   fetcher.New(fetcher.Options{}),
 		admin:     newAdminAuth(os.Getenv("ADMIN_PASSWORD"), os.Getenv("SESSION_SECRET")),
+		loginRate: newLoginLimiter(),
 		assetsDir: envOr("ASSETS_DIR", "data/assets"),
 		startTime: time.Now(),
 		now:       func() int64 { return timeNow() },

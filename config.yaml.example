@@ -33,5 +33,10 @@ ua_blocks: []
 # API and health included — with a 403 page.
 ip_blocks: []
 
+# Login rate limiting per client IP: after `login_rate_max_attempts` failed
+# logins the address is locked for `login_rate_lock_seconds`. 0 disables.
+login_rate_max_attempts: 10
+login_rate_lock_seconds: 300
+
 # Custom icon file name inside the assets data directory (empty = built-in default).
 icon: ""

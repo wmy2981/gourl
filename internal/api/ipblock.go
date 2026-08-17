@@ -25,11 +25,7 @@ func (s *Server) ipBlock(next http.Handler) http.Handler {
 // ipBlocked returns the first ip_blocks rule matched by the request's remote
 // address, or "" when not blocked. Rules come from config.yaml.
 func (s *Server) ipBlocked(r *http.Request) string {
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		host = r.RemoteAddr
-	}
-	ip := net.ParseIP(host)
+	ip := net.ParseIP(clientIP(r))
 	if ip == nil {
 		return ""
 	}
