@@ -461,5 +461,9 @@ components:
           type: integer
           minimum: 0
           description: How long a locked IP stays locked after too many failed logins, in seconds (0 disables the limiter). Default 300.
+        link_rate_per_second:
+          type: integer
+          minimum: 0
+          description: Shared budget for short-link redirects across all codes — a token bucket refilling N tokens per second (burst N). Over-limit requests get a bare 429 and are not counted. 0 disables. Default 100.
 security:
   - bearerAuth: []

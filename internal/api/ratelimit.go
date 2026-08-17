@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"sync"
 	"time"
+
+	"golang.org/x/time/rate"
 )
 
 // clientIP returns the request's remote address without the port.
@@ -72,4 +74,22 @@ func (l *loginLimiter) clear(ip string) {
 	defer l.mu.Unlock()
 	delete(l.fails, ip)
 	delete(l.until, ip)
+}
+
+// allowLink admits a short-link redirect against the shared per-second
+// budget (link_rate_per_second, 0 = unlimited). The limiter is rebuilt only
+// when the configured rate changes, so hot config updates take effect.
+func (s *Server) allowLink() bool {
+	n := s.cfg.Get().LinkRatePerSecond
+	if n <= 0 {
+		return true
+	}
+	s.linkRateMu.Lock()
+	if s.linkRate == nil || s.linkRateN != n {
+		s.linkRate = rate.NewLimiter(rate.Limit(n), n) // burst = one second's budget
+		s.linkRateN = n
+	}
+	lim := s.linkRate
+	s.linkRateMu.Unlock()
+	return lim.Allow()
 }

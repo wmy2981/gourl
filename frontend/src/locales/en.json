@@ -145,6 +145,8 @@
     "loginRateLock": "Lock duration (seconds)",
     "loginRateHint": "Failed attempts allowed per IP before locking (0 = disabled)",
     "loginRateLockHint": "How long the IP stays locked after too many failures (0 = disabled)",
+    "linkRate": "Link access limit (per second)",
+    "linkRateHint": "Max short-link redirects per second across all codes (0 = unlimited)",
     "icon": "Icon",
     "uploadIcon": "Upload SVG/PNG",
     "removeIcon": "Reset to default",

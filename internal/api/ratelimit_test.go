@@ -3,7 +3,56 @@ package api
 import (
 	"net/http"
 	"testing"
+
+	"github.com/wmy2981/gourl/internal/counter"
 )
+
+// TestLinkRateLimit: redirects share one per-second budget; requests over the
+// limit get a bare 429 and are never counted.
+func TestLinkRateLimit(t *testing.T) {
+	s, mr := newTestServer(t)
+	createLink(t, s, "abc", "https://example.com/target")
+
+	cfg := s.cfg.Get()
+	cfg.LinkRatePerSecond = 2
+	if err := s.cfg.Update(cfg); err != nil {
+		t.Fatal(err)
+	}
+
+	for i := 0; i < 2; i++ {
+		rec := get(t, s, "/abc", nil)
+		if rec.Code != http.StatusFound {
+			t.Fatalf("attempt %d: status = %d, want 302", i+1, rec.Code)
+		}
+	}
+	rec := get(t, s, "/abc", nil)
+	if rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("over budget: status = %d, want 429", rec.Code)
+	}
+	if rec.Body.Len() != 0 {
+		t.Errorf("429 must be a bare body, got %q", rec.Body.String())
+	}
+	total, _ := counter.Keys("abc", "")
+	if got, err := mr.Get(total); err != nil || got != "2" {
+		t.Errorf("clicks = %q (err %v), want 2 — over-limit requests must not count", got, err)
+	}
+}
+
+// TestLinkRateLimitDisabledByZero: 0 turns the budget off entirely.
+func TestLinkRateLimitDisabledByZero(t *testing.T) {
+	s, _ := newTestServer(t)
+	createLink(t, s, "abc", "https://example.com/target")
+	cfg := s.cfg.Get()
+	cfg.LinkRatePerSecond = 0
+	if err := s.cfg.Update(cfg); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 5; i++ {
+		if rec := get(t, s, "/abc", nil); rec.Code != http.StatusFound {
+			t.Fatalf("attempt %d with limiter disabled: %d", i+1, rec.Code)
+		}
+	}
+}
 
 // TestLoginRateLimitByIP: after the configured number of failed attempts
 // (default 10) the client IP is locked and every login — even with the right

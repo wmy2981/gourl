@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/wmy2981/gourl/internal/config"
@@ -14,6 +15,7 @@ import (
 	"github.com/wmy2981/gourl/internal/fetcher"
 	"github.com/wmy2981/gourl/internal/store"
 	"github.com/wmy2981/gourl/internal/webui"
+	"golang.org/x/time/rate"
 )
 
 // TitleFetcher retrieves a page's title and description.
@@ -36,9 +38,12 @@ type Server struct {
 	cfg       *config.Manager
 	counter   *counter.Counter
 	fetcher   TitleFetcher
-	admin     *adminAuth
-	loginRate *loginLimiter
-	assetsDir string
+	admin      *adminAuth
+	loginRate  *loginLimiter
+	linkRateMu sync.Mutex
+	linkRate   *rate.Limiter
+	linkRateN  int
+	assetsDir  string
 	startTime time.Time
 	now       func() int64 // injectable clock for tests
 	meta      *metaQueue

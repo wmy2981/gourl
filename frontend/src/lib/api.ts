@@ -65,6 +65,7 @@ export interface AppConfig {
   ip_blocks: string[]
   login_rate_max_attempts: number
   login_rate_lock_seconds: number
+  link_rate_per_second: number
   icon: string
 }
 

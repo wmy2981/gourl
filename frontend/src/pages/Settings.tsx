@@ -56,6 +56,7 @@ export default function Settings() {
       base_url: form.base_url,
       login_rate_max_attempts: form.login_rate_max_attempts,
       login_rate_lock_seconds: form.login_rate_lock_seconds,
+      link_rate_per_second: form.link_rate_per_second,
       icon: form.icon,
       extra_base_urls: extraUrlsText
         .split('\n')
@@ -173,6 +174,17 @@ export default function Settings() {
                 onChange={(e) => set('login_rate_lock_seconds', Number(e.target.value))}
               />
               <p className="mt-1 text-xs text-muted">{t('settings.loginRateLockHint')}</p>
+            </div>
+            <div>
+              <Label htmlFor='cfg-link-rate'>{t('settings.linkRate')}</Label>
+              <Input
+                id='cfg-link-rate'
+                type="number"
+                min={0}
+                value={form.link_rate_per_second}
+                onChange={(e) => set('link_rate_per_second', Number(e.target.value))}
+              />
+              <p className="mt-1 text-xs text-muted">{t('settings.linkRateHint')}</p>
             </div>
           </div>
         </Card>

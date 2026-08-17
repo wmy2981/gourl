@@ -43,6 +43,9 @@ type Config struct {
 	// N failures in a row lock the address for the window. 0 disables.
 	LoginRateMaxAttempts int `yaml:"login_rate_max_attempts" json:"login_rate_max_attempts"`
 	LoginRateLockSeconds int `yaml:"login_rate_lock_seconds" json:"login_rate_lock_seconds"`
+	// LinkRatePerSecond caps short-link redirects across all codes (a shared
+	// token bucket). 0 disables.
+	LinkRatePerSecond int `yaml:"link_rate_per_second" json:"link_rate_per_second"`
 }
 
 // Default returns a usable default configuration.
@@ -52,6 +55,7 @@ func Default() *Config {
 		ShortCodeLength:      6,
 		LoginRateMaxAttempts: 10,
 		LoginRateLockSeconds: 300,
+		LinkRatePerSecond:    100,
 	}
 }
 
@@ -102,6 +106,9 @@ func (c *Config) Validate() error {
 	}
 	if c.LoginRateMaxAttempts < 0 || c.LoginRateLockSeconds < 0 {
 		return fmt.Errorf("login rate limits must not be negative (0 disables)")
+	}
+	if c.LinkRatePerSecond < 0 {
+		return fmt.Errorf("link_rate_per_second must not be negative (0 disables)")
 	}
 	return nil
 }

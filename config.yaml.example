@@ -38,5 +38,10 @@ ip_blocks: []
 login_rate_max_attempts: 10
 login_rate_lock_seconds: 300
 
+# Shared short-link access budget: at most this many redirects per second
+# across all codes (token bucket, burst = same number). Over-limit requests
+# get a bare 429 and are not counted. 0 disables.
+link_rate_per_second: 100
+
 # Custom icon file name inside the assets data directory (empty = built-in default).
 icon: ""

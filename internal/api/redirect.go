@@ -28,6 +28,14 @@ func (s *Server) redirect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Shared per-second budget across all short links: over the limit the
+	// request is dropped — bare 429, no redirect, no click counted.
+	if !s.allowLink() {
+		slog.Debug("link rate limited", "code", code, "remote", r.RemoteAddr)
+		w.WriteHeader(http.StatusTooManyRequests)
+		return
+	}
+
 	if p := s.uaBlocked(r); p != "" {
 		// Blocked UAs get a 403 page naming the matched pattern and are
 		// never counted.
