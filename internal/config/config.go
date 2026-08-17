@@ -50,6 +50,9 @@ type Config struct {
 	// setup flow (or migrated from the legacy ADMIN_PASSWORD env var). It is
 	// never exposed to the frontend.
 	PasswordHash string `yaml:"password_hash" json:"-"`
+	// LogLevel is the process-wide log verbosity (debug/info/warning/error),
+	// applied at startup and hot-applied on every config save.
+	LogLevel string `yaml:"log_level" json:"log_level"`
 }
 
 // Default returns a usable default configuration.
@@ -60,6 +63,7 @@ func Default() *Config {
 		LoginRateMaxAttempts: 10,
 		LoginRateLockSeconds: 300,
 		LinkRatePerSecond:    100,
+		LogLevel:             "info",
 	}
 }
 
@@ -113,6 +117,13 @@ func (c *Config) Validate() error {
 	}
 	if c.LinkRatePerSecond < 0 {
 		return fmt.Errorf("link_rate_per_second must not be negative (0 disables)")
+	}
+	switch c.LogLevel {
+	case "":
+		c.LogLevel = "info"
+	case "debug", "info", "warning", "warn", "error":
+	default:
+		return fmt.Errorf("log_level must be debug, info, warning or error, got %q", c.LogLevel)
 	}
 	return nil
 }

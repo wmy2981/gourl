@@ -22,9 +22,29 @@ func TestParseLevel(t *testing.T) {
 		"error":   slog.LevelError,
 	}
 	for in, want := range cases {
-		if got := parseLevel(in); got != want {
-			t.Errorf("parseLevel(%q) = %v, want %v", in, got, want)
+		if got := ParseLevel(in); got != want {
+			t.Errorf("ParseLevel(%q) = %v, want %v", in, got, want)
 		}
+	}
+}
+
+// TestSetLevelChangesRuntimeLevel verifies SetLevel takes effect immediately
+// (the settings page swaps log_level without a restart).
+func TestSetLevelChangesRuntimeLevel(t *testing.T) {
+	Init(slog.LevelError)
+	t.Cleanup(Close)
+
+	ch, cancel := Subscribe(8)
+	defer cancel()
+	// Below the current level: nothing reaches subscribers.
+	slog.Debug("hidden")
+	slog.Info("also hidden")
+
+	SetLevel(slog.LevelDebug)
+	slog.Debug("visible now")
+	rec := <-ch
+	if rec.Message != "visible now" {
+		t.Fatalf("expected debug record after SetLevel, got %+v", rec)
 	}
 }
 
@@ -33,8 +53,7 @@ func TestParseLevel(t *testing.T) {
 func TestInitMirrorsToLogDir(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("LOG_DIR", dir)
-	t.Setenv("LOG_LEVEL", "debug")
-	Init()
+	Init(slog.LevelDebug)
 	t.Cleanup(Close)
 
 	slog.Info("hello log file", "k", "v")

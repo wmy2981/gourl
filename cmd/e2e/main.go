@@ -27,8 +27,9 @@ const (
 )
 
 func main() {
-	logx.Init()
-	_ = os.Setenv("LOG_LEVEL", "warning") // keep e2e output readable
+	// Keep e2e output readable: the temp config below pins log_level to
+	// warning, the same quiet level the old LOG_LEVEL env provided.
+	logx.Init(slog.LevelInfo)
 
 	port := os.Getenv("E2E_PORT")
 	if port == "" {
@@ -46,6 +47,10 @@ func main() {
 		}
 		cfgPath = tmp.Name()
 		tmp.Close()
+		if err := os.WriteFile(cfgPath, []byte("log_level: warning\n"), 0o644); err != nil {
+			slog.Error("config seed failed", "path", cfgPath, "error", err)
+			os.Exit(1)
+		}
 		defer os.Remove(cfgPath)
 	}
 	cfg, err := config.NewManager(cfgPath)
@@ -53,6 +58,7 @@ func main() {
 		slog.Error("config load failed", "path", cfgPath, "error", err)
 		os.Exit(1)
 	}
+	logx.SetLevel(logx.ParseLevel(cfg.Get().LogLevel))
 	st, err := store.Open(":memory:")
 	if err != nil {
 		slog.Error("store open failed", "error", err)

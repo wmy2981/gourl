@@ -24,7 +24,9 @@ func envOr(key, def string) string {
 }
 
 func main() {
-	logx.Init()
+	// Default level until the config loads; the configured log_level is
+	// applied right after (and hot-applied on settings saves).
+	logx.Init(slog.LevelInfo)
 
 	// Log the build identity first: dev images embed "VERSION (sha7)", so
 	// even a startup failure (bad config, unwritable data dir, …) can be
@@ -37,6 +39,7 @@ func main() {
 		slog.Error("config load failed", "path", cfgPath, "error", err)
 		os.Exit(1)
 	}
+	logx.SetLevel(logx.ParseLevel(cfg.Get().LogLevel))
 
 	dbPath := envOr("DB_PATH", "data/gourl.db")
 	if dir := filepath.Dir(dbPath); dir != "" && dir != "." {
@@ -70,7 +73,7 @@ func main() {
 		"config", cfgPath,
 		"db", dbPath,
 		"redis", redisAddr,
-		"auth_enabled", os.Getenv("ADMIN_PASSWORD") != "",
+		"auth_enabled", cfg.Get().PasswordHash != "",
 	)
 	if err := http.ListenAndServe(addr, api.NewServer(st, cfg, ctr).Handler()); err != nil {
 		slog.Error("http server failed", "error", err)

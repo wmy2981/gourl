@@ -38,8 +38,7 @@ func TestLogHistoryNotConfigured(t *testing.T) {
 func TestLogHistoryReadsFile(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("LOG_DIR", dir)
-	t.Setenv("LOG_LEVEL", "debug")
-	logx.Init()
+	logx.Init(slog.LevelDebug)
 	t.Cleanup(logx.Close)
 
 	slog.Info("history marker", "code", "abc")

@@ -10,21 +10,23 @@
 
 ## 功能
 
-- **短链接生成** — 自定义短码或自动生成，支持多级路径（`link1/link2`），位数可配置
-- **链接管理** — 现代化管理后台（苹果风玻璃拟态、响应式、深色模式）
-- **延迟计数** — 点击先入 Redis，每 30s 批量归并 SQLite，抗高并发尖峰
+- **短链接生成** — 自定义短码或自动生成，支持多级路径（`link1/link2`）与简体中文，位数可配置
+- **链接管理** — 现代化管理后台（苹果风玻璃拟态、响应式、深色模式，移动端支持右缘左滑手势打开侧栏）
+- **延迟计数** — 点击先入 Redis，每 30s 批量归并 SQLite，抗高并发尖峰；短码查询走内存 TTL 缓存
 - **历史保留** — 短链删除后，点击总数与趋势图统计依然保留
 - **自动获取标题** — 创建链接后后台异步抓取 title/description（不阻塞请求），带 SSRF 全面防护
-- **UA 屏蔽** — User-Agent 规则（设置页逗号分隔），命中返回 403 且不计点击
+- **UA / IP 屏蔽** — User-Agent 规则与 IP 规则（精确 IP、CIDR、`192.168.*.*` 通配），命中返回 403 并指明命中规则，不计点击；IP 拦截覆盖所有路由
 - **批量操作** — 批量创建（每行一条严格语法）、跨页多选批量删除、一键清空过期、过期状态筛选与红色标识
 - **实时日志页** — SSE 实时流 + 级别/关键字/时间筛选 + `.log` 导出；历史来自 LOG_DIR 文件
-- **中文短码** — 自定义短码支持简体中文
-- **短链有效期** — 每条链接可设 `expires_at`（0 为永不过期），过期展示优雅双语提示页
+- **短链有效期** — 每条链接可设 `expires_at`（0 为永不过期），过期短码与不存在一样返回 404
 - **REST API** — 完整 JSON API，Bearer Token 认证，便于二次开发
-- **自定义站点** — 服务名称、标题、关键词、header/footer、上传图标（SVG/PNG，一键恢复默认）
+- **Setup 初始化流程** — 首次启动无密码时，第一个访问者在 `/admin/setup` 设置密码；bcrypt 哈希保存在 `config.yaml`，不再依赖环境变量
+- **限流防护** — 登录按 IP 锁定（默认错 10 次锁 300 秒）与短链访问每秒上限（默认 100 次/秒），均可配置
+- **自定义站点** — 服务名称、标题、关键词、描述、上传图标（SVG/PNG，一键恢复默认）
 - **多基址** — 附加基址并排展示，链接行可选择展示或复制的基址
 - **中英文双语** — 自动检测浏览器语言，页内可手动切换
-- **二维码、CSV/JSON 导出、批量导入** — 粘贴 JSON 或加载 `.csv`/`.json` 文件；导入遇重复 code 可选报错/跳过/更新
+- **二维码、CSV/JSON 导出、批量导入** — 粘贴 JSON 或加载 `.csv`/`.json` 文件；导入遇重复 code 可选报错/跳过/更新，返回各类数量与短码明细；解析宽松（字段名不区分大小写、多种日期格式、数字/字符串互转）；`click_count` 一律不导入
+- **额外保留字** — 除内置系统前缀外可自定义，支持中文与多级保留字（多级条目保留整棵子树）
 - **API 文档** — `/docs/` 交互式 Swagger UI
 - **结构化日志** — slog 4 级（debug/info/warning/error），文本或 JSON 输出，可镜像到数据卷轮转文件
 
@@ -42,15 +44,16 @@ Redis · React 19 + Vite + Tailwind CSS 4 + shadcn 风格组件
 #    将 config.yaml.example 复制为 config/config.yaml 并按需调整。
 
 # 2. 在 docker-compose.yml 同级创建 .env：
-echo 'ADMIN_PASSWORD=change-me' > .env
-echo "SESSION_SECRET=$(openssl rand -hex 32)" >> .env
+echo "SESSION_SECRET=$(openssl rand -hex 32)" > .env
 
 # 3. 启动
 docker compose up -d
 ```
 
-访问 http://localhost:8080 会自动跳转管理后台。数据（SQLite、上传图标、
-内置 Redis 的 rdb、轮转日志）持久化在 `./data`，配置在 `./config`（设置页会写回其中）。
+访问 http://localhost:8080 —— 未配置密码时会进入一次性 Setup 页面，
+由第一个访问者设置管理员密码（bcrypt 哈希保存在 `config.yaml`），之后进入管理后台。
+数据（SQLite、上传图标、内置 Redis 的 rdb、轮转日志）持久化在 `./data`，
+配置在 `./config`（设置页会写回其中）。
 
 首次部署无需额外操作：入口脚本仅以 root 运行片刻，把新建的 `./data` 与
 `./config` 挂载目录 chown 给非特权 gourl 用户，随后用 su-exec 降权运行
@@ -67,7 +70,7 @@ Redis 与 gourl。容器内的 Redis "vm.overcommit_memory" 警告无害可忽�
 
 | 环境变量 | 默认值 | 用途 |
 |---|---|---|
-| `ADMIN_PASSWORD` | —（认证关闭） | 管理后台密码；留空 = 内网信任模式 |
+| `ADMIN_PASSWORD` | — | 旧版环境变量密码。若已设置且 `config.yaml` 无 `password_hash`，启动时一次性迁移（哈希写回配置文件）后即被忽略。优先使用 Setup 流程。 |
 | `SESSION_SECRET` | 不安全默认值 | 会话 Cookie 签名 —— **生产环境务必设置** |
 | `REDIS_ADDR` | `localhost:6379` | 点击计数缓冲 |
 | `DB_PATH` | `data/gourl.db` | SQLite 文件 |
@@ -79,8 +82,9 @@ Redis 与 gourl。容器内的 Redis "vm.overcommit_memory" 警告无害可忽�
 | `LOG_FORMAT` | `text` | `json` 结构化输出（日志走 stderr） |
 | `LOG_DIR` | — | 可选：日志镜像写入该目录的轮转文件（如挂载卷 `/app/data/log`；10 MB × 5 份 × 30 天，gzip） |
 
-业务配置在 `config.yaml`（见 `config.yaml.example`）：服务名称/标题/关键词/描述/
-header/footer、随机短码位数、主 + 附加基址、额外保留字、UA 屏蔽规则、自定义图标。
+业务配置在 `config.yaml`（见 `config.yaml.example`）：服务名称/标题/关键词/描述、
+随机短码位数、主 + 附加基址、额外保留字、UA 屏蔽规则、IP 屏蔽规则、登录限流、
+短链访问限流、管理员 `password_hash`（由 Setup 流程写入）、自定义图标。
 
 ## API 文档
 

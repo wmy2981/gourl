@@ -496,5 +496,9 @@ components:
           type: integer
           minimum: 0
           description: Shared budget for short-link redirects across all codes — a token bucket refilling N tokens per second (burst N). Over-limit requests get a bare 429 and are not counted. 0 disables. Default 100.
+        log_level:
+          type: string
+          enum: [debug, info, warning, error]
+          description: Server log verbosity, hot-applied on save. Default info.
 security:
   - bearerAuth: []

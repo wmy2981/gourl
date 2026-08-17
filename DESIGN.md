@@ -53,17 +53,17 @@ gourl/
 ├── go.mod / go.sum
 ├── cmd/gourl/main.go           # 入口：加载配置、启动 HTTP 服务
 ├── internal/
-│   ├── config/                 # YAML 加载 + 校验 + 热更新（原子写回，文件锁）
-│   ├── store/                  # SQLite：schema、links、daily_clicks、ua_blocks、api_tokens
+│   ├── config/                 # YAML 加载 + 校验 + 热更新（原子写回）
+│   ├── store/                  # SQLite：schema、links、daily_clicks、ua_blocks、api_tokens + GetLink 内存 TTL 缓存
 │   ├── counter/                # Redis 计数 + 30s 归并任务
 │   ├── fetcher/                # 标题/描述抓取 + SSRF 防护（后台异步队列使用）
-│   ├── shortcode/              # 随机短码生成（base62）+ 保留字校验（自定义码支持中文）
-│   ├── api/                    # REST 路由、handler、认证、SSE 日志流
+│   ├── shortcode/              # 随机短码生成（base62）+ 保留字校验（自定义码支持中文与多级）
+│   ├── api/                    # REST 路由、handler、认证（bcrypt + setup）、IP ban/登录限流/访问限流中间件、SSE 日志流
 │   ├── logx/                   # slog 4 级日志：订阅广播（日志页 SSE）+ LOG_DIR 文件历史
 │   ├── webui/                  # go:embed：前端 dist、swagger-ui、openapi.yaml、默认图标
 │   └── version/                # 构建时注入版本号
 ├── frontend/                   # Vite React SPA（管理后台）
-│   ├── src/                    # pages: login / dashboard / links / logs / settings
+│   ├── src/                    # pages: login / setup / dashboard / links / logs / settings
 │   └── e2e/                    # Playwright 测试
 ├── assets/                     # 内置默认图标（SVG，单一事实来源）
 ├── .github/
@@ -71,8 +71,8 @@ gourl/
 │   ├── workflows/release.yml   # push main/dev → 版本校验 + tag + Release
 │   ├── workflows/build.yml     # dev 直推 / main 等 Release 成功后构建推 GHCR
 │   └── scripts/release_check.py# 版本前进性校验 + 自动生成 Release notes
-├── Dockerfile                  # 多阶段：node 构建前端 → go build → alpine runtime
-└── docker-compose.yml          # app + redis；挂载 config.yaml、data 卷（SQLite）、assets 卷（图标）
+├── Dockerfile                  # 多阶段：node 构建前端 → go build → alpine runtime（内嵌 Redis）
+└── docker-compose.yml          # 单容器 app（内嵌 Redis）；目录挂载 ./config 与 ./data
 ```
 
 前端构建产物由 `scripts/build-frontend.ps1` 复制到 `internal/webui/dist` 并以 `embed` 打进单个二进制，单镜像部署。
@@ -83,41 +83,47 @@ gourl/
 
 ```yaml
 site:
-  name: gourl                       # 服务名称（health/页脚/后台标题/过期页）
-  title: gourl - Short Links        # 站点标题（meta）
+  name: gourl                       # 服务名称（health/页脚/后台标题/登录页品牌行）
+  title: gourl - Short Links        # 站点标题（meta 与后台 tab）
   keywords: short link, url shortener
   description: Lightweight self-hosted URL shortener
-  header: ""                        # 过期页 header HTML（可空）
-  footer: ""                        # 过期页 footer HTML（可空）
 short_code_length: 6                # 随机短码位数（新建时生效）
 base_url: ""                        # 主基址，空则按 Host 推断（如 https://s.example.com）
 extra_base_urls: []                 # 副基址列表，如 [https://s2.example.com]
-reserved_codes: []                  # 追加保留字（内置列表之外）
+reserved_codes: []                  # 追加保留字（内置列表之外；支持中文与多级，多级条目按前缀保留整棵子树）
+ua_blocks: []                       # UA 屏蔽规则（大小写不敏感子串；命中 403 提示页指明规则，不计数）
+ip_blocks: []                       # IP 屏蔽规则（精确 IP / CIDR / 点分通配 192.168.*.*；拦所有路由含 health）
+login_rate_max_attempts: 10         # 登录按 IP 限流：错误次数（0=禁用）
+login_rate_lock_seconds: 300        # 锁定秒数（0=禁用）
+link_rate_per_second: 100           # 短链访问共享预算（token bucket，0=禁用；超限裸 429 不计数）
+password_hash: ""                   # 管理员密码 bcrypt 哈希（setup 流程写入，不暴露给前端）
 icon: ""                            # 自定义图标文件名（assets/ 下，空=内置默认）
 ```
 
 **环境变量（运行时与机密，docker-compose 注入）**
 
-`PORT`（默认 8080）、`DB_PATH`（SQLite 文件路径）、`REDIS_ADDR`、`ADMIN_PASSWORD`（空=禁用登录，内网信任模式）、`SESSION_SECRET`、`CONFIG_PATH`（默认 config.yaml）、`TZ`（容器时区，决定每日统计切日边界、expires_at 解释与时间展示；docker-compose 默认 `Asia/Shanghai`）、`LOG_LEVEL`（debug/info/warning/error，默认 info）、`LOG_FORMAT`（json 或 text，默认 text）、`LOG_DIR`（可选目录，镜像到 lumberjack 轮转文件，同时作为日志页的历史来源）。
+`PORT`（默认 8080）、`DB_PATH`（SQLite 文件路径）、`REDIS_ADDR`、`ADMIN_PASSWORD`（旧版密码来源：config 无 `password_hash` 且设置了该变量时，启动时一次性 bcrypt 哈希写回 config.yaml 后即被忽略）、`SESSION_SECRET`、`CONFIG_PATH`（默认 config.yaml）、`TZ`（容器时区，决定每日统计切日边界、expires_at 解释与时间展示；docker-compose 默认 `Asia/Shanghai`）、`LOG_LEVEL`（debug/info/warning/error，默认 info）、`LOG_FORMAT`（json 或 text，默认 text）、`LOG_DIR`（可选目录，镜像到 lumberjack 轮转文件，同时作为日志页的历史来源）。
 
 ### 3.3 数据流
 
 ```
 访客 GET /{code...}（多级 path 整体匹配短码）
+  → 最外层 IP 屏蔽（ip_blocks 命中 → 403 提示页指明规则，拦所有路由含 health）
   → 保留前缀 /api /admin /expired /health /assets 等优先于短链路由
-  → UA 屏蔽检查（命中 → 403，不计数）
-  → 链接存在/过期检查（不存在 → 404 页；过期 → 渲染过期页）
+  → 访问限流（link_rate_per_second 共享 token bucket，超限 → 裸 429，不重定向不计数）
+  → UA 屏蔽检查（命中 → 403 提示页指明关键词，不计数）
+  → 链接存在/过期检查（不存在 → 404；过期 → 与不存在相同 404；查询走内存 TTL 缓存）
   → Redis INCRBY counter:{code}、counter:{code}:{YYYY-MM-DD}
   → 302 → 目标 URL
 
 归并任务（每 30s）
   → 对每个活跃 key GETDEL 取走计数值
-  → SQLite 事务内 upsert links.click_count / daily_clicks
+  → SQLite 事务内 upsert links.click_count / daily_clicks（并失效对应短码缓存）
   → 写库失败则将数值 INCRBY 回补 Redis（下轮重试）
 
 配置热更新
-  → 后台配置页保存 → PUT /api/v1/config 校验 → 原子写回 config.yaml（文件锁）
-  → 内存配置对象热替换（站点信息/图标/保留字/短码长度即刻生效，无需重启）
+  → 后台配置页保存 → PUT /api/v1/config 校验 → 原子写回 config.yaml（temp + rename）
+  → 内存配置对象热替换（站点信息/图标/保留字/短码长度/限流阈值即刻生效，无需重启）
 ```
 
 ## 4. 数据模型（SQLite，仅短链接及相关记录）
@@ -129,7 +135,7 @@ icon: ""                            # 自定义图标文件名（assets/ 下，�
 | `ua_blocks` | `id` INTEGER PK、`pattern` TEXT UNIQUE、`created_at`；匹配规则：大小写不敏感子串匹配 |
 | `api_tokens` | `id` INTEGER PK、`token` TEXT UNIQUE（明文存储，满足"查看 Token"；备注：后续可换 sha256 哈希 + 仅创建时展示一次）、`note` TEXT、`created_at` |
 
-管理密码不落库。建表用启动时自动迁移（embed schema.sql + schema_version 表）。
+管理员密码以 bcrypt 哈希保存在 config.yaml（`password_hash`），经 setup 流程或旧 env 一次性迁移写入，不落库、不暴露给前端。建表用启动时自动迁移（embed schema.sql + schema_version 表）。
 
 ## 5. Redis 数据结构
 
@@ -145,12 +151,14 @@ icon: ""                            # 自定义图标文件名（assets/ 下，�
 | 方法 | 路径 | 说明 |
 |---|---|---|
 | GET | `/api/v1/health` | **公开**：服务名称、版本、启动时间、uptime、redis/sqlite 状态；依赖异常返回 503 |
-| POST | `/api/v1/auth/login` | 密码登录，签发会话 |
+| POST | `/api/v1/auth/login` | 密码登录，签发会话；按 IP 限流（错误 N 次锁 M 秒，超限 429 + `rate_limited`） |
+| POST | `/api/v1/auth/setup` | **公开**：setup 模式（config 无 password_hash）下设置初始密码并直接登录；弱密码 400，已配置 409 |
+| GET | `/api/v1/auth/status` | **公开**：`{configured}` 是否已设置密码（前端据此路由到 setup 页） |
 | POST | `/api/v1/auth/logout` | 登出 |
-| GET | `/api/v1/links` | 列表（分页 + 关键字搜索 code/url/title + 过期状态筛选 `expires=active|expired` + 排序） |
+| GET | `/api/v1/links` | 列表（分页 + 关键字搜索 code/url/title/description + 过期状态筛选 `expires=active|expired` + 排序） |
 | POST | `/api/v1/links` | 创建（`url` 必填；`code` 可选，可多级，命中保留字/重复 → 400/409；`expires_at` 可选，0=永不；title/description 由后台异步抓取，响应立即返回；响应含 `urls` 数组 = 主+副 baseurl 生成的完整短链列表） |
 | DELETE | `/api/v1/links` | 批量删除（body `{codes: [...]}`，上限 500；不存在的 code 跳过） |
-| POST | `/api/v1/links/batch` | 批量导入（对象 `{conflict, items}`，上限 500 条/次，逐条校验返回逐条结果；`conflict` 为 error/skip/update——code 已存在时报错/跳过/更新；兼容旧裸数组 body；item 支持 title/description/日期字符串 expires_at/click_count/created_at 覆盖） |
+| POST | `/api/v1/links/batch` | 批量导入（对象 `{conflict, items}`，上限 500 条/次；`conflict` 为 error/skip/update；兼容旧裸数组 body。解析宽松：字段名大小写不敏感、未知字段忽略、数字/字符串互转、expires_at 支持 unix 秒/yyyy-MM-dd/RFC3339 与字符串形式、null 取缺省，仅缺 url 报错；`click_count` 一律舍弃。响应含 `succeeded/skipped/updated/failed` 计数与 `failed_codes/skipped_codes/updated_codes` 明细，`created/failed` 保留兼容） |
 | GET | `/api/v1/links/expired` | 过期链接数量（清空过期前的确认依据） |
 | DELETE | `/api/v1/links/expired` | 清空所有过期链接 |
 | GET | `/api/v1/links/{code}` | 详情（响应含完整短链列表） |
@@ -168,9 +176,9 @@ icon: ""                            # 自定义图标文件名（assets/ 下，�
 | POST | `/api/v1/icon` | 上传图标（SVG/PNG ≤1MB）；DELETE `/api/v1/icon` 恢复默认 |
 | GET | `/api/v1/dashboard` | 仪表盘：链接总数、总点击数、今日点击、最近 14 天每日总点击 |
 
-公开端点：`GET /{code...}`（302 跳转；过期的渲染过期页，不存在的渲染 404 页）、`GET /assets/{file}`（自定义图标静态服务）、`GET /admin` 与 `/docs`（管理后台与 Swagger UI）。保留前缀（api/admin/expired/health/assets/favicon/export/docs + 自定义）优先于短链匹配，命中保留前缀渲染 404。
+公开端点：`GET /{code...}`（302 跳转；过期与不存在统一渲染 404 页）、`GET /assets/{file}`（自定义图标静态服务）、`GET /admin` 与 `/docs`（管理后台与 Swagger UI）。保留前缀（api/admin/expired/health/assets/favicon/export/docs + 自定义）优先于短链匹配，命中保留前缀渲染 404。
 
-错误统一格式：`{ "error": { "code": "...", "message": "..." } }`，message 按 `Accept-Language` 双语。
+错误统一格式：`{ "error": { "code": "...", "message": "..." } }`，code 稳定、message 为英文；双语展示由前端按 code 映射。页面级拦截（UA/IP）返回 403 双语 HTML 提示页并指明命中的规则。
 
 ## 7. 前端页面（管理后台 SPA，响应式）
 

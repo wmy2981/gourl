@@ -48,5 +48,9 @@ login_rate_lock_seconds: 300
 # get a bare 429 and are not counted. 0 disables.
 link_rate_per_second: 100
 
+# Server log verbosity (debug/info/warning/error). Managed from the settings
+# page, applied immediately on save.
+log_level: info
+
 # Custom icon file name inside the assets data directory (empty = built-in default).
 icon: ""

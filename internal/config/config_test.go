@@ -71,6 +71,27 @@ func TestValidateRejectsBadConfigs(t *testing.T) {
 	}
 }
 
+func TestValidateLogLevel(t *testing.T) {
+	for _, good := range []string{"", "debug", "info", "warning", "warn", "error"} {
+		c := Default()
+		c.LogLevel = good
+		if err := c.Validate(); err != nil {
+			t.Errorf("Validate(log_level %q) = %v", good, err)
+		}
+	}
+	// Empty falls back to info.
+	c := Default()
+	c.LogLevel = ""
+	if err := c.Validate(); err != nil || c.LogLevel != "info" {
+		t.Errorf("empty log_level should fall back to info: %v, %q", err, c.LogLevel)
+	}
+	c = Default()
+	c.LogLevel = "verbose"
+	if err := c.Validate(); err == nil {
+		t.Error("Validate(log_level verbose) should fail")
+	}
+}
+
 func TestValidateIPBlocks(t *testing.T) {
 	for _, bad := range []string{"", "999.1.2.3", "192.168.1", "not-an-ip", "192.168.*.x", "a.b.c.d"} {
 		c := Default()

@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/wmy2981/gourl/internal/config"
+	"github.com/wmy2981/gourl/internal/logx"
 )
 
 // getConfig handles GET /api/v1/config.
@@ -30,6 +31,8 @@ func (s *Server) updateConfig(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_config", err.Error())
 		return
 	}
+	// The log level is part of the business config now: apply it immediately.
+	logx.SetLevel(logx.ParseLevel(cfg.LogLevel))
 	slog.Info("config updated", "actor", actorFrom(r))
 	writeJSON(w, http.StatusOK, s.cfg.Get())
 }

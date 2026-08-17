@@ -1,8 +1,9 @@
 // Package logx configures the process-wide structured logger (log/slog)
 // with four levels: debug, info, warning, error.
 //
-// Configuration (environment variables):
-//   - LOG_LEVEL: debug | info | warning | error (default: info)
+// Configuration:
+//   - Level: business config field `log_level` (settings page), changeable at
+//     runtime via SetLevel; the LOG_LEVEL env var is gone.
 //   - LOG_FORMAT: json for structured JSON output, anything else = text
 //   - LOG_DIR: optional directory for a rotating file mirror of the logs
 //     (e.g. a directory on the mounted volume so logs persist across
@@ -60,10 +61,15 @@ func Close() {
 	}
 }
 
-// Init configures slog as the default logger. Call once at startup.
-func Init() {
-	level := parseLevel(os.Getenv("LOG_LEVEL"))
-	opts := &slog.HandlerOptions{Level: level}
+// levelVar carries the process-wide level so SetLevel can raise or lower it
+// at runtime (the settings page writes log_level back to config.yaml).
+var levelVar = new(slog.LevelVar)
+
+// Init configures slog as the default logger with the given initial level.
+// Call once at startup; the level can change later via SetLevel.
+func Init(level slog.Level) {
+	levelVar.Set(level)
+	opts := &slog.HandlerOptions{Level: levelVar}
 
 	// Mirror to a rotating file on the mounted volume when LOG_DIR is set;
 	// stderr stays in the chain so docker logs still sees everything.
@@ -93,7 +99,12 @@ func Init() {
 	slog.Debug("logging initialized", "level", level.String())
 }
 
-func parseLevel(s string) slog.Level {
+// SetLevel updates the process-wide log level at runtime.
+func SetLevel(level slog.Level) { levelVar.Set(level) }
+
+// ParseLevel maps the config log_level string to a slog level. Anything
+// unrecognized falls back to info (config validation rejects it first).
+func ParseLevel(s string) slog.Level {
 	switch strings.ToLower(strings.TrimSpace(s)) {
 	case "debug":
 		return slog.LevelDebug

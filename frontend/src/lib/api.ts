@@ -66,6 +66,7 @@ export interface AppConfig {
   login_rate_max_attempts: number
   login_rate_lock_seconds: number
   link_rate_per_second: number
+  log_level: string
   icon: string
 }
 

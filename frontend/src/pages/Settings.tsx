@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { KeyRound, Plus, Trash2, Upload } from 'lucide-react'
 import { api, ApiError, type AppConfig } from '../lib/api'
 import { copyText } from '../lib/clipboard'
-import { Button, Card, Input, Label, Textarea, useToast } from '../components/ui'
+import { Button, Card, Input, Label, Select, Textarea, useToast } from '../components/ui'
 
 export default function Settings() {
   const { t } = useTranslation()
@@ -57,6 +57,7 @@ export default function Settings() {
       login_rate_max_attempts: form.login_rate_max_attempts,
       login_rate_lock_seconds: form.login_rate_lock_seconds,
       link_rate_per_second: form.link_rate_per_second,
+      log_level: form.log_level,
       icon: form.icon,
       extra_base_urls: extraUrlsText
         .split('\n')
@@ -185,6 +186,21 @@ export default function Settings() {
                 onChange={(e) => set('link_rate_per_second', Number(e.target.value))}
               />
               <p className="mt-1 text-xs text-muted">{t('settings.linkRateHint')}</p>
+            </div>
+            <div>
+              <Label>{t('settings.logLevel')}</Label>
+              <Select
+                value={form.log_level}
+                onChange={(v) => set('log_level', v)}
+                ariaLabel={t('settings.logLevel')}
+                options={[
+                  { value: 'debug', label: t('settings.logLevelDebug') },
+                  { value: 'info', label: t('settings.logLevelInfo') },
+                  { value: 'warning', label: t('settings.logLevelWarning') },
+                  { value: 'error', label: t('settings.logLevelError') },
+                ]}
+              />
+              <p className="mt-1 text-xs text-muted">{t('settings.logLevelHint')}</p>
             </div>
           </div>
         </Card>
