@@ -477,7 +477,7 @@ components:
       type: object
       required: [url]
       properties:
-        url: { type: string, description: "Absolute http(s) URL" }
+        url: { type: string, description: "Absolute URL with any scheme (http(s), tcp://, openapp://…); non-http(s) targets never get a title fetch" }
         code: { type: string, description: "Optional custom code, may contain / (≤5 levels, ASCII or Chinese); empty = random" }
         title: { type: string }
         description: { type: string, maxLength: 500, description: "At most 500 characters (runes)" }

@@ -128,7 +128,7 @@
     "batchFailures": "失败项（可修改后重试）",
     "batchRetry": "重试失败项",
     "note": "备注",
-    "invalidUrl": "目标必须是完整的 http(s) URL",
+    "invalidUrl": "目标必须是带协议前缀的完整 URL（如 https://、tcp://、openapp://）",
     "invalidDate": "日期无效，请使用 yyyy/MM/dd 格式",
     "invalidCode": "短码格式无效",
     "descriptionTooLong": "描述最多 500 个字符",

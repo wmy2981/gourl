@@ -162,7 +162,7 @@ func TestCreateRejectsInvalidInputs(t *testing.T) {
 	}{
 		{"missing url", map[string]any{"code": "abc"}, "invalid_request"},
 		{"relative url", map[string]any{"url": "example.com/x", "code": "abc"}, "invalid_request"},
-		{"ftp url", map[string]any{"url": "ftp://example.com/x", "code": "abc"}, "invalid_request"},
+		{"scheme-less", map[string]any{"url": ":x", "code": "abc"}, "invalid_request"},
 		{"negative expires", map[string]any{"url": "https://e.com/x", "code": "abc", "expires_at": -1}, "invalid_request"},
 		{"reserved code", map[string]any{"url": "https://e.com/x", "code": "api"}, "reserved_code"},
 		{"reserved multi-level", map[string]any{"url": "https://e.com/x", "code": "admin/dashboard"}, "reserved_code"},

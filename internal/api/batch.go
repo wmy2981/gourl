@@ -370,8 +370,8 @@ type codeError struct {
 // resolveCode validates the item and returns the code to use (custom or
 // generated). It does not check DB uniqueness, which is handled per insert.
 func (s *Server) resolveCode(item createLinkRequest, cfg *config.Config, r *http.Request) (string, *codeError) {
-	if !isAbsoluteHTTPURL(item.URL) {
-		return "", &codeError{"invalid_request", "url must be an absolute http(s) URL"}
+	if !isAbsoluteURL(item.URL) {
+		return "", &codeError{"invalid_request", "url must be an absolute URL with a scheme"}
 	}
 	if selfLinkTarget(cfg, r, item.URL) {
 		return "", &codeError{"self_link_target", "target URL points at this instance's own short links"}

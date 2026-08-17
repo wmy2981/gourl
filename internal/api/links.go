@@ -24,10 +24,18 @@ func timeNow() int64 { return time.Now().Unix() }
 // runes so CJK text gets its full 500 characters, not 500 bytes.
 const maxDescriptionLen = 500
 
-// isAbsoluteHTTPURL rejects anything but http/https absolute URLs.
-func isAbsoluteHTTPURL(s string) bool {
+// isAbsoluteURL accepts any absolute URL with a non-empty scheme: http(s)
+// plus application protocols like tcp:// or openapp://. Only the scheme and
+// something after it are required — mailto:user@… has no host.
+func isAbsoluteURL(s string) bool {
 	u, err := url.Parse(s)
-	return err == nil && u.IsAbs() && (u.Scheme == "http" || u.Scheme == "https") && u.Host != ""
+	if err != nil {
+		return false
+	}
+	if !u.IsAbs() || u.Scheme == "" {
+		return false
+	}
+	return u.Host != "" || u.Opaque != "" || u.Path != ""
 }
 
 // checkDescription validates the description length against maxDescriptionLen.
@@ -188,8 +196,8 @@ func (s *Server) createLink(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_request", "invalid JSON body")
 		return
 	}
-	if !isAbsoluteHTTPURL(req.URL) {
-		writeError(w, http.StatusBadRequest, "invalid_request", "url must be an absolute http(s) URL")
+	if !isAbsoluteURL(req.URL) {
+		writeError(w, http.StatusBadRequest, "invalid_request", "url must be an absolute URL with a scheme")
 		return
 	}
 	if msg, ok := checkDescription(req.Description); !ok {
@@ -300,8 +308,8 @@ func (s *Server) updateLink(w http.ResponseWriter, r *http.Request) {
 	// unless the caller overrides them explicitly in the same request.
 	refetchMeta := false
 	if req.URL != nil {
-		if !isAbsoluteHTTPURL(*req.URL) {
-			writeError(w, http.StatusBadRequest, "invalid_request", "url must be an absolute http(s) URL")
+		if !isAbsoluteURL(*req.URL) {
+			writeError(w, http.StatusBadRequest, "invalid_request", "url must be an absolute URL with a scheme")
 			return
 		}
 		if selfLinkTarget(cfg, r, *req.URL) {

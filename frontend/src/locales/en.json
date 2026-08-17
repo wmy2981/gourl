@@ -128,7 +128,7 @@
     "batchFailures": "Failed items (editable, then retry)",
     "batchRetry": "Retry failed",
     "note": "Note",
-    "invalidUrl": "Destination must be an absolute http(s) URL",
+    "invalidUrl": "Destination must be an absolute URL with a scheme (e.g. https://, tcp://, openapp://)",
     "invalidDate": "Invalid date — use yyyy/MM/dd",
     "invalidCode": "Invalid short code",
     "descriptionTooLong": "Description must be at most 500 characters",
