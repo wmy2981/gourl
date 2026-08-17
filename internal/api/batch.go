@@ -7,6 +7,9 @@ import (
 	"log/slog"
 	"net/http"
 	"sort"
+	"strconv"
+	"strings"
+	"time"
 
 	"github.com/wmy2981/gourl/internal/config"
 	"github.com/wmy2981/gourl/internal/shortcode"
@@ -143,25 +146,180 @@ func (s *Server) batchCreate(w http.ResponseWriter, r *http.Request) {
 }
 
 // decodeBatchRequest accepts both the current object form
-// {"conflict": "...", "items": [...]} and the legacy bare-array form.
+// {"conflict": "...", "items": [...]} and the legacy bare-array form. Items
+// are parsed leniently: field names are case-insensitive, unknown fields are
+// ignored, numbers/strings coerce, and only a missing url fails the item.
 func decodeBatchRequest(r *http.Request) (*batchCreateRequest, error) {
-	var raw json.RawMessage
-	if err := json.NewDecoder(r.Body).Decode(&raw); err != nil {
+	dec := json.NewDecoder(r.Body)
+	dec.UseNumber()
+	var raw any
+	if err := dec.Decode(&raw); err != nil {
 		return nil, fmt.Errorf("invalid JSON body")
 	}
-	// Legacy form: a bare array of items.
-	if len(raw) > 0 && raw[0] == '[' {
-		var items []createLinkRequest
-		if err := json.Unmarshal(raw, &items); err != nil {
-			return nil, fmt.Errorf("invalid JSON body")
+	switch v := raw.(type) {
+	case []any: // legacy bare-array form
+		items, err := lenientItems(v)
+		if err != nil {
+			return nil, err
 		}
 		return &batchCreateRequest{Items: items}, nil
-	}
-	var req batchCreateRequest
-	if err := json.Unmarshal(raw, &req); err != nil {
+	case map[string]any:
+		var conflict string
+		var arr []any
+		for k, val := range v {
+			switch strings.ToLower(k) {
+			case "conflict":
+				conflict, _ = asString(val)
+			case "items":
+				var ok bool
+				arr, ok = val.([]any)
+				if !ok {
+					return nil, fmt.Errorf("invalid JSON body: items must be an array")
+				}
+			}
+		}
+		if arr == nil {
+			return nil, fmt.Errorf("invalid JSON body: missing items")
+		}
+		items, err := lenientItems(arr)
+		if err != nil {
+			return nil, err
+		}
+		return &batchCreateRequest{Conflict: strings.ToLower(conflict), Items: items}, nil
+	default:
 		return nil, fmt.Errorf("invalid JSON body")
 	}
-	return &req, nil
+}
+
+// lenientItems parses each item through the lenient field mapping.
+func lenientItems(arr []any) ([]createLinkRequest, error) {
+	items := make([]createLinkRequest, 0, len(arr))
+	for i, el := range arr {
+		m, ok := el.(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("item %d: must be an object", i)
+		}
+		item, err := lenientItem(m)
+		if err != nil {
+			return nil, fmt.Errorf("item %d: %w", i, err)
+		}
+		items = append(items, item)
+	}
+	return items, nil
+}
+
+// lenientItem maps a decoded JSON object onto createLinkRequest: keys are
+// matched case-insensitively, unknown keys and nulls are ignored, string and
+// number representations coerce where sensible. Only url is required.
+func lenientItem(m map[string]any) (createLinkRequest, error) {
+	var item createLinkRequest
+	for k, v := range m {
+		switch strings.ToLower(k) {
+		case "url":
+			s, err := asString(v)
+			if err != nil {
+				return item, fmt.Errorf("url must be a string")
+			}
+			item.URL = s
+		case "code":
+			s, err := asString(v)
+			if err != nil {
+				return item, fmt.Errorf("code must be a string")
+			}
+			item.Code = s
+		case "title":
+			s, err := asString(v)
+			if err != nil {
+				return item, fmt.Errorf("title must be a string")
+			}
+			item.Title = s
+		case "description":
+			s, err := asString(v)
+			if err != nil {
+				return item, fmt.Errorf("description must be a string")
+			}
+			item.Description = s
+		case "expires_at":
+			ev, err := asExpiry(v)
+			if err != nil {
+				return item, err
+			}
+			item.ExpiresAt = &ev
+		case "created_at":
+			n, err := asInt64(v)
+			if err != nil {
+				return item, fmt.Errorf("created_at must be a number")
+			}
+			item.CreatedAt = &n
+		case "click_count":
+			// Deliberately dropped: imports must never fabricate click history.
+		}
+	}
+	if item.URL == "" {
+		return item, errors.New("url is required")
+	}
+	return item, nil
+}
+
+// asString coerces JSON scalars to string; null yields "".
+func asString(v any) (string, error) {
+	switch t := v.(type) {
+	case string:
+		return t, nil
+	case json.Number:
+		return t.String(), nil
+	case nil:
+		return "", nil
+	default:
+		return "", fmt.Errorf("must be a string")
+	}
+}
+
+// asInt64 coerces a JSON number (or its string form) to int64; null yields 0.
+func asInt64(v any) (int64, error) {
+	switch t := v.(type) {
+	case json.Number:
+		return t.Int64()
+	case string:
+		n, err := strconv.ParseInt(t, 10, 64)
+		if err != nil {
+			return 0, fmt.Errorf("must be a number")
+		}
+		return n, nil
+	case nil:
+		return 0, nil
+	default:
+		return 0, fmt.Errorf("must be a number")
+	}
+}
+
+// asExpiry accepts a unix-seconds number, a yyyy-mm-dd calendar date (local
+// midnight), an RFC3339 timestamp, or the string form of any of those.
+func asExpiry(v any) (expiryValue, error) {
+	var zero expiryValue
+	switch t := v.(type) {
+	case json.Number:
+		n, err := t.Int64()
+		if err != nil {
+			return zero, fmt.Errorf("expires_at must be a unix timestamp or date string")
+		}
+		return expiryValue(n), nil
+	case string:
+		if n, err := strconv.ParseInt(t, 10, 64); err == nil {
+			return expiryValue(n), nil
+		}
+		if ts, err := time.ParseInLocation("2006-01-02", t, time.Local); err == nil {
+			return expiryValue(ts.Unix()), nil
+		}
+		if ts, err := time.Parse(time.RFC3339, t); err == nil {
+			return expiryValue(ts.Unix()), nil
+		}
+		return zero, fmt.Errorf("expires_at must be a unix timestamp, yyyy-mm-dd or RFC3339")
+	case nil:
+		return zero, nil
+	default:
+		return zero, fmt.Errorf("expires_at must be a unix timestamp or date string")
+	}
 }
 
 // applyConflictUpdate merges an imported item into the existing link.
