@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log/slog"
 )
 
 // Token is an API token record.
@@ -26,6 +27,7 @@ func (s *Store) CreateToken(ctx context.Context, token, note string, now int64) 
 	if err != nil {
 		return 0, err
 	}
+	slog.Debug("store: token created", "id", id)
 	return id, nil
 }
 
@@ -74,7 +76,9 @@ func (s *Store) DeleteToken(ctx context.Context, id int64) error {
 		return err
 	}
 	if n == 0 {
+		slog.Debug("store: delete token failed", "id", id, "error", ErrNotFound)
 		return ErrNotFound
 	}
+	slog.Debug("store: token deleted", "id", id)
 	return nil
 }

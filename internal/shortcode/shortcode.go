@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"unicode/utf8"
 )
 
 // alphabet is base62 (digits, uppercase, lowercase).
@@ -24,7 +25,7 @@ const MaxLength = 64
 var builtinReserved = []string{
 	"api", "admin", "expired", "health", "assets", "favicon",
 	"export", "login", "logout", "config", "icon", "dashboard",
-	"links", "tokens", "ua-blocks", "settings", "static",
+	"links", "tokens", "ua-blocks", "settings", "static", "docs",
 }
 
 var errNotEnoughEntropy = errors.New("crypto/rand failure")
@@ -44,8 +45,13 @@ func Random(n int) (string, error) {
 	return string(buf), nil
 }
 
-// IsReserved reports whether the first segment of code matches the built-in
-// reserved list or any extra reserved prefix, case-insensitively.
+// IsReserved reports whether code is shadowed by the built-in reserved list
+// or any extra reserved entry. Built-ins match the first segment
+// case-insensitively (a multi-level code like "api/foo" is rejected because
+// the api route would shadow it). Extra entries behave like the codes they
+// protect: single-segment entries match the first segment, while
+// multi-segment entries match the full code by prefix, so "foo/bar" reserves
+// "foo/bar" and every code below it.
 func IsReserved(code string, extra []string) bool {
 	seg := code
 	if i := strings.IndexByte(code, '/'); i >= 0 {
@@ -56,22 +62,30 @@ func IsReserved(code string, extra []string) bool {
 			return true
 		}
 	}
+	lowerCode := strings.ToLower(code)
 	for _, r := range extra {
-		if strings.EqualFold(seg, r) {
+		if strings.Contains(r, "/") {
+			lower := strings.ToLower(r)
+			if lowerCode == lower || strings.HasPrefix(lowerCode, lower+"/") {
+				return true
+			}
+		} else if strings.EqualFold(seg, r) {
 			return true
 		}
 	}
 	return false
 }
 
-// Validate checks a custom code: non-empty, url-safe characters, at most
-// MaxSegments levels, each segment non-empty, total length <= MaxLength.
+// Validate checks a custom code: non-empty, url-safe characters (ASCII
+// alphanumerics, - _ and CJK unified ideographs — simplified Chinese), at
+// most MaxSegments levels, each segment non-empty, total length <= MaxLength
+// (counted in runes, so a 64-character Chinese code is fine).
 func Validate(code string) error {
 	if code == "" {
 		return errors.New("code must not be empty")
 	}
-	if len(code) > MaxLength {
-		return fmt.Errorf("code too long: %d chars, max %d", len(code), MaxLength)
+	if n := utf8.RuneCountInString(code); n > MaxLength {
+		return fmt.Errorf("code too long: %d chars, max %d", n, MaxLength)
 	}
 	segs := strings.Split(code, "/")
 	if len(segs) > MaxSegments {
@@ -82,7 +96,11 @@ func Validate(code string) error {
 			return errors.New("code segments must not be empty")
 		}
 		for _, r := range s {
-			if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '-' || r == '_') {
+			// CJK unified ideographs cover simplified Chinese; the same range
+			// also admits traditional/Japanese kanji, which is intentional
+			// (there is no Unicode range for simplified-only characters).
+			if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' ||
+				r == '-' || r == '_' || r >= '一' && r <= '鿿') {
 				return fmt.Errorf("invalid character %q in code", r)
 			}
 		}

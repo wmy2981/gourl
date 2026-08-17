@@ -1,7 +1,12 @@
 # gourl business configuration.
 # Copy to config.yaml (ignored by git) and adjust. Runtime settings and
-# secrets (PORT, DB_PATH, REDIS_ADDR, ADMIN_PASSWORD, SESSION_SECRET, TZ...)
-# are provided via environment variables, not here.
+# secrets (PORT, DB_PATH, REDIS_ADDR, SESSION_SECRET, TZ...) are provided via
+# environment variables, not here.
+#
+# The admin password is stored as a bcrypt hash in the `password_hash` field
+# below (written by the /admin/setup flow; never edit it by hand). On first
+# start with no hash and no ADMIN_PASSWORD env var, the server runs in setup
+# mode and the first visitor sets the password.
 site:
   # Service name used in health responses, page footer, admin title and expired pages.
   name: gourl
@@ -11,9 +16,6 @@ site:
   keywords: short link, url shortener
   # meta description.
   description: Lightweight self-hosted URL shortener
-  # Extra HTML injected into the header/footer of the expired page (empty to omit).
-  header: ""
-  footer: ""
 
 # Length of randomly generated short codes (4-32).
 short_code_length: 6
@@ -26,6 +28,29 @@ extra_base_urls: []
 # Extra reserved short-code prefixes in addition to the built-in list
 # (api, admin, expired, health, assets, favicon, export, ...). Case-insensitive.
 reserved_codes: []
+
+# Blocked User-Agent patterns (case-insensitive substring match, 403 + no
+# click counted). Managed from the settings page, persisted here.
+ua_blocks: []
+
+# Banned IP rules: single IP, CIDR network, or IPv4 dotted-quad wildcard
+# (e.g. 192.168.*.*). Matched requests are refused on every route — session,
+# API and health included — with a 403 page.
+ip_blocks: []
+
+# Login rate limiting per client IP: after `login_rate_max_attempts` failed
+# logins the address is locked for `login_rate_lock_seconds`. 0 disables.
+login_rate_max_attempts: 10
+login_rate_lock_seconds: 300
+
+# Shared short-link access budget: at most this many redirects per second
+# across all codes (token bucket, burst = same number). Over-limit requests
+# get a bare 429 and are not counted. 0 disables.
+link_rate_per_second: 100
+
+# Server log verbosity (debug/info/warning/error). Managed from the settings
+# page, applied immediately on save.
+log_level: info
 
 # Custom icon file name inside the assets data directory (empty = built-in default).
 icon: ""

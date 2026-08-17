@@ -57,8 +57,8 @@ func TestValidateRejectsBadConfigs(t *testing.T) {
 		{"base url not absolute", func(c *Config) { c.BaseURL = "s.example.com" }},
 		{"base url wrong scheme", func(c *Config) { c.BaseURL = "ftp://s.example.com" }},
 		{"extra base url invalid", func(c *Config) { c.ExtraBaseURLs = []string{"not-a-url"} }},
-		{"reserved code with slash", func(c *Config) { c.ReservedCodes = []string{"a/b"} }},
 		{"reserved code invalid char", func(c *Config) { c.ReservedCodes = []string{"a b"} }},
+		{"reserved code empty segment", func(c *Config) { c.ReservedCodes = []string{"foo//bar"} }},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -71,6 +71,50 @@ func TestValidateRejectsBadConfigs(t *testing.T) {
 	}
 }
 
+func TestValidateLogLevel(t *testing.T) {
+	for _, good := range []string{"", "debug", "info", "warning", "warn", "error"} {
+		c := Default()
+		c.LogLevel = good
+		if err := c.Validate(); err != nil {
+			t.Errorf("Validate(log_level %q) = %v", good, err)
+		}
+	}
+	// Empty falls back to info.
+	c := Default()
+	c.LogLevel = ""
+	if err := c.Validate(); err != nil || c.LogLevel != "info" {
+		t.Errorf("empty log_level should fall back to info: %v, %q", err, c.LogLevel)
+	}
+	c = Default()
+	c.LogLevel = "verbose"
+	if err := c.Validate(); err == nil {
+		t.Error("Validate(log_level verbose) should fail")
+	}
+}
+
+func TestValidateIPBlocks(t *testing.T) {
+	for _, bad := range []string{"", "999.1.2.3", "192.168.1", "not-an-ip", "192.168.*.x", "a.b.c.d"} {
+		c := Default()
+		c.IPBlocks = []string{bad}
+		if err := c.Validate(); err == nil {
+			t.Errorf("Validate(ip_blocks %q) should fail", bad)
+		}
+	}
+	c := Default()
+	c.IPBlocks = []string{"192.168.1.1", "10.0.0.0/8", "192.168.*.*", "2001:db8::1"}
+	if err := c.Validate(); err != nil {
+		t.Errorf("Validate(valid ip_blocks) = %v", err)
+	}
+}
+
+func TestValidateAcceptsChineseAndMultiSegmentReservedCodes(t *testing.T) {
+	c := Default()
+	c.ReservedCodes = []string{"中文", "帮助/指南", "foo/bar", "short"}
+	if err := c.Validate(); err != nil {
+		t.Fatalf("Validate: %v", err)
+	}
+}
+
 func TestValidateEmptyNameFallsBack(t *testing.T) {
 	c := Default()
 	c.Site.Name = ""
@@ -79,6 +123,18 @@ func TestValidateEmptyNameFallsBack(t *testing.T) {
 	}
 	if c.Site.Name != "gourl" {
 		t.Errorf("name = %q, want gourl", c.Site.Name)
+	}
+}
+
+func TestGetNormalizesNilSlices(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	m, err := NewManager(path) // defaults: no base urls, no reserved codes
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := m.Get()
+	if cfg.ExtraBaseURLs == nil || cfg.ReservedCodes == nil {
+		t.Fatalf("slice fields must be empty arrays, got %#v / %#v", cfg.ExtraBaseURLs, cfg.ReservedCodes)
 	}
 }
 

@@ -5,6 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <title>gourl</title>
+    <script>
+      // Apply the saved/system theme before the first paint — the module
+      // bundle runs too late and lets a light flash through on dark setups.
+      ;(function () {
+        var saved = localStorage.getItem('gourl-theme')
+        var dark =
+          saved === 'dark' ||
+          (!saved && window.matchMedia('(prefers-color-scheme: dark)').matches)
+        if (dark) document.documentElement.classList.add('dark')
+      })()
+    </script>
   </head>
   <body>
     <div id="root"></div>

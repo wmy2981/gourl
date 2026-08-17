@@ -117,12 +117,48 @@ func TestBearerTokenAuthenticates(t *testing.T) {
 	}
 }
 
-func TestTrustedNetworkModeBypassesAuth(t *testing.T) {
+func TestSetupModeRefusesAdminAPI(t *testing.T) {
 	s, _ := newTestServer(t)
-	s.admin = newAdminAuth("", "secret")
-	rec := do(t, s, http.MethodGet, "/api/v1/links", nil)
+	s.admin = newAdminAuth("", "test-secret") // setup mode
+
+	for _, tc := range []struct{ method, path string }{
+		{http.MethodGet, "/api/v1/links"},
+		{http.MethodPost, "/api/v1/links"},
+		{http.MethodGet, "/api/v1/tokens"},
+		{http.MethodGet, "/api/v1/config"},
+		{http.MethodGet, "/api/v1/logs"},
+	} {
+		rec := doWith(t, s, tc.method, tc.path, nil, nil, "")
+		if rec.Code != http.StatusForbidden || decodeError(t, rec) != "setup_required" {
+			t.Errorf("%s %s: status = %d, code = %q, want 403 setup_required", tc.method, tc.path, rec.Code, decodeError(t, rec))
+		}
+	}
+}
+
+func TestSetupModeAllowsBearerToken(t *testing.T) {
+	s, _ := newTestServer(t)
+	s.admin = newAdminAuth("", "test-secret") // setup mode
+	ctx := context.Background()
+	if _, err := s.store.CreateToken(ctx, "setup-token-1", "ci", s.now()); err != nil {
+		t.Fatal(err)
+	}
+	rec := doWith(t, s, http.MethodGet, "/api/v1/links", nil, nil, "setup-token-1")
 	if rec.Code != http.StatusOK {
-		t.Errorf("trusted mode list status = %d, want 200", rec.Code)
+		t.Errorf("setup mode bearer status = %d, want 200", rec.Code)
+	}
+}
+
+func TestEphemeralSecretGeneratedWhenUnset(t *testing.T) {
+	a1 := newAdminAuth("hash-1", "")
+	a2 := newAdminAuth("hash-2", "")
+	if string(a1.secret) != string(a2.secret) {
+		t.Error("ephemeral secret must stay stable within the process")
+	}
+	if len(a1.secret) != 64 { // 32 random bytes, hex-encoded
+		t.Errorf("ephemeral secret length = %d, want 64 hex chars", len(a1.secret))
+	}
+	if string(a1.secret) == "insecure-dev-secret" {
+		t.Error("ephemeral secret must not fall back to the old hardcoded value")
 	}
 }
 

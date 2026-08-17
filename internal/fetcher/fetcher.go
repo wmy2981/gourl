@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -70,6 +71,7 @@ func New(opts Options) *Fetcher {
 // (network, SSRF policy, non-HTML content, oversize body) returns an error;
 // callers should treat errors as "no title available" and continue.
 func (f *Fetcher) Fetch(ctx context.Context, rawURL string) (title, description string, err error) {
+	slog.Debug("fetching title", "url", rawURL)
 	if !f.allowPrivate {
 		if err := validateURL(ctx, rawURL); err != nil {
 			return "", "", err
@@ -110,7 +112,10 @@ func (f *Fetcher) Fetch(ctx context.Context, rawURL string) (title, description 
 		return "", "", fmt.Errorf("parse html: %w", err)
 	}
 	t, d := extractMeta(doc)
-	return truncate(clean(t), f.titleLimit), truncate(clean(d), f.descriptionMax), nil
+	t = truncate(clean(t), f.titleLimit)
+	d = truncate(clean(d), f.descriptionMax)
+	slog.Debug("title fetched", "url", rawURL, "title_len", len(t), "description_len", len(d))
+	return t, d, nil
 }
 
 // extractMeta walks the tree for the first <title> and the first

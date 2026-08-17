@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"strconv"
 
@@ -36,6 +37,7 @@ func (s *Server) listTokens(w http.ResponseWriter, r *http.Request) {
 			"created_at":  t.CreatedAt,
 		})
 	}
+	slog.Debug("tokens listed", "count", len(tokens), "actor", actorFrom(r))
 	writeJSON(w, http.StatusOK, map[string]any{"tokens": out})
 }
 
@@ -60,6 +62,7 @@ func (s *Server) createToken(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "internal_error", "failed to store token")
 		return
 	}
+	slog.Info("api token created", "note", body.Note, "actor", actorFrom(r))
 	writeJSON(w, http.StatusCreated, map[string]any{
 		"id":         id,
 		"token":      token, // full value, shown exactly once
@@ -83,5 +86,6 @@ func (s *Server) deleteToken(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "internal_error", "failed to delete token")
 		return
 	}
+	slog.Info("api token revoked", "id", id, "actor", actorFrom(r))
 	w.WriteHeader(http.StatusNoContent)
 }

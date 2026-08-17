@@ -26,6 +26,47 @@
     'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
   --font-mono:
     ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* Chart tooltip surface: follows the active theme via CSS variables */
+  --tooltip-bg: rgba(255, 255, 255, 0.92);
+  --tooltip-text: #1d1d1f;
+
+  /* Unified motion language: fast, fluid, subtle. Enter/ease-out for arrivals
+     (cubic-bezier(0.16,1,0.3,1) ≈ easeOutExpo), fast ease-in for departures. */
+  /* backwards (not both): after the animation the transform must go back to
+     none — a retained identity matrix would become the containing block of
+     the fixed-positioned dialogs rendered inside this wrapper. */
+  --animate-fade-up: fade-up 0.35s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+  --animate-pop-in: pop-in 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
+  --animate-pop-out: pop-out 0.18s cubic-bezier(0.4, 0, 1, 1) both;
+  --animate-backdrop-in: backdrop-in 0.2s ease both;
+  --animate-backdrop-out: backdrop-out 0.16s ease both;
+
+  @keyframes fade-up {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: none; }
+  }
+  @keyframes pop-in {
+    from { opacity: 0; transform: scale(0.95) translateY(6px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+  }
+  @keyframes pop-out {
+    from { opacity: 1; transform: scale(1); }
+    to { opacity: 0; transform: scale(0.96) translateY(4px); }
+  }
+  @keyframes backdrop-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes backdrop-out {
+    from { opacity: 1; }
+    to { opacity: 0; }
+  }
+}
+
+.dark {
+  --tooltip-bg: rgba(28, 28, 30, 0.94);
+  --tooltip-text: #f5f5f7;
 }
 
 @layer base {
@@ -38,6 +79,43 @@
     transition:
       background-color 0.3s ease,
       color 0.3s ease;
+  }
+
+  /* Custom scrollbars: thin rounded thumbs that follow the theme. Firefox
+     gets scrollbar-width/color; WebKit/Blink get the pseudo-element styling.
+     The border + background-clip trick insets the thumb so it never touches
+     the container edge. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(134, 134, 139, 0.45) transparent;
+  }
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(134, 134, 139, 0.45);
+    border-radius: 9999px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(245, 158, 11, 0.75);
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+  .dark ::-webkit-scrollbar-thumb {
+    background: rgba(245, 245, 247, 0.3);
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+  .dark ::-webkit-scrollbar-thumb:hover {
+    background: rgba(245, 158, 11, 0.85);
+    border: 2px solid transparent;
+    background-clip: content-box;
   }
 }
 

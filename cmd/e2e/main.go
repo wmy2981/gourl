@@ -5,7 +5,7 @@ package main
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"time"
@@ -16,6 +16,7 @@ import (
 	"github.com/wmy2981/gourl/internal/api"
 	"github.com/wmy2981/gourl/internal/config"
 	"github.com/wmy2981/gourl/internal/counter"
+	"github.com/wmy2981/gourl/internal/logx"
 	"github.com/wmy2981/gourl/internal/store"
 )
 
@@ -26,24 +27,59 @@ const (
 )
 
 func main() {
+	// Keep e2e output readable: the temp config below pins log_level to
+	// warning, the same quiet level the old LOG_LEVEL env provided. LOG_DIR
+	// points at a temp dir so the default ./data/log never lands in the
+	// repository working tree.
+	logDir, err := os.MkdirTemp("", "gourl-e2e-log-")
+	if err != nil {
+		slog.Error("log dir failed", "error", err)
+		os.Exit(1)
+	}
+	defer os.RemoveAll(logDir)
+	_ = os.Setenv("LOG_DIR", logDir)
+
+	logx.Init(slog.LevelInfo)
+
 	port := os.Getenv("E2E_PORT")
 	if port == "" {
 		port = "8099"
 	}
 
-	cfg, err := config.NewManager(os.Getenv("E2E_CONFIG"))
-	if err != nil {
-		log.Fatalf("config: %v", err)
+	// The config must live at a writable path: the settings page PUTs config
+	// changes back to it, and an empty path breaks the atomic write-back.
+	cfgPath := os.Getenv("E2E_CONFIG")
+	if cfgPath == "" {
+		tmp, err := os.CreateTemp("", "gourl-e2e-config-*.yaml")
+		if err != nil {
+			slog.Error("config temp file failed", "error", err)
+			os.Exit(1)
+		}
+		cfgPath = tmp.Name()
+		tmp.Close()
+		if err := os.WriteFile(cfgPath, []byte("log_level: warning\n"), 0o644); err != nil {
+			slog.Error("config seed failed", "path", cfgPath, "error", err)
+			os.Exit(1)
+		}
+		defer os.Remove(cfgPath)
 	}
+	cfg, err := config.NewManager(cfgPath)
+	if err != nil {
+		slog.Error("config load failed", "path", cfgPath, "error", err)
+		os.Exit(1)
+	}
+	logx.SetLevel(logx.ParseLevel(cfg.Get().LogLevel))
 	st, err := store.Open(":memory:")
 	if err != nil {
-		log.Fatalf("store: %v", err)
+		slog.Error("store open failed", "error", err)
+		os.Exit(1)
 	}
 	defer st.Close()
 
 	mr := miniredis.NewMiniRedis()
 	if err := mr.Start(); err != nil {
-		log.Fatalf("miniredis: %v", err)
+		slog.Error("miniredis start failed", "error", err)
+		os.Exit(1)
 	}
 	defer mr.Close()
 	ctr := counter.NewFromClient(redis.NewClient(&redis.Options{Addr: mr.Addr()}))
@@ -53,7 +89,8 @@ func main() {
 	_ = os.Setenv("SESSION_SECRET", sessionSecret)
 	assetsDir, err := os.MkdirTemp("", "gourl-e2e-assets-")
 	if err != nil {
-		log.Fatal(err)
+		slog.Error("assets dir failed", "error", err)
+		os.Exit(1)
 	}
 	_ = os.Setenv("ASSETS_DIR", assetsDir)
 	defer os.RemoveAll(assetsDir)
@@ -64,8 +101,9 @@ func main() {
 	go counter.NewFlusher(st, ctr, flushInterval).Run(flushCtx)
 
 	addr := "127.0.0.1:" + port
-	log.Printf("e2e server listening on http://%s (admin password: %s)", addr, adminPassword)
+	slog.Info("e2e server listening", "addr", "http://"+addr, "admin_password", adminPassword)
 	if err := http.ListenAndServe(addr, api.NewServer(st, cfg, ctr).Handler()); err != nil {
-		log.Fatal(err)
+		slog.Error("http server failed", "error", err)
+		os.Exit(1)
 	}
 }

@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { KeyRound, Plus, ShieldOff, Trash2, Upload } from 'lucide-react'
+import { KeyRound, Plus, Trash2, Upload } from 'lucide-react'
 import { api, ApiError, type AppConfig } from '../lib/api'
-import { Button, Card, Input, Label, Textarea, useToast } from '../components/ui'
+import { copyText } from '../lib/clipboard'
+import { Button, Card, Input, Label, Select, Textarea, useToast } from '../components/ui'
 
 export default function Settings() {
   const { t } = useTranslation()
@@ -12,15 +13,20 @@ export default function Settings() {
 
   const { data: cfg } = useQuery({ queryKey: ['config'], queryFn: api.getConfig })
   const [form, setForm] = useState<AppConfig | null>(null)
+  const [extraUrlsText, setExtraUrlsText] = useState('')
   const [reservedText, setReservedText] = useState('')
-  const [uaPattern, setUaPattern] = useState('')
+  const [uaText, setUaText] = useState('')
+  const [ipText, setIpText] = useState('')
   const [tokenNote, setTokenNote] = useState('')
   const [newToken, setNewToken] = useState('')
 
   useEffect(() => {
     if (cfg && !form) {
       setForm(cfg)
-      setReservedText(cfg.reserved_codes.join('\n'))
+      setExtraUrlsText(cfg.extra_base_urls.join('\n'))
+      setReservedText(cfg.reserved_codes.join(', '))
+      setUaText(cfg.ua_blocks.join(', '))
+      setIpText(cfg.ip_blocks.join(', '))
     }
   }, [cfg, form])
 
@@ -45,9 +51,28 @@ export default function Settings() {
 
   const save = () => {
     saveMutation.mutate({
-      ...form,
-      reserved_codes: reservedText
+      site: form.site,
+      short_code_length: form.short_code_length,
+      base_url: form.base_url,
+      login_rate_max_attempts: form.login_rate_max_attempts,
+      login_rate_lock_seconds: form.login_rate_lock_seconds,
+      link_rate_per_second: form.link_rate_per_second,
+      log_level: form.log_level,
+      icon: form.icon,
+      extra_base_urls: extraUrlsText
         .split('\n')
+        .map((s) => s.trim())
+        .filter(Boolean),
+      reserved_codes: reservedText
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean),
+      ua_blocks: uaText
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean),
+      ip_blocks: ipText
+        .split(',')
         .map((s) => s.trim())
         .filter(Boolean),
     })
@@ -56,7 +81,9 @@ export default function Settings() {
   const iconInput = async (file: File | undefined) => {
     if (!file) return
     try {
-      await api.uploadIcon(file)
+      const res = await api.uploadIcon(file)
+      // Keep the page snapshot in sync so the reset button appears right away.
+      setForm((f) => (f ? { ...f, icon: res.icon } : f))
       toast(t('settings.saved'))
       queryClient.invalidateQueries({ queryKey: ['config'] })
     } catch (err) {
@@ -74,28 +101,20 @@ export default function Settings() {
           <h2 className="mb-4 text-sm font-medium text-muted">{t('settings.site')}</h2>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
-              <Label>{t('settings.siteName')}</Label>
-              <Input value={form.site.name} onChange={(e) => setSite('name', e.target.value)} />
+              <Label htmlFor='cfg-site-name'>{t('settings.siteName')}</Label>
+              <Input id='cfg-site-name' value={form.site.name} onChange={(e) => setSite('name', e.target.value)} />
             </div>
             <div>
-              <Label>{t('settings.siteTitle')}</Label>
-              <Input value={form.site.title} onChange={(e) => setSite('title', e.target.value)} />
+              <Label htmlFor='cfg-site-title'>{t('settings.siteTitle')}</Label>
+              <Input id='cfg-site-title' value={form.site.title} onChange={(e) => setSite('title', e.target.value)} />
             </div>
             <div>
-              <Label>{t('settings.keywords')}</Label>
-              <Input value={form.site.keywords} onChange={(e) => setSite('keywords', e.target.value)} />
+              <Label htmlFor='cfg-keywords'>{t('settings.keywords')}</Label>
+              <Input id='cfg-keywords' value={form.site.keywords} onChange={(e) => setSite('keywords', e.target.value)} />
             </div>
             <div>
-              <Label>{t('settings.description')}</Label>
-              <Input value={form.site.description} onChange={(e) => setSite('description', e.target.value)} />
-            </div>
-            <div>
-              <Label>{t('settings.header')}</Label>
-              <Textarea rows={2} value={form.site.header} onChange={(e) => setSite('header', e.target.value)} />
-            </div>
-            <div>
-              <Label>{t('settings.footer')}</Label>
-              <Textarea rows={2} value={form.site.footer} onChange={(e) => setSite('footer', e.target.value)} />
+              <Label htmlFor='cfg-description'>{t('settings.description')}</Label>
+              <Input id='cfg-description' value={form.site.description} onChange={(e) => setSite('description', e.target.value)} />
             </div>
           </div>
         </Card>
@@ -105,8 +124,9 @@ export default function Settings() {
           <h2 className="mb-4 text-sm font-medium text-muted">{t('settings.behavior')}</h2>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
-              <Label>{t('settings.shortCodeLength')}</Label>
+              <Label htmlFor='cfg-code-length'>{t('settings.shortCodeLength')}</Label>
               <Input
+                id='cfg-code-length'
                 type="number"
                 min={4}
                 max={32}
@@ -115,40 +135,72 @@ export default function Settings() {
               />
             </div>
             <div>
-              <Label>{t('settings.baseUrl')}</Label>
-              <Input value={form.base_url} onChange={(e) => set('base_url', e.target.value)} placeholder="https://s.example.com" />
+              <Label htmlFor='cfg-base-url'>{t('settings.baseUrl')}</Label>
+              <Input id='cfg-base-url' value={form.base_url} onChange={(e) => set('base_url', e.target.value)} placeholder="https://s.example.com" />
               <p className="mt-1 text-xs text-muted">{t('settings.baseUrlHint')}</p>
             </div>
             <div className="sm:col-span-2">
-              <Label>{t('settings.extraBaseUrls')}</Label>
-              <div className="flex flex-col gap-2">
-                {form.extra_base_urls.map((u, i) => (
-                  <div key={i} className="flex gap-2">
-                    <Input value={u} onChange={(e) => {
-                      const next = [...form.extra_base_urls]
-                      next[i] = e.target.value
-                      set('extra_base_urls', next)
-                    }} />
-                    <Button variant="ghost" onClick={() => set('extra_base_urls', form.extra_base_urls.filter((_, j) => j !== i))} aria-label="Remove">
-                      <Trash2 size={15} />
-                    </Button>
-                  </div>
-                ))}
-                <Button
-                  variant="outline"
-                  className="self-start"
-                  onClick={() => set('extra_base_urls', [...form.extra_base_urls, ''])}
-                >
-                  <Plus size={15} />
-                  {t('settings.addExtra')}
-                </Button>
-              </div>
+              <Label htmlFor="cfg-extra-urls">{t('settings.extraBaseUrls')}</Label>
+              <Textarea
+                id="cfg-extra-urls"
+                rows={3}
+                value={extraUrlsText}
+                onChange={(e) => setExtraUrlsText(e.target.value)}
+              />
               <p className="mt-1 text-xs text-muted">{t('settings.extraBaseUrlsHint')}</p>
             </div>
             <div className="sm:col-span-2">
-              <Label>{t('settings.reservedCodes')}</Label>
-              <Textarea rows={3} value={reservedText} onChange={(e) => setReservedText(e.target.value)} />
+              <Label htmlFor='cfg-reserved'>{t('settings.reservedCodes')}</Label>
+              <Textarea id='cfg-reserved' rows={3} value={reservedText} onChange={(e) => setReservedText(e.target.value)} />
               <p className="mt-1 text-xs text-muted">{t('settings.reservedCodesHint')}</p>
+            </div>
+            <div>
+              <Label htmlFor='cfg-login-attempts'>{t('settings.loginRateAttempts')}</Label>
+              <Input
+                id='cfg-login-attempts'
+                type="number"
+                min={0}
+                value={form.login_rate_max_attempts}
+                onChange={(e) => set('login_rate_max_attempts', Number(e.target.value))}
+              />
+              <p className="mt-1 text-xs text-muted">{t('settings.loginRateHint')}</p>
+            </div>
+            <div>
+              <Label htmlFor='cfg-login-lock'>{t('settings.loginRateLock')}</Label>
+              <Input
+                id='cfg-login-lock'
+                type="number"
+                min={0}
+                value={form.login_rate_lock_seconds}
+                onChange={(e) => set('login_rate_lock_seconds', Number(e.target.value))}
+              />
+              <p className="mt-1 text-xs text-muted">{t('settings.loginRateLockHint')}</p>
+            </div>
+            <div>
+              <Label htmlFor='cfg-link-rate'>{t('settings.linkRate')}</Label>
+              <Input
+                id='cfg-link-rate'
+                type="number"
+                min={0}
+                value={form.link_rate_per_second}
+                onChange={(e) => set('link_rate_per_second', Number(e.target.value))}
+              />
+              <p className="mt-1 text-xs text-muted">{t('settings.linkRateHint')}</p>
+            </div>
+            <div>
+              <Label>{t('settings.logLevel')}</Label>
+              <Select
+                value={form.log_level}
+                onChange={(v) => set('log_level', v)}
+                ariaLabel={t('settings.logLevel')}
+                options={[
+                  { value: 'debug', label: t('settings.logLevelDebug') },
+                  { value: 'info', label: t('settings.logLevelInfo') },
+                  { value: 'warning', label: t('settings.logLevelWarning') },
+                  { value: 'error', label: t('settings.logLevelError') },
+                ]}
+              />
+              <p className="mt-1 text-xs text-muted">{t('settings.logLevelHint')}</p>
             </div>
           </div>
         </Card>
@@ -170,9 +222,14 @@ export default function Settings() {
             />
             {form.icon && (
               <Button variant="danger" onClick={async () => {
-                await api.deleteIcon()
-                toast(t('settings.saved'))
-                queryClient.invalidateQueries({ queryKey: ['config'] })
+                try {
+                  const res = await api.deleteIcon()
+                  setForm((f) => (f ? { ...f, icon: res.icon } : f))
+                  toast(t('settings.saved'))
+                  queryClient.invalidateQueries({ queryKey: ['config'] })
+                } catch (err) {
+                  toast(err instanceof ApiError ? err.message : t('settings.saveFailed'), 'error')
+                }
               }}>
                 {t('settings.removeIcon')}
               </Button>
@@ -181,20 +238,35 @@ export default function Settings() {
           </div>
         </Card>
 
-        {/* UA blocks */}
-        <UABlockSection
-          uaPattern={uaPattern}
-          setUaPattern={setUaPattern}
-          add={async () => {
-            try {
-              await api.addUABlock(uaPattern)
-              setUaPattern('')
-              queryClient.invalidateQueries({ queryKey: ['ua-blocks'] })
-            } catch (err) {
-              toast(err instanceof ApiError ? err.message : t('common.error'), 'error')
-            }
-          }}
-        />
+        {/* UA blocks: like extra base urls and reserved codes, the list is
+            edited here and applied by the save button */}
+        <Card className="p-6">
+          <h2 className="mb-1 text-sm font-medium text-muted">{t('settings.uaBlocks')}</h2>
+          <p className="mb-4 text-xs text-muted">{t('settings.uaBlockHint')}</p>
+          {/* Unconditional: block rules never expire, whether any exist yet or not. */}
+          <p className="mb-4 text-xs text-muted">{t('common.never')}</p>
+          <Textarea
+            rows={3}
+            value={uaText}
+            onChange={(e) => setUaText(e.target.value)}
+            placeholder={t('settings.uaPlaceholder')}
+            aria-label={t('settings.uaPatterns')}
+          />
+        </Card>
+
+        {/* IP blocks: banned addresses are refused on every route, session,
+            API and health included */}
+        <Card className="p-6">
+          <h2 className="mb-1 text-sm font-medium text-muted">{t('settings.ipBlocks')}</h2>
+          <p className="mb-4 text-xs text-muted">{t('settings.ipBlockHint')}</p>
+          <Textarea
+            rows={3}
+            value={ipText}
+            onChange={(e) => setIpText(e.target.value)}
+            placeholder={t('settings.ipPlaceholder')}
+            aria-label={t('settings.ipPatterns')}
+          />
+        </Card>
 
         {/* API tokens */}
         <TokenSection
@@ -223,49 +295,6 @@ export default function Settings() {
   )
 }
 
-function UABlockSection({
-  uaPattern,
-  setUaPattern,
-  add,
-}: {
-  uaPattern: string
-  setUaPattern: (v: string) => void
-  add: () => void
-}) {
-  const { t } = useTranslation()
-  const queryClient = useQueryClient()
-  const { data } = useQuery({ queryKey: ['ua-blocks'], queryFn: api.uaBlocks })
-
-  return (
-    <Card className="p-6">
-      <h2 className="mb-1 text-sm font-medium text-muted">{t('settings.uaBlocks')}</h2>
-      <p className="mb-4 text-xs text-muted">{t('settings.uaBlockHint')}</p>
-      <div className="flex flex-col gap-2">
-        {data?.ua_blocks.map((b) => (
-          <div key={b.id} className="flex items-center justify-between rounded-xl border border-hairline px-3.5 py-2">
-            <span className="short-code text-sm">{b.pattern}</span>
-            <Button variant="ghost" className="!p-1.5" onClick={async () => {
-              await api.deleteUABlock(b.id)
-              queryClient.invalidateQueries({ queryKey: ['ua-blocks'] })
-            }} aria-label="Remove">
-              <ShieldOff size={15} />
-            </Button>
-          </div>
-        ))}
-        {data?.ua_blocks.length === 0 && (
-          <p className="py-2 text-sm text-muted">{t('common.never')}</p>
-        )}
-        <div className="flex gap-2">
-          <Input value={uaPattern} onChange={(e) => setUaPattern(e.target.value)} placeholder="curl" />
-          <Button variant="outline" onClick={add} disabled={!uaPattern.trim()}>
-            {t('settings.addUaBlock')}
-          </Button>
-        </div>
-      </div>
-    </Card>
-  )
-}
-
 function TokenSection({
   tokenNote,
   setTokenNote,
@@ -286,12 +315,25 @@ function TokenSection({
     <Card className="p-6">
       <h2 className="mb-1 text-sm font-medium text-muted">{t('settings.tokens')}</h2>
       <p className="mb-4 text-xs text-muted">{t('settings.tokensHint')}</p>
+      {/* Unconditional: tokens never expire, whether any exist yet or not. */}
+      <p className="mb-4 text-xs text-muted">{t('settings.tokenNeverExpires')}</p>
+      <p className="mb-4">
+        <a
+          href="/docs/"
+          target="_blank"
+          rel="noreferrer"
+          className="text-sm font-medium text-accent-deep transition-colors hover:text-accent dark:text-accent"
+        >
+          {t('settings.apiDocs')} →
+        </a>
+      </p>
       {newToken && (
         <div className="mb-4 rounded-xl border border-accent/40 bg-accent-soft p-3">
           <p className="short-code break-all text-sm">{newToken}</p>
-          <Button variant="ghost" className="mt-1 !p-1 text-xs" onClick={() => {
-            navigator.clipboard.writeText(newToken)
-            toast(t('links.copied'))
+          <Button variant="ghost" className="mt-1 !p-1 text-xs" onClick={async () => {
+            // Same multi-tier fallback chain as the link-row copy button.
+            const ok = await copyText(newToken)
+            toast(ok ? t('links.copied') : newToken, ok ? 'success' : 'error')
           }}>
             {t('links.copy')}
           </Button>
@@ -307,7 +349,7 @@ function TokenSection({
             <Button variant="ghost" className="!p-1.5" onClick={async () => {
               await api.deleteToken(tok.id)
               queryClient.invalidateQueries({ queryKey: ['tokens'] })
-            }} aria-label="Revoke">
+            }} aria-label={t('settings.revoke')}>
               <Trash2 size={15} />
             </Button>
           </div>
@@ -320,8 +362,8 @@ function TokenSection({
         )}
         <div className="flex gap-2">
           <Input value={tokenNote} onChange={(e) => setTokenNote(e.target.value)} placeholder={t('form.note')} />
-          <Button variant="outline" onClick={create}>
-            {t('settings.createToken')}
+          <Button variant="outline" onClick={create} aria-label={t('settings.createToken')} className="!px-2.5">
+            <Plus size={16} />
           </Button>
         </div>
       </div>

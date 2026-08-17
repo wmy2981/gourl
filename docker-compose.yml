@@ -1,31 +1,14 @@
 services:
   app:
-    image: ghcr.io/wmy2981/gourl:dev
+    # Override with GOURL_IMAGE=ghcr.io/wmy2981/gourl:dev to deploy a
+    # pre-release build; latest only exists after a main release.
+    image: ${GOURL_IMAGE:-ghcr.io/wmy2981/gourl:latest}
     build: .
     ports:
       - "8080:8080"
     environment:
-      # Required secrets; set them in your shell or a .env file.
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set ADMIN_PASSWORD}
-      SESSION_SECRET: ${SESSION_SECRET:-please-change-me}
-      REDIS_ADDR: redis:6379
-      # Local timezone: daily click buckets and expires_at are interpreted in it.
       TZ: ${TZ:-Asia/Shanghai}
     volumes:
-      # Writable so the settings page can hot-apply config changes.
-      - ./config.yaml:/app/config.yaml
-      - gourl-data:/app/data
-    depends_on:
-      - redis
+      - ./config:/app/config
+      - ./data:/app/data
     restart: unless-stopped
-
-  redis:
-    image: redis:7-alpine
-    command: redis-server --appendonly yes
-    volumes:
-      - gourl-redis:/data
-    restart: unless-stopped
-
-volumes:
-  gourl-data:
-  gourl-redis:

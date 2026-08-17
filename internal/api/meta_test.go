@@ -7,6 +7,9 @@ import (
 	"net/http"
 	"sync/atomic"
 	"testing"
+	"time"
+
+	"github.com/wmy2981/gourl/internal/store"
 )
 
 // mockFetcher is a deterministic TitleFetcher for tests.
@@ -21,7 +24,26 @@ func (m *mockFetcher) Fetch(ctx context.Context, rawURL string) (string, string,
 	return m.title, m.desc, m.err
 }
 
-func TestCreateAutoFetchesTitle(t *testing.T) {
+// waitMeta polls the store until the link's title matches (the async meta
+// worker runs on its own goroutine). Fails the test on timeout.
+func waitMeta(t *testing.T, s *Server, code, wantTitle string) {
+	t.Helper()
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		l, err := s.store.GetLink(context.Background(), code)
+		if err == nil && l.Title == wantTitle {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	l, err := s.store.GetLink(context.Background(), code)
+	if err != nil {
+		t.Fatalf("get link: %v", err)
+	}
+	t.Fatalf("title = %q, want %q after async fetch", l.Title, wantTitle)
+}
+
+func TestCreateFetchesTitleAsync(t *testing.T) {
 	s, _ := newTestServer(t)
 	s.fetcher = &mockFetcher{title: "Fetched Title", desc: "Fetched Description"}
 
@@ -36,9 +58,11 @@ func TestCreateAutoFetchesTitle(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &l); err != nil {
 		t.Fatal(err)
 	}
-	if l.Title != "Fetched Title" || l.Description != "Fetched Description" {
-		t.Errorf("meta not attached: %+v", l)
+	// The response returns immediately with empty meta; the fetch lands later.
+	if l.Title != "" || l.Description != "" {
+		t.Fatalf("expected empty meta in the immediate response, got %+v", l)
 	}
+	waitMeta(t, s, "abc", "Fetched Title")
 }
 
 func TestCreateFetchFailureIsSilent(t *testing.T) {
@@ -52,8 +76,10 @@ func TestCreateFetchFailureIsSilent(t *testing.T) {
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("creation must succeed despite fetch failure: %d, body %s", rec.Code, rec.Body.String())
 	}
-	var l linkJSON
-	if err := json.Unmarshal(rec.Body.Bytes(), &l); err != nil {
+	// Give the worker a beat to fail, then confirm the meta stays empty.
+	time.Sleep(100 * time.Millisecond)
+	l, err := s.store.GetLink(context.Background(), "abc")
+	if err != nil {
 		t.Fatal(err)
 	}
 	if l.Title != "" || l.Description != "" {
@@ -69,6 +95,7 @@ func TestUpdateURLRefetchesTitle(t *testing.T) {
 		"url":  "https://example.com/old",
 		"code": "abc",
 	})
+	waitMeta(t, s, "abc", "Old Title")
 
 	f.title = "New Title"
 	rec := do(t, s, http.MethodPatch, "/api/v1/links/abc", map[string]any{
@@ -81,9 +108,11 @@ func TestUpdateURLRefetchesTitle(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &l); err != nil {
 		t.Fatal(err)
 	}
-	if l.URL != "https://example.com/new" || l.Title != "New Title" {
-		t.Errorf("url change should refetch title: %+v", l)
+	if l.URL != "https://example.com/new" {
+		t.Errorf("url = %q, want the updated url", l.URL)
 	}
+	// The background refetch lands on the stored link shortly after.
+	waitMeta(t, s, "abc", "New Title")
 }
 
 func TestUpdateTitleDoesNotRefetch(t *testing.T) {
@@ -94,6 +123,7 @@ func TestUpdateTitleDoesNotRefetch(t *testing.T) {
 		"url":  "https://example.com/page",
 		"code": "abc",
 	})
+	waitMeta(t, s, "abc", "Auto Title")
 	callsAfterCreate := f.calls.Load()
 
 	rec := do(t, s, http.MethodPatch, "/api/v1/links/abc", map[string]any{
@@ -109,7 +139,26 @@ func TestUpdateTitleDoesNotRefetch(t *testing.T) {
 	if l.Title != "Manual Title" {
 		t.Errorf("title = %q, want Manual Title", l.Title)
 	}
+	time.Sleep(100 * time.Millisecond)
 	if f.calls.Load() != callsAfterCreate {
-		t.Error("title-only patch must not trigger a fetch")
+		t.Errorf("title-only patch must not trigger a fetch: calls %d -> %d", callsAfterCreate, f.calls.Load())
+	}
+}
+
+// The async worker must not leave a deleted link dangling (store miss is a
+// debug note, never a crash or a stuck worker).
+func TestMetaAfterDeleteIsHarmless(t *testing.T) {
+	s, _ := newTestServer(t)
+	s.fetcher = &mockFetcher{title: "Slow Title"}
+	do(t, s, http.MethodPost, "/api/v1/links", map[string]any{
+		"url":  "https://example.com/page",
+		"code": "abc",
+	})
+	if rec := do(t, s, http.MethodDelete, "/api/v1/links/abc", nil); rec.Code != http.StatusNoContent {
+		t.Fatalf("delete status = %d", rec.Code)
+	}
+	time.Sleep(100 * time.Millisecond)
+	if _, err := s.store.GetLink(context.Background(), "abc"); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("expected the link to stay deleted, got %v", err)
 	}
 }

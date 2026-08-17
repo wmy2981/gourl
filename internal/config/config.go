@@ -9,12 +9,16 @@ package config
 import (
 	"errors"
 	"fmt"
+	"log/slog"
+	"net"
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 
+	"github.com/wmy2981/gourl/internal/shortcode"
 	"gopkg.in/yaml.v3"
 )
 
@@ -24,8 +28,6 @@ type Site struct {
 	Title       string `yaml:"title" json:"title"`
 	Keywords    string `yaml:"keywords" json:"keywords"`
 	Description string `yaml:"description" json:"description"`
-	Header      string `yaml:"header" json:"header"`
-	Footer      string `yaml:"footer" json:"footer"`
 }
 
 // Config is the YAML business configuration.
@@ -35,14 +37,34 @@ type Config struct {
 	BaseURL         string   `yaml:"base_url" json:"base_url"`
 	ExtraBaseURLs   []string `yaml:"extra_base_urls" json:"extra_base_urls"`
 	ReservedCodes   []string `yaml:"reserved_codes" json:"reserved_codes"`
+	UABlocks        []string `yaml:"ua_blocks" json:"ua_blocks"`
+	IPBlocks        []string `yaml:"ip_blocks" json:"ip_blocks"`
 	Icon            string   `yaml:"icon" json:"icon"`
+	// LoginRateMaxAttempts / LoginRateLockSeconds limit failed logins per IP:
+	// N failures in a row lock the address for the window. 0 disables.
+	LoginRateMaxAttempts int `yaml:"login_rate_max_attempts" json:"login_rate_max_attempts"`
+	LoginRateLockSeconds int `yaml:"login_rate_lock_seconds" json:"login_rate_lock_seconds"`
+	// LinkRatePerSecond caps short-link redirects across all codes (a shared
+	// token bucket). 0 disables.
+	LinkRatePerSecond int `yaml:"link_rate_per_second" json:"link_rate_per_second"`
+	// PasswordHash is the bcrypt hash of the admin password, set through the
+	// setup flow (or migrated from the legacy ADMIN_PASSWORD env var). It is
+	// never exposed to the frontend.
+	PasswordHash string `yaml:"password_hash" json:"-"`
+	// LogLevel is the process-wide log verbosity (debug/info/warning/error),
+	// applied at startup and hot-applied on every config save.
+	LogLevel string `yaml:"log_level" json:"log_level"`
 }
 
 // Default returns a usable default configuration.
 func Default() *Config {
 	return &Config{
-		Site:            Site{Name: "gourl", Title: "gourl - Short Links"},
-		ShortCodeLength: 6,
+		Site:                 Site{Name: "gourl", Title: "gourl - Short Links"},
+		ShortCodeLength:      6,
+		LoginRateMaxAttempts: 10,
+		LoginRateLockSeconds: 300,
+		LinkRatePerSecond:    100,
+		LogLevel:             "info",
 	}
 }
 
@@ -86,7 +108,55 @@ func (c *Config) Validate() error {
 			return err
 		}
 	}
+	for _, b := range c.IPBlocks {
+		if err := validIPBlock(b); err != nil {
+			return err
+		}
+	}
+	if c.LoginRateMaxAttempts < 0 || c.LoginRateLockSeconds < 0 {
+		return fmt.Errorf("login rate limits must not be negative (0 disables)")
+	}
+	if c.LinkRatePerSecond < 0 {
+		return fmt.Errorf("link_rate_per_second must not be negative (0 disables)")
+	}
+	switch c.LogLevel {
+	case "":
+		c.LogLevel = "info"
+	case "debug", "info", "warning", "warn", "error":
+	default:
+		return fmt.Errorf("log_level must be debug, info, warning or error, got %q", c.LogLevel)
+	}
 	return nil
+}
+
+// validIPBlock accepts a single IP, a CIDR network, or an IPv4 dotted-quad
+// rule with "*" segments (e.g. 192.168.*.*).
+func validIPBlock(s string) error {
+	if s == "" {
+		return fmt.Errorf("ip_blocks entries must not be empty")
+	}
+	if _, _, err := net.ParseCIDR(s); err == nil {
+		return nil
+	}
+	if net.ParseIP(s) != nil {
+		return nil
+	}
+	if strings.Contains(s, "*") {
+		parts := strings.Split(s, ".")
+		if len(parts) == 4 {
+			for _, p := range parts {
+				if p == "*" {
+					continue
+				}
+				n, err := strconv.Atoi(p)
+				if err != nil || n < 0 || n > 255 {
+					return fmt.Errorf("invalid ip_blocks entry %q", s)
+				}
+			}
+			return nil
+		}
+	}
+	return fmt.Errorf("invalid ip_blocks entry %q: want IP, CIDR or dotted-quad with '*' segments", s)
 }
 
 func isAbsoluteHTTPURL(s string) bool {
@@ -94,18 +164,15 @@ func isAbsoluteHTTPURL(s string) bool {
 	return err == nil && u.IsAbs() && (u.Scheme == "http" || u.Scheme == "https") && u.Host != ""
 }
 
-// validReservedCode accepts a non-empty reserved prefix of url-safe characters.
+// validReservedCode accepts a non-empty reserved entry. Entries are matched
+// against short codes, so they must be valid code shapes too: url-safe
+// characters (ASCII + CJK), non-empty segments, at most MaxSegments levels.
 func validReservedCode(s string) error {
 	if s == "" {
 		return fmt.Errorf("reserved_codes entries must not be empty")
 	}
-	if strings.ContainsAny(s, "/") {
-		return fmt.Errorf("reserved_codes entry %q must be a single segment (no '/')", s)
-	}
-	for _, r := range s {
-		if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '-' || r == '_') {
-			return fmt.Errorf("reserved_codes entry %q contains invalid character %q", s, r)
-		}
+	if err := shortcode.Validate(s); err != nil {
+		return fmt.Errorf("invalid reserved_codes entry %q: %w", s, err)
 	}
 	return nil
 }
@@ -126,13 +193,29 @@ func NewManager(path string) (*Manager, error) {
 	return &Manager{cfg: cfg, path: path}, nil
 }
 
-// Get returns a copy of the current config.
+// Get returns a copy of the current config. Slice fields are normalized to
+// empty (not nil) slices so JSON never emits null — the frontend relies on
+// them being arrays.
 func (m *Manager) Get() *Config {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	cp := *m.cfg
 	cp.ExtraBaseURLs = append([]string(nil), m.cfg.ExtraBaseURLs...)
 	cp.ReservedCodes = append([]string(nil), m.cfg.ReservedCodes...)
+	cp.UABlocks = append([]string(nil), m.cfg.UABlocks...)
+	cp.IPBlocks = append([]string(nil), m.cfg.IPBlocks...)
+	if cp.ExtraBaseURLs == nil {
+		cp.ExtraBaseURLs = []string{}
+	}
+	if cp.ReservedCodes == nil {
+		cp.ReservedCodes = []string{}
+	}
+	if cp.UABlocks == nil {
+		cp.UABlocks = []string{}
+	}
+	if cp.IPBlocks == nil {
+		cp.IPBlocks = []string{}
+	}
 	return &cp
 }
 
@@ -147,8 +230,10 @@ func (m *Manager) Update(c *Config) error {
 		return fmt.Errorf("marshal config: %w", err)
 	}
 	if err := atomicWrite(m.path, data); err != nil {
+		slog.Debug("config write failed", "path", m.path, "error", err)
 		return err
 	}
+	slog.Debug("config written", "path", m.path)
 	m.mu.Lock()
 	m.cfg = c
 	m.mu.Unlock()

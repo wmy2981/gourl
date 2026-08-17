@@ -2,7 +2,7 @@ package api
 
 import (
 	"errors"
-	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -24,58 +24,69 @@ func (s *Server) redirect(w http.ResponseWriter, r *http.Request) {
 
 	cfg := s.cfg.Get()
 	if shortcode.IsReserved(code, cfg.ReservedCodes) {
+		slog.Debug("redirect: reserved code", "code", code, "remote", r.RemoteAddr)
 		s.renderNotFound(w, r)
 		return
 	}
 
-	if blocked, err := s.uaBlocked(r); err != nil {
-		log.Printf("ua block check failed: %v", err)
-	} else if blocked {
-		// Blocked UAs get a bare 403 and are never counted.
-		w.WriteHeader(http.StatusForbidden)
+	// Shared per-second budget across all short links: over the limit the
+	// request is dropped — bare 429, no redirect, no click counted.
+	if !s.allowLink() {
+		slog.Debug("link rate limited", "code", code, "remote", r.RemoteAddr)
+		w.WriteHeader(http.StatusTooManyRequests)
+		return
+	}
+
+	if p := s.uaBlocked(r); p != "" {
+		// Blocked UAs get a 403 page naming the matched pattern and are
+		// never counted.
+		slog.Info("ua blocked", "code", code, "remote", r.RemoteAddr, "pattern", p)
+		s.renderBlocked(w, r, "ua", p)
 		return
 	}
 
 	link, err := s.store.GetLink(r.Context(), code)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
+			slog.Debug("redirect: code not found", "code", code, "remote", r.RemoteAddr)
 			s.renderNotFound(w, r)
 			return
 		}
+		slog.Error("redirect: lookup failed", "code", code, "error", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
 
 	now := s.now()
 	if link.ExpiresAt > 0 && link.ExpiresAt < now {
-		s.renderExpired(w, r, link)
+		// Expired codes look like any other missing link: a plain 404.
+		slog.Debug("redirect: code expired", "code", code, "remote", r.RemoteAddr)
+		s.renderNotFound(w, r)
 		return
 	}
 
 	// Best-effort counting: a Redis outage must not break redirects.
 	date := counter.Date(time.Unix(now, 0))
 	if err := s.counter.Incr(r.Context(), code, date); err != nil {
-		log.Printf("count click %s: %v", code, err)
+		slog.Warn("count click failed", "code", code, "error", err)
 	}
 
+	slog.Debug("link redirected", "code", code, "url", link.URL, "remote", r.RemoteAddr)
 	http.Redirect(w, r, link.URL, http.StatusFound)
 }
 
-// uaBlocked reports whether the request UA matches any configured block
-// pattern (case-insensitive substring match).
-func (s *Server) uaBlocked(r *http.Request) (bool, error) {
+// uaBlocked returns the first UA block pattern matched by the request UA
+// (case-insensitive substring match), or "" when not blocked. Patterns come
+// from config.yaml.
+func (s *Server) uaBlocked(r *http.Request) string {
 	ua := strings.ToLower(r.UserAgent())
 	if ua == "" {
-		return false, nil
+		return ""
 	}
-	blocks, err := s.store.ListUABlocks(r.Context())
-	if err != nil {
-		return false, err
-	}
-	for _, b := range blocks {
-		if strings.Contains(ua, strings.ToLower(b.Pattern)) {
-			return true, nil
+	for _, p := range s.cfg.Get().UABlocks {
+		if strings.Contains(ua, strings.ToLower(p)) {
+			return p
 		}
 	}
-	return false, nil
+	return ""
 }

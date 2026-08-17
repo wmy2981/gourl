@@ -1,19 +1,40 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
 import Login from '../pages/Login'
+import { ToastProvider } from '../components/ui'
 import '../lib/i18n'
+
+function renderLogin() {
+  return render(
+    <QueryClientProvider client={new QueryClient()}>
+      <MemoryRouter>
+        <ToastProvider>
+          <Login />
+        </ToastProvider>
+      </MemoryRouter>
+    </QueryClientProvider>,
+  )
+}
 
 function mockFetch(status: number, body: unknown) {
   vi.stubGlobal(
     'fetch',
-    vi.fn(async () =>
-      new Response(JSON.stringify(body), {
+    vi.fn(async (url: string | URL) => {
+      // The login page loads the service name from the public health endpoint.
+      if (String(url).endsWith('/api/v1/health')) {
+        return new Response(JSON.stringify({ name: 'My Service' }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      }
+      return new Response(JSON.stringify(body), {
         status,
         headers: { 'Content-Type': 'application/json' },
-      }),
-    ),
+      })
+    }),
   )
 }
 
@@ -22,29 +43,29 @@ beforeEach(() => {
 })
 
 describe('Login', () => {
+  it('shows the configured service name in the brand line', async () => {
+    mockFetch(200, { ok: true })
+    renderLogin()
+    expect(await screen.findByText(/My Service/)).toBeInTheDocument()
+  })
+
   it('submits the password and navigates on success', async () => {
     mockFetch(200, { ok: true })
-    render(
-      <MemoryRouter>
-        <Login />
-      </MemoryRouter>,
-    )
+    renderLogin()
 
     await userEvent.type(screen.getByLabelText('Password'), 'secret')
     await userEvent.click(screen.getByRole('button', { name: /sign in/i }))
 
-    expect(fetch).toHaveBeenCalledTimes(1)
-    const [, init] = (fetch as ReturnType<typeof vi.fn>).mock.calls[0]
-    expect((init as RequestInit).body).toContain('secret')
+    const calls = (fetch as ReturnType<typeof vi.fn>).mock.calls as [string, RequestInit][]
+    expect(calls.length).toBeGreaterThanOrEqual(2) // health + login
+    const loginCall = calls.find(([url]) => String(url).endsWith('/api/v1/auth/login'))
+    expect(loginCall).toBeDefined()
+    expect(loginCall![1].body).toContain('secret')
   })
 
-  it('shows an error on a wrong password', async () => {
+  it('shows an error toast on a wrong password', async () => {
     mockFetch(401, { error: { code: 'unauthorized', message: 'invalid password' } })
-    render(
-      <MemoryRouter>
-        <Login />
-      </MemoryRouter>,
-    )
+    renderLogin()
 
     await userEvent.type(screen.getByLabelText('Password'), 'wrong')
     await userEvent.click(screen.getByRole('button', { name: /sign in/i }))
@@ -53,11 +74,7 @@ describe('Login', () => {
   })
 
   it('disables the submit button while empty', () => {
-    render(
-      <MemoryRouter>
-        <Login />
-      </MemoryRouter>,
-    )
+    renderLogin()
     expect(screen.getByRole('button', { name: /sign in/i })).toBeDisabled()
   })
 })

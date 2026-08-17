@@ -1,0 +1,561 @@
+openapi: 3.0.3
+info:
+  title: gourl API
+  description: |
+    Lightweight self-hosted URL shortener API.
+
+    Admin endpoints accept either a session cookie (from
+    `POST /api/v1/auth/login`) or `Authorization: Bearer <token>` (tokens are
+    created in Settings). With no admin password configured the server runs
+    in setup mode: admin endpoints refuse with `403 setup_required` (bearer
+    tokens still authenticate) until the setup flow (`POST /api/v1/auth/setup`)
+    sets the first password. The redirect route `GET /{code}` is always
+    public and never requires auth.
+  version: "0.1.0"
+servers:
+  - url: /api/v1
+tags:
+  - name: health
+    description: Public service status
+  - name: auth
+    description: Admin session
+  - name: links
+    description: Short link management
+  - name: ua-blocks
+    description: Blocked User-Agent patterns
+  - name: tokens
+    description: API tokens
+  - name: config
+    description: Site configuration
+  - name: dashboard
+    description: Aggregate statistics
+paths:
+  /health:
+    get:
+      tags: [health]
+      summary: Service health and identity
+      security: []
+      responses:
+        "200":
+          description: Healthy — includes name, version, uptime and dependency probes
+        "503":
+          description: A dependency (redis/sqlite) is unavailable
+  /auth/login:
+    post:
+      tags: [auth]
+      summary: Login with the admin password, sets a session cookie
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [password]
+              properties:
+                password: { type: string }
+      responses:
+        "200": { description: Session cookie set }
+        "401": { description: Invalid password }
+        "403": { description: Authentication not configured }
+  /auth/setup:
+    post:
+      tags: [auth]
+      summary: Set the admin password while the server is in setup mode (no password_hash configured); logs the caller in
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                password: { type: string, minLength: 8 }
+      responses:
+        "200": { description: Password set and session cookie issued }
+        "400": { description: Weak password or invalid body }
+        "409": { description: already_configured — password already set }
+  /auth/status:
+    get:
+      tags: [auth]
+      summary: Report whether an admin password is configured (routes the SPA to /admin/setup when not)
+      security: []
+      responses:
+        "200":
+          description: Auth status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  configured: { type: boolean }
+  /auth/logout:
+    post:
+      tags: [auth]
+      summary: Clear the session cookie
+      security: []
+      responses:
+        "200": { description: Signed out }
+  /links:
+    get:
+      tags: [links]
+      summary: List links (paginated, searchable, sortable, expiry-filterable)
+      parameters:
+        - { name: page, in: query, schema: { type: integer, default: 1 } }
+        - { name: page_size, in: query, schema: { type: integer, default: 20, maximum: 100 } }
+        - { name: q, in: query, schema: { type: string }, description: Match on code/url/title }
+        - { name: expires, in: query, schema: { type: string, enum: ["", active, expired] }, description: "Filter by expiry state (default: all)" }
+        - { name: sort, in: query, schema: { type: string, enum: [created_at, clicks, code] } }
+        - { name: order, in: query, schema: { type: string, enum: [asc, desc] } }
+      responses:
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/SetupRequired" }
+        "200":
+          description: Link list with total count
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  links: { type: array, items: { $ref: "#/components/schemas/Link" } }
+                  total: { type: integer }
+                  page: { type: integer }
+                  page_size: { type: integer }
+    post:
+      tags: [links]
+      summary: Create a link (title/description are fetched in the background)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateLink" }
+      responses:
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/SetupRequired" }
+        "201": { description: Created, returns the link with full short URLs }
+        "400": { description: Invalid url/code or reserved code }
+        "409": { description: Code already in use }
+    delete:
+      tags: [links]
+      summary: Delete multiple links at once
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [codes]
+              properties:
+                codes:
+                  type: array
+                  maxItems: 500
+                  items: { type: string }
+      responses:
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/SetupRequired" }
+        "200":
+          description: Number of links actually deleted (absent codes are skipped). Daily click history is kept, as always.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deleted: { type: integer }
+  /links/batch:
+    post:
+      tags: [links]
+      summary: Batch import links (≤500 per call, per-item results)
+      description: "conflict decides what happens when an item's code already exists: error (default, the item fails with code_taken), skip (the item is skipped) or update (the existing link is refreshed with the item's fields). A legacy bare-array body is still accepted (conflict = error)."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                conflict: { type: string, enum: [error, skip, update], default: error }
+                items:
+                  type: array
+                  maxItems: 500
+                  items: { $ref: "#/components/schemas/CreateLink" }
+      responses:
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/SetupRequired" }
+        "201":
+          description: Per-item results (status created/updated/skipped/error) with created/failed counts
+  /links/expired:
+    get:
+      tags: [links]
+      summary: Count links past their expiry
+      responses:
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/SetupRequired" }
+        "200":
+          description: Number of expired links (drives the clear-expired confirmation)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count: { type: integer }
+    delete:
+      tags: [links]
+      summary: Delete every expired link (daily click history is kept)
+      responses:
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/SetupRequired" }
+        "200":
+          description: Number of deleted links
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deleted: { type: integer }
+  /links/{code}:
+    parameters:
+      - { name: code, in: path, required: true, schema: { type: string }, description: "Short code (may contain /, ASCII or Chinese)" }
+    get:
+      tags: [links]
+      summary: Get a link
+      responses:
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/SetupRequired" }
+        "200": { description: Link }
+        "404": { description: Not found }
+    patch:
+      tags: [links]
+      summary: Update a link (url change re-fetches title in the background unless overridden)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                code: { type: string }
+                url: { type: string }
+                title: { type: string }
+                description: { type: string }
+                expires_at: { type: integer }
+      responses:
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/SetupRequired" }
+        "200": { description: Updated link }
+        "404": { description: Not found }
+        "409": { description: New code already in use }
+    delete:
+      tags: [links]
+      summary: Delete a link (its daily click records are deliberately kept for history)
+      responses:
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/SetupRequired" }
+        "204": { description: Deleted }
+        "404": { description: Not found }
+  /export.csv:
+    get:
+      tags: [links]
+      summary: Export all links as CSV (UTF-8 with BOM)
+      responses:
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/SetupRequired" }
+        "200":
+          description: CSV attachment
+          content:
+            text/csv: { schema: { type: string } }
+  /export.json:
+    get:
+      tags: [links]
+      summary: Export all links as a JSON array of the same 7 fields the CSV carries
+      responses:
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/SetupRequired" }
+        "200":
+          description: JSON array of {code, url, title, description, expires_at, click_count, created_at}
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ExportRow" }
+  /logs:
+    get:
+      tags: [logs]
+      summary: Recent log records read back from the mirrored log file (LOG_DIR)
+      description: "Newest first; available is false when LOG_DIR is not configured (the admin log page then shows the live stream only)."
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, default: 200, maximum: 1000 } }
+        - { name: offset, in: query, schema: { type: integer, default: 0 }, description: "Records to skip (newest first) for paging" }
+      responses:
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/SetupRequired" }
+        "200":
+          description: Log records plus history availability
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  available: { type: boolean }
+                  records:
+                    type: array
+                    items: { $ref: "#/components/schemas/LogRecord" }
+  /logs/stream:
+    get:
+      tags: [logs]
+      summary: Server-Sent Events stream of live log records
+      description: "Each frame is an `event: log` carrying a LogRecord as JSON; a comment ping keeps the connection alive. Requires an authenticated session cookie or bearer token."
+      responses:
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/SetupRequired" }
+        "200":
+          description: text/event-stream
+          content:
+            text/event-stream: { schema: { type: string } }
+  /ua-blocks:
+    get:
+      tags: [ua-blocks]
+      summary: List blocked User-Agent patterns
+      description: Programmatic access — the settings page manages these patterns through the Config resource (GET/PUT /config, field ua_blocks).
+      responses:
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/SetupRequired" }
+        "200": { description: List }
+    post:
+      tags: [ua-blocks]
+      summary: Add a block pattern (case-insensitive substring match)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [pattern]
+              properties:
+                pattern: { type: string }
+      responses:
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/SetupRequired" }
+        "201": { description: Created }
+        "409": { description: Pattern already exists }
+  /ua-blocks/{id}:
+    delete:
+      tags: [ua-blocks]
+      summary: Remove a block pattern
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/SetupRequired" }
+        "204": { description: Deleted }
+        "404": { description: Not found }
+  /tokens:
+    get:
+      tags: [tokens]
+      summary: List API tokens (preview only — full token never returned)
+      responses:
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/SetupRequired" }
+        "200": { description: Token list }
+    post:
+      tags: [tokens]
+      summary: Create an API token (full value returned exactly once)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                note: { type: string }
+      responses:
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/SetupRequired" }
+        "201": { description: Token created with full value }
+  /tokens/{id}:
+    delete:
+      tags: [tokens]
+      summary: Revoke a token
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/SetupRequired" }
+        "204": { description: Revoked }
+        "404": { description: Not found }
+  /config:
+    get:
+      tags: [config]
+      summary: Get the full site configuration
+      responses:
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/SetupRequired" }
+        "200": { description: Config, schema: { $ref: "#/components/schemas/Config" } }
+    put:
+      tags: [config]
+      summary: Update the configuration (validated, written back to config.yaml, hot-applied)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Config" }
+      responses:
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/SetupRequired" }
+        "200": { description: Updated config }
+        "400": { description: Invalid config }
+  /icon:
+    post:
+      tags: [config]
+      summary: Upload a custom icon (multipart field "icon", SVG/PNG ≤1 MiB)
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                icon: { type: string, format: binary }
+      responses:
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/SetupRequired" }
+        "200": { description: Uploaded, config icon updated }
+        "400": { description: Wrong type or too large }
+    delete:
+      tags: [config]
+      summary: Reset to the built-in default icon
+      responses:
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/SetupRequired" }
+        "200": { description: Reset }
+  /dashboard:
+    get:
+      tags: [dashboard]
+      summary: Aggregate metrics and the last 14 days of clicks
+      responses:
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/SetupRequired" }
+        "200":
+          description: Dashboard data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  links_total: { type: integer }
+                  clicks_total: { type: integer }
+                  clicks_today: { type: integer }
+                  daily:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        date: { type: string }
+                        count: { type: integer }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+  responses:
+    Unauthorized:
+      description: Missing or invalid session cookie / bearer token
+    SetupRequired:
+      description: "setup_required — no admin password configured yet, run the setup flow first (bearer tokens still authenticate)"
+  schemas:
+    Link:
+      type: object
+      properties:
+        code: { type: string }
+        url: { type: string }
+        title: { type: string }
+        description: { type: string }
+        expires_at: { type: integer }
+        click_count: { type: integer }
+        created_at: { type: integer }
+        updated_at: { type: integer }
+        urls:
+          type: array
+          description: Full short URLs (primary + extra base URLs)
+          items: { type: string }
+    CreateLink:
+      type: object
+      required: [url]
+      properties:
+        url: { type: string, description: "Absolute http(s) URL" }
+        code: { type: string, description: "Optional custom code, may contain / (≤5 levels, ASCII or Chinese); empty = random" }
+        title: { type: string }
+        description: { type: string }
+        expires_at:
+          oneOf:
+            - type: integer
+              description: Unix seconds; 0 = never
+            - type: string
+              description: "yyyy-MM-dd calendar date, parsed at local midnight"
+        click_count:
+          type: integer
+          description: "Import-time override (batch only); single creates ignore it"
+        created_at:
+          type: integer
+          description: "Import-time override (batch only); single creates ignore it"
+    ExportRow:
+      type: object
+      description: The uniform 7-field export shape shared by CSV and JSON
+      properties:
+        code: { type: string }
+        url: { type: string }
+        title: { type: string }
+        description: { type: string }
+        expires_at: { type: integer, description: "Unix seconds, 0 = never" }
+        click_count: { type: integer }
+        created_at: { type: integer }
+    LogRecord:
+      type: object
+      properties:
+        time: { type: string, format: date-time }
+        level: { type: string, enum: [debug, info, warn, error], description: "Empty for unparseable history lines" }
+        message: { type: string }
+        attrs:
+          type: object
+          description: Structured key-value attributes of the log line
+          additionalProperties: true
+    Config:
+      type: object
+      properties:
+        site:
+          type: object
+          properties:
+            name: { type: string }
+            title: { type: string }
+            keywords: { type: string }
+            description: { type: string }
+        short_code_length: { type: integer, minimum: 4, maximum: 32 }
+        base_url: { type: string }
+        extra_base_urls: { type: array, items: { type: string } }
+        reserved_codes: { type: array, items: { type: string } }
+        ua_blocks:
+          type: array
+          description: Blocked User-Agent patterns (case-insensitive substring match). Managed from the settings page like any other list field; PUT replaces the whole list.
+          items: { type: string }
+        ip_blocks:
+          type: array
+          description: Banned IP rules — single IP, CIDR network, or IPv4 dotted-quad with "*" segments (e.g. 192.168.*.*). Matched requests are refused on every route (session, API and health included) with a 403 page.
+          items: { type: string }
+        icon: { type: string }
+        login_rate_max_attempts:
+          type: integer
+          minimum: 0
+          description: Failed login attempts allowed per IP before the address is locked (0 disables the limiter). Default 10.
+        login_rate_lock_seconds:
+          type: integer
+          minimum: 0
+          description: How long a locked IP stays locked after too many failed logins, in seconds (0 disables the limiter). Default 300.
+        link_rate_per_second:
+          type: integer
+          minimum: 0
+          description: Shared budget for short-link redirects across all codes — a token bucket refilling N tokens per second (burst N). Over-limit requests get a bare 429 and are not counted. 0 disables. Default 100.
+        log_level:
+          type: string
+          enum: [debug, info, warning, error]
+          description: Server log verbosity, hot-applied on save. Default info.
+security:
+  - bearerAuth: []

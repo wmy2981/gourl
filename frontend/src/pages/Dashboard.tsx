@@ -70,16 +70,26 @@ export default function Dashboard() {
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="currentColor" opacity={0.08} vertical={false} />
-                <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#86868b' }} tickLine={false} axisLine={false} />
+                <XAxis
+                  dataKey="date"
+                  tick={{ fontSize: 11, fill: '#86868b' }}
+                  tickLine={false}
+                  axisLine={false}
+                  // Axis ticks carry month/day only (e.g. 08/15); the tooltip
+                  // still shows the full server-side yyyy-MM-dd date.
+                  tickFormatter={(d: string) => d.slice(5).replace('-', '/')}
+                />
                 <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: '#86868b' }} tickLine={false} axisLine={false} />
                 <Tooltip
                   contentStyle={{
                     borderRadius: 12,
-                    border: 'none',
-                    background: 'rgba(255,255,255,0.9)',
+                    border: '1px solid var(--color-hairline)',
+                    background: 'var(--tooltip-bg)',
+                    color: 'var(--tooltip-text)',
                     backdropFilter: 'blur(12px)',
                     boxShadow: '0 8px 30px rgba(0,0,0,0.12)',
                   }}
+                  formatter={(value) => [value, t('dashboard.clicks')]}
                 />
                 <Area
                   type="monotone"

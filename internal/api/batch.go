@@ -3,7 +3,13 @@ package api
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
+	"log/slog"
 	"net/http"
+	"sort"
+	"strconv"
+	"strings"
+	"time"
 
 	"github.com/wmy2981/gourl/internal/config"
 	"github.com/wmy2981/gourl/internal/shortcode"
@@ -13,14 +19,26 @@ import (
 // batchLimit caps links per import request.
 const batchLimit = 500
 
+// batchCreateRequest is the POST /api/v1/links/batch body. A legacy bare
+// array is also accepted (conflict = error).
+type batchCreateRequest struct {
+	// Conflict policy when an item's code already exists:
+	//   error (default) — the item fails with code_taken
+	//   skip             — the item is skipped (status "skipped")
+	//   update           — the existing link is updated with the item's fields
+	Conflict string             `json:"conflict"`
+	Items    []createLinkRequest `json:"items"`
+}
+
 // batchCreate handles POST /api/v1/links/batch. Each item is validated and
 // created independently; failures of one item never fail the others.
 func (s *Server) batchCreate(w http.ResponseWriter, r *http.Request) {
-	var items []createLinkRequest
-	if err := json.NewDecoder(r.Body).Decode(&items); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_request", "invalid JSON body")
+	req, err := decodeBatchRequest(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_request", err.Error())
 		return
 	}
+	items := req.Items
 	if len(items) == 0 {
 		writeError(w, http.StatusBadRequest, "invalid_request", "batch must not be empty")
 		return
@@ -29,54 +47,318 @@ func (s *Server) batchCreate(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_request", "batch exceeds 500 items")
 		return
 	}
+	if req.Conflict != "" && req.Conflict != "error" && req.Conflict != "skip" && req.Conflict != "update" {
+		writeError(w, http.StatusBadRequest, "invalid_request", "conflict must be error, skip or update")
+		return
+	}
 
 	cfg := s.cfg.Get()
 	now := s.now()
 	results := make([]map[string]any, 0, len(items))
-	created, failed := 0, 0
+	created, failed, skipped, updated := 0, 0, 0, 0
+	var failedCodes, skippedCodes, updatedCodes []string
 
+	// Validate every item up front, then insert the valid ones in a single
+	// transaction (one commit instead of one per item).
+	type pending struct {
+		index int // original position in the request, reported to the client
+		item  createLinkRequest
+		code  string
+	}
+	var valid []pending
 	for i, item := range items {
 		res := map[string]any{"index": i, "url": item.URL}
-		code, err := s.resolveCode(item, cfg)
-		if err != nil {
+		code, verr := s.resolveCode(item, cfg)
+		if verr != nil {
 			failed++
+			failedCodes = append(failedCodes, item.Code)
 			res["status"] = "error"
-			res["error_code"] = err.code
-			res["error_message"] = err.message
+			res["error_code"] = verr.code
+			res["error_message"] = verr.message
 			results = append(results, res)
 			continue
 		}
-		link := &store.Link{
-			Code:      code,
-			URL:       item.URL,
-			ExpiresAt: item.ExpiresAt,
-			CreatedAt: now,
-			UpdatedAt: now,
-		}
-		s.attachMeta(r, link)
-		if err := s.store.CreateLink(r.Context(), link); err != nil {
-			if errors.Is(err, store.ErrTaken) {
-				failed++
-				res["status"] = "error"
-				res["error_code"] = "code_taken"
-				res["error_message"] = "code is already in use"
-				results = append(results, res)
-				continue
-			}
-			writeError(w, http.StatusInternalServerError, "internal_error", "failed to create links")
-			return
-		}
-		created++
-		res["status"] = "created"
-		res["code"] = code
-		results = append(results, res)
+		valid = append(valid, pending{index: i, item: item, code: code})
 	}
 
-	writeJSON(w, http.StatusCreated, map[string]any{
-		"results": results,
-		"created": created,
-		"failed":  failed,
+	links := make([]store.Link, len(valid))
+	for i, p := range valid {
+		links[i] = store.Link{
+			Code:        p.code,
+			URL:         p.item.URL,
+			Title:       p.item.Title,
+			Description: p.item.Description,
+			CreatedAt:   now,
+			UpdatedAt:   now,
+		}
+		if p.item.ExpiresAt != nil {
+			links[i].ExpiresAt = int64(*p.item.ExpiresAt)
+		}
+		if p.item.CreatedAt != nil {
+			links[i].CreatedAt = *p.item.CreatedAt
+		}
+	}
+	errs, err := s.store.CreateLinks(r.Context(), links)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal_error", "failed to create links")
+		return
+	}
+	for i, err := range errs {
+		res := map[string]any{"index": valid[i].index, "url": valid[i].item.URL}
+		switch {
+		case errors.Is(err, store.ErrTaken) && req.Conflict == "update":
+			// Refresh the existing link with the imported fields.
+			if uerr := s.applyConflictUpdate(r, valid[i].item, valid[i].code); uerr != nil {
+				failed++
+				failedCodes = append(failedCodes, valid[i].code)
+				res["status"] = "error"
+				res["error_code"] = "internal_error"
+				res["error_message"] = uerr.Error()
+			} else {
+				updated++
+				updatedCodes = append(updatedCodes, valid[i].code)
+				res["status"] = "updated"
+				res["code"] = valid[i].code
+			}
+		case errors.Is(err, store.ErrTaken) && req.Conflict == "skip":
+			skipped++
+			skippedCodes = append(skippedCodes, valid[i].code)
+			res["status"] = "skipped"
+			res["code"] = valid[i].code
+		case errors.Is(err, store.ErrTaken):
+			failed++
+			failedCodes = append(failedCodes, valid[i].code)
+			res["status"] = "error"
+			res["error_code"] = "code_taken"
+			res["error_message"] = "code is already in use"
+		default:
+			created++
+			res["status"] = "created"
+			res["code"] = valid[i].code
+			s.meta.enqueue(valid[i].code, valid[i].item.URL)
+		}
+		results = append(results, res)
+	}
+	// The response must echo the request order so the client can map results
+	// back to its input lines by index.
+	sort.SliceStable(results, func(a, b int) bool {
+		return results[a]["index"].(int) < results[b]["index"].(int)
 	})
+
+	// Legacy counts stay for compatibility; the per-status lists are what the
+	// UI reports ("created N, skipped N, updated N, failed N").
+	slog.Info("links batch created", "created", created, "skipped", skipped, "updated", updated, "failed", failed, "actor", actorFrom(r))
+	writeJSON(w, http.StatusCreated, map[string]any{
+		"results":       results,
+		"created":       created,
+		"failed":        failed,
+		"succeeded":     created,
+		"skipped":       skipped,
+		"updated":       updated,
+		"failed_codes":  failedCodes,
+		"skipped_codes": skippedCodes,
+		"updated_codes": updatedCodes,
+	})
+}
+
+// decodeBatchRequest accepts both the current object form
+// {"conflict": "...", "items": [...]} and the legacy bare-array form. Items
+// are parsed leniently: field names are case-insensitive, unknown fields are
+// ignored, numbers/strings coerce, and only a missing url fails the item.
+func decodeBatchRequest(r *http.Request) (*batchCreateRequest, error) {
+	dec := json.NewDecoder(r.Body)
+	dec.UseNumber()
+	var raw any
+	if err := dec.Decode(&raw); err != nil {
+		return nil, fmt.Errorf("invalid JSON body")
+	}
+	switch v := raw.(type) {
+	case []any: // legacy bare-array form
+		items, err := lenientItems(v)
+		if err != nil {
+			return nil, err
+		}
+		return &batchCreateRequest{Items: items}, nil
+	case map[string]any:
+		var conflict string
+		var arr []any
+		for k, val := range v {
+			switch strings.ToLower(k) {
+			case "conflict":
+				conflict, _ = asString(val)
+			case "items":
+				var ok bool
+				arr, ok = val.([]any)
+				if !ok {
+					return nil, fmt.Errorf("invalid JSON body: items must be an array")
+				}
+			}
+		}
+		if arr == nil {
+			return nil, fmt.Errorf("invalid JSON body: missing items")
+		}
+		items, err := lenientItems(arr)
+		if err != nil {
+			return nil, err
+		}
+		return &batchCreateRequest{Conflict: strings.ToLower(conflict), Items: items}, nil
+	default:
+		return nil, fmt.Errorf("invalid JSON body")
+	}
+}
+
+// lenientItems parses each item through the lenient field mapping.
+func lenientItems(arr []any) ([]createLinkRequest, error) {
+	items := make([]createLinkRequest, 0, len(arr))
+	for i, el := range arr {
+		m, ok := el.(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("item %d: must be an object", i)
+		}
+		item, err := lenientItem(m)
+		if err != nil {
+			return nil, fmt.Errorf("item %d: %w", i, err)
+		}
+		items = append(items, item)
+	}
+	return items, nil
+}
+
+// lenientItem maps a decoded JSON object onto createLinkRequest: keys are
+// matched case-insensitively, unknown keys and nulls are ignored, string and
+// number representations coerce where sensible. Only url is required.
+func lenientItem(m map[string]any) (createLinkRequest, error) {
+	var item createLinkRequest
+	for k, v := range m {
+		switch strings.ToLower(k) {
+		case "url":
+			s, err := asString(v)
+			if err != nil {
+				return item, fmt.Errorf("url must be a string")
+			}
+			item.URL = s
+		case "code":
+			s, err := asString(v)
+			if err != nil {
+				return item, fmt.Errorf("code must be a string")
+			}
+			item.Code = s
+		case "title":
+			s, err := asString(v)
+			if err != nil {
+				return item, fmt.Errorf("title must be a string")
+			}
+			item.Title = s
+		case "description":
+			s, err := asString(v)
+			if err != nil {
+				return item, fmt.Errorf("description must be a string")
+			}
+			item.Description = s
+		case "expires_at":
+			ev, err := asExpiry(v)
+			if err != nil {
+				return item, err
+			}
+			item.ExpiresAt = &ev
+		case "created_at":
+			n, err := asInt64(v)
+			if err != nil {
+				return item, fmt.Errorf("created_at must be a number")
+			}
+			item.CreatedAt = &n
+		case "click_count":
+			// Deliberately dropped: imports must never fabricate click history.
+		}
+	}
+	if item.URL == "" {
+		return item, errors.New("url is required")
+	}
+	return item, nil
+}
+
+// asString coerces JSON scalars to string; null yields "".
+func asString(v any) (string, error) {
+	switch t := v.(type) {
+	case string:
+		return t, nil
+	case json.Number:
+		return t.String(), nil
+	case nil:
+		return "", nil
+	default:
+		return "", fmt.Errorf("must be a string")
+	}
+}
+
+// asInt64 coerces a JSON number (or its string form) to int64; null yields 0.
+func asInt64(v any) (int64, error) {
+	switch t := v.(type) {
+	case json.Number:
+		return t.Int64()
+	case string:
+		n, err := strconv.ParseInt(t, 10, 64)
+		if err != nil {
+			return 0, fmt.Errorf("must be a number")
+		}
+		return n, nil
+	case nil:
+		return 0, nil
+	default:
+		return 0, fmt.Errorf("must be a number")
+	}
+}
+
+// asExpiry accepts a unix-seconds number, a yyyy-mm-dd calendar date (local
+// midnight), an RFC3339 timestamp, or the string form of any of those.
+func asExpiry(v any) (expiryValue, error) {
+	var zero expiryValue
+	switch t := v.(type) {
+	case json.Number:
+		n, err := t.Int64()
+		if err != nil {
+			return zero, fmt.Errorf("expires_at must be a unix timestamp or date string")
+		}
+		return expiryValue(n), nil
+	case string:
+		if n, err := strconv.ParseInt(t, 10, 64); err == nil {
+			return expiryValue(n), nil
+		}
+		if ts, err := time.ParseInLocation("2006-01-02", t, time.Local); err == nil {
+			return expiryValue(ts.Unix()), nil
+		}
+		if ts, err := time.Parse(time.RFC3339, t); err == nil {
+			return expiryValue(ts.Unix()), nil
+		}
+		return zero, fmt.Errorf("expires_at must be a unix timestamp, yyyy-mm-dd or RFC3339")
+	case nil:
+		return zero, nil
+	default:
+		return zero, fmt.Errorf("expires_at must be a unix timestamp or date string")
+	}
+}
+
+// applyConflictUpdate merges an imported item into the existing link.
+func (s *Server) applyConflictUpdate(r *http.Request, item createLinkRequest, code string) error {
+	link, err := s.store.GetLink(r.Context(), code)
+	if err != nil {
+		return err
+	}
+	link.URL = item.URL
+	if item.Title != "" {
+		link.Title = item.Title
+	}
+	if item.Description != "" {
+		link.Description = item.Description
+	}
+	if item.ExpiresAt != nil {
+		link.ExpiresAt = int64(*item.ExpiresAt)
+	}
+	if item.CreatedAt != nil {
+		link.CreatedAt = *item.CreatedAt
+	}
+	link.UpdatedAt = s.now()
+	return s.store.UpdateLink(r.Context(), link)
 }
 
 // codeError carries a per-item validation error.
@@ -91,7 +373,7 @@ func (s *Server) resolveCode(item createLinkRequest, cfg *config.Config) (string
 	if !isAbsoluteHTTPURL(item.URL) {
 		return "", &codeError{"invalid_request", "url must be an absolute http(s) URL"}
 	}
-	if item.ExpiresAt < 0 {
+	if item.ExpiresAt != nil && *item.ExpiresAt < 0 {
 		return "", &codeError{"invalid_request", "expires_at must be >= 0"}
 	}
 	if item.Code == "" {

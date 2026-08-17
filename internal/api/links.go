@@ -3,7 +3,8 @@ package api
 import (
 	"encoding/json"
 	"errors"
-	"log"
+	"fmt"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -35,12 +36,15 @@ func (s *Server) listLinks(w http.ResponseWriter, r *http.Request) {
 		PageSize: pageSize,
 		Sort:     r.URL.Query().Get("sort"),
 		Order:    r.URL.Query().Get("order"),
+		Expires:  r.URL.Query().Get("expires"),
+		Now:      s.now(),
 	}
 	links, total, err := s.store.ListLinks(r.Context(), opts)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "internal_error", "failed to list links")
 		return
 	}
+	slog.Debug("links listed", "total", total, "page", opts.Page, "actor", actorFrom(r))
 	cfg := s.cfg.Get()
 	out := make([]linkJSON, 0, len(links))
 	for i := range links {
@@ -54,11 +58,45 @@ func (s *Server) listLinks(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// createLinkRequest is the POST /api/v1/links body.
+// expiryValue accepts either a unix-seconds timestamp (number) or a
+// yyyy-mm-dd calendar date string (parsed at local midnight).
+type expiryValue int64
+
+func (e *expiryValue) UnmarshalJSON(b []byte) error {
+	if len(b) == 0 || string(b) == "null" {
+		return nil
+	}
+	var n json.Number
+	if err := json.Unmarshal(b, &n); err == nil {
+		i, err := n.Int64()
+		if err != nil {
+			return fmt.Errorf("expires_at: %w", err)
+		}
+		*e = expiryValue(i)
+		return nil
+	}
+	var s string
+	if err := json.Unmarshal(b, &s); err == nil {
+		t, err := time.ParseInLocation("2006-01-02", s, time.Local)
+		if err != nil {
+			return fmt.Errorf("expires_at must be a unix timestamp or yyyy-mm-dd")
+		}
+		*e = expiryValue(t.Unix())
+		return nil
+	}
+	return fmt.Errorf("expires_at must be a unix timestamp or yyyy-mm-dd")
+}
+
+// createLinkRequest is the POST /api/v1/links body. created_at is honored on
+// batch imports only (single creates ignore it); click_count is deliberately
+// not accepted anywhere — imports must never fabricate click history.
 type createLinkRequest struct {
-	URL       string `json:"url"`
-	Code      string `json:"code"`
-	ExpiresAt int64  `json:"expires_at"`
+	URL         string       `json:"url"`
+	Code        string       `json:"code"`
+	Title       string       `json:"title"`
+	Description string       `json:"description"`
+	ExpiresAt   *expiryValue `json:"expires_at"`
+	CreatedAt   *int64       `json:"created_at"`
 }
 
 // createLink handles POST /api/v1/links.
@@ -72,7 +110,7 @@ func (s *Server) createLink(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_request", "url must be an absolute http(s) URL")
 		return
 	}
-	if req.ExpiresAt < 0 {
+	if req.ExpiresAt != nil && *req.ExpiresAt < 0 {
 		writeError(w, http.StatusBadRequest, "invalid_request", "expires_at must be >= 0")
 		return
 	}
@@ -99,14 +137,16 @@ func (s *Server) createLink(w http.ResponseWriter, r *http.Request) {
 
 	now := s.now()
 	link := &store.Link{
-		Code:      code,
-		URL:       req.URL,
-		ExpiresAt: req.ExpiresAt,
-		CreatedAt: now,
-		UpdatedAt: now,
+		Code:        code,
+		URL:         req.URL,
+		Title:       req.Title,
+		Description: req.Description,
+		CreatedAt:   now,
+		UpdatedAt:   now,
 	}
-	// Auto-fetch the title/description; a fetch failure never blocks creation.
-	s.attachMeta(r, link)
+	if req.ExpiresAt != nil {
+		link.ExpiresAt = int64(*req.ExpiresAt)
+	}
 	if err := s.store.CreateLink(r.Context(), link); err != nil {
 		if errors.Is(err, store.ErrTaken) {
 			writeError(w, http.StatusConflict, "code_taken", "code is already in use")
@@ -115,6 +155,10 @@ func (s *Server) createLink(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "internal_error", "failed to create link")
 		return
 	}
+	// Title/description are fetched in the background so a slow target site
+	// never delays the response; the meta lands on a later list refetch.
+	s.meta.enqueue(code, req.URL)
+	slog.Info("link created", "code", code, "url", req.URL, "actor", actorFrom(r))
 	writeJSON(w, http.StatusCreated, toLinkJSON(link, fullURLs(cfg, r, code)))
 }
 
@@ -129,6 +173,7 @@ func (s *Server) getLink(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "internal_error", "failed to get link")
 		return
 	}
+	slog.Debug("link fetched", "code", link.Code, "actor", actorFrom(r))
 	writeJSON(w, http.StatusOK, toLinkJSON(link, fullURLs(s.cfg.Get(), r, link.Code)))
 }
 
@@ -161,17 +206,16 @@ func (s *Server) updateLink(w http.ResponseWriter, r *http.Request) {
 	}
 	cfg := s.cfg.Get()
 
+	// Changing the URL re-fetches the title/description (in the background),
+	// unless the caller overrides them explicitly in the same request.
+	refetchMeta := false
 	if req.URL != nil {
 		if !isAbsoluteHTTPURL(*req.URL) {
 			writeError(w, http.StatusBadRequest, "invalid_request", "url must be an absolute http(s) URL")
 			return
 		}
 		link.URL = *req.URL
-		// Changing the URL re-fetches the title/description, unless the
-		// caller overrides them explicitly in the same request.
-		if req.Title == nil && req.Description == nil {
-			s.attachMeta(r, link)
-		}
+		refetchMeta = req.Title == nil && req.Description == nil
 	}
 	if req.Title != nil {
 		link.Title = *req.Title
@@ -217,12 +261,17 @@ func (s *Server) updateLink(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "internal_error", "failed to update link")
 		return
 	}
+	if refetchMeta {
+		s.meta.enqueue(link.Code, link.URL)
+	}
+	slog.Info("link updated", "code", link.Code, "actor", actorFrom(r))
 	writeJSON(w, http.StatusOK, toLinkJSON(link, fullURLs(cfg, r, link.Code)))
 }
 
 // deleteLink handles DELETE /api/v1/links/{code}.
 func (s *Server) deleteLink(w http.ResponseWriter, r *http.Request) {
-	if err := s.store.DeleteLink(r.Context(), pathCode(r.PathValue("code"))); err != nil {
+	code := pathCode(r.PathValue("code"))
+	if err := s.store.DeleteLink(r.Context(), code); err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "not_found", "link not found")
 			return
@@ -230,25 +279,10 @@ func (s *Server) deleteLink(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "internal_error", "failed to delete link")
 		return
 	}
+	slog.Info("link deleted", "code", code, "actor", actorFrom(r))
 	w.WriteHeader(http.StatusNoContent)
 }
 
 // pathCode normalizes a multi-level code captured by {code...}: the wildcard
 // preserves leading slashes, strip them for DB lookups.
 func pathCode(code string) string { return strings.TrimPrefix(code, "/") }
-
-// attachMeta fetches title/description for the link's URL and stores them.
-// Fetch failures are logged and leave the meta empty; they never fail the
-// surrounding operation.
-func (s *Server) attachMeta(r *http.Request, link *store.Link) {
-	if s.fetcher == nil {
-		return
-	}
-	title, desc, err := s.fetcher.Fetch(r.Context(), link.URL)
-	if err != nil {
-		log.Printf("fetch meta for %s: %v", link.URL, err)
-		return
-	}
-	link.Title = title
-	link.Description = desc
-}

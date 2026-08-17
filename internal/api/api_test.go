@@ -12,11 +12,18 @@ import (
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/redis/go-redis/v9"
+	"golang.org/x/crypto/bcrypt"
 
 	"github.com/wmy2981/gourl/internal/config"
 	"github.com/wmy2981/gourl/internal/counter"
 	"github.com/wmy2981/gourl/internal/store"
 )
+
+// testAdminAuth builds an auth with a cheap bcrypt hash of the password.
+func testAdminAuth(password, secret string) *adminAuth {
+	hash, _ := bcrypt.GenerateFromPassword([]byte(password), bcrypt.MinCost)
+	return newAdminAuth(string(hash), secret)
+}
 
 func newTestServer(t *testing.T) (*Server, *miniredis.Miniredis) {
 	t.Helper()
@@ -37,7 +44,7 @@ func newTestServer(t *testing.T) (*Server, *miniredis.Miniredis) {
 
 	srv := NewServer(st, cfgMgr, counter.NewFromClient(rdb))
 	srv.now = func() int64 { return 1700000000 }
-	srv.admin = newAdminAuth("test-password", "test-secret")
+	srv.admin = testAdminAuth("test-password", "test-secret")
 	srv.assetsDir = t.TempDir()
 	if testSession == nil {
 		tok, err := srv.admin.issueToken()

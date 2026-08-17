@@ -11,6 +11,9 @@ frontend/test-results/
 frontend/playwright-report/
 frontend/tsconfig.tsbuildinfo
 internal/webui/dist/
+# Generated copies of assets/favicon.svg (single source of truth is the repo root)
+frontend/src/assets/icon.svg
+internal/webui/icon.svg
 
 # Runtime data (SQLite, uploaded icons)
 data/

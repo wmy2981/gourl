@@ -38,7 +38,7 @@ export interface LinkListResponse {
 export interface UABlock {
   id: number
   pattern: string
-  created_at: number
+  created_at?: number
 }
 
 export interface TokenInfo {
@@ -53,8 +53,6 @@ export interface SiteInfo {
   title: string
   keywords: string
   description: string
-  header: string
-  footer: string
 }
 
 export interface AppConfig {
@@ -63,6 +61,12 @@ export interface AppConfig {
   base_url: string
   extra_base_urls: string[]
   reserved_codes: string[]
+  ua_blocks: string[]
+  ip_blocks: string[]
+  login_rate_max_attempts: number
+  login_rate_lock_seconds: number
+  link_rate_per_second: number
+  log_level: string
   icon: string
 }
 
@@ -73,13 +77,60 @@ export interface DashboardData {
   daily: { date: string; count: number }[]
 }
 
+export interface LogRecord {
+  time: string
+  level: 'debug' | 'info' | 'warn' | 'error' | ''
+  message: string
+  attrs?: Record<string, unknown>
+}
+
+export interface LogHistoryResponse {
+  available: boolean
+  records: LogRecord[]
+}
+
+export interface BatchCreateResult {
+  index: number
+  url: string
+  status: 'created' | 'updated' | 'skipped' | 'error'
+  code?: string
+  error_code?: string
+  error_message?: string
+}
+
+export interface BatchCreateResponse {
+  created: number
+  failed: number
+  /** Per-status counts and code lists: created, skipped, updated, failed. */
+  succeeded: number
+  skipped: number
+  updated: number
+  failed_codes: string[]
+  skipped_codes: string[]
+  updated_codes: string[]
+  results: BatchCreateResult[]
+}
+
+/** Import item: url is required; the rest is optional and mirrors the export fields. click_count is dropped on import. */
+export interface ImportItem {
+  url: string
+  code?: string
+  title?: string
+  description?: string
+  expires_at?: number | string
+  created_at?: number
+}
+
 const JSON_HEADERS = { 'Content-Type': 'application/json' }
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  // FormData bodies must keep the browser-set multipart boundary; forcing the
+  // JSON content type would make the server reject the file field.
+  const isForm = typeof FormData !== 'undefined' && init.body instanceof FormData
   const res = await fetch(path, {
     credentials: 'same-origin',
     ...init,
-    headers: { ...JSON_HEADERS, ...(init.headers ?? {}) },
+    headers: isForm ? { ...(init.headers ?? {}) } : { ...JSON_HEADERS, ...(init.headers ?? {}) },
   })
   if (res.status === 401) {
     // Not authenticated (or session expired): back to login.
@@ -114,7 +165,13 @@ export const api = {
     }),
   logout: () =>
     request<{ ok: boolean }>('/api/v1/auth/logout', { method: 'POST' }),
-  health: () => request<Record<string, unknown>>('/api/v1/health'),
+  setupAdmin: (password: string) =>
+    request<{ ok: boolean }>('/api/v1/auth/setup', {
+      method: 'POST',
+      body: JSON.stringify({ password }),
+    }),
+  authStatus: () => request<{ configured: boolean }>('/api/v1/auth/status'),
+  health: () => request<{ name: string }>('/api/v1/health'),
 
   listLinks: (params: Record<string, string | number | undefined>) => {
     const q = new URLSearchParams()
@@ -124,13 +181,13 @@ export const api = {
     const qs = q.toString()
     return request<LinkListResponse>(`/api/v1/links${qs ? `?${qs}` : ''}`)
   },
-  createLink: (body: { url: string; code?: string; expires_at?: number }) =>
+  createLink: (body: { url: string; code?: string; expires_at?: number; title?: string; description?: string }) =>
     request<Link>('/api/v1/links', { method: 'POST', body: JSON.stringify(body) }),
-  batchCreate: (items: { url: string; code?: string; expires_at?: number }[]) =>
-    request<{ created: number; failed: number; results: unknown[] }>(
-      '/api/v1/links/batch',
-      { method: 'POST', body: JSON.stringify(items) },
-    ),
+  batchCreate: (items: ImportItem[], conflict: 'error' | 'skip' | 'update' = 'error') =>
+    request<BatchCreateResponse>('/api/v1/links/batch', {
+      method: 'POST',
+      body: JSON.stringify({ conflict, items }),
+    }),
   getLink: (code: string) => request<Link>(`/api/v1/links/${encodePath(code)}`),
   updateLink: (code: string, body: Record<string, unknown>) =>
     request<Link>(`/api/v1/links/${encodePath(code)}`, {
@@ -139,7 +196,30 @@ export const api = {
     }),
   deleteLink: (code: string) =>
     request<void>(`/api/v1/links/${encodePath(code)}`, { method: 'DELETE' }),
+  deleteLinks: (codes: string[]) =>
+    request<{ deleted: number }>('/api/v1/links', {
+      method: 'DELETE',
+      body: JSON.stringify({ codes }),
+    }),
+  expiredCount: () => request<{ count: number }>('/api/v1/links/expired'),
+  deleteExpired: () =>
+    request<{ deleted: number }>('/api/v1/links/expired', { method: 'DELETE' }),
   exportCsv: () => request<Blob>('/api/v1/export.csv'),
+  exportJson: () => request<Record<string, unknown>[]>('/api/v1/export.json'),
+  logHistory: (limit = 200, offset = 0) =>
+    request<LogHistoryResponse>(`/api/v1/logs?limit=${limit}&offset=${offset}`),
+  logStream: (onLog: (rec: LogRecord) => void, onError?: () => void) => {
+    const es = new EventSource('/api/v1/logs/stream')
+    es.addEventListener('log', (e) => {
+      try {
+        onLog(JSON.parse((e as MessageEvent).data) as LogRecord)
+      } catch {
+        // malformed frame: ignore
+      }
+    })
+    es.onerror = () => onError?.()
+    return es
+  },
 
   uaBlocks: () => request<{ ua_blocks: UABlock[] }>('/api/v1/ua-blocks'),
   addUABlock: (pattern: string) =>

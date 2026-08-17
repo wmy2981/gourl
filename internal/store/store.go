@@ -7,6 +7,8 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log/slog"
+	"strings"
 
 	sqlite3 "modernc.org/sqlite"
 	sqlite3lib "modernc.org/sqlite/lib"
@@ -32,16 +34,22 @@ type Link struct {
 
 // ListOptions controls listing.
 type ListOptions struct {
-	Query    string // substring match on code/url/title
+	Query    string // substring match on code/url/title/description
 	Page     int    // 1-based
 	PageSize int    // default 20, max 100
 	Sort     string // created_at (default) | clicks | code
 	Order    string // desc (default) | asc
+	// Expires filters by expiry state: "" or "all" = no filter, "expired" =
+	// past expiry, "active" = never expires or still valid. Now is the clock
+	// used for the comparison (injectable for tests).
+	Expires string
+	Now     int64
 }
 
-// Store wraps the SQLite connection.
+// Store wraps the SQLite connection plus the in-memory link lookup cache.
 type Store struct {
-	db *sql.DB
+	db    *sql.DB
+	cache *linkCache
 }
 
 // Open opens (creating if needed) the SQLite database at path and runs
@@ -52,7 +60,12 @@ func Open(path string) (*Store, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open sqlite: %w", err)
 	}
-	s := &Store{db: db}
+	if path == ":memory:" {
+		// An in-memory database lives per-connection; pin a single connection
+		// so every goroutine (e.g. the async meta workers) sees the same data.
+		db.SetMaxOpenConns(1)
+	}
+	s := &Store{db: db, cache: newLinkCache()}
 	if err := s.migrate(context.Background()); err != nil {
 		db.Close()
 		return nil, err
@@ -97,6 +110,10 @@ var migrations = []string{
 		note       TEXT NOT NULL DEFAULT '',
 		created_at INTEGER NOT NULL
 	);`,
+	// v2: query indexes for list ordering, expiry cleanup and daily stats.
+	`CREATE INDEX IF NOT EXISTS idx_links_created_at ON links(created_at);
+	CREATE INDEX IF NOT EXISTS idx_links_expires_at ON links(expires_at);
+	CREATE INDEX IF NOT EXISTS idx_daily_clicks_date ON daily_clicks(date);`,
 }
 
 // migrate applies pending migrations inside a transaction each, recording the
@@ -148,16 +165,76 @@ func (s *Store) CreateLink(ctx context.Context, l *Link) error {
 		`INSERT INTO links (`+linkColumns+`) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
 		l.Code, l.URL, l.Title, l.Description, l.ExpiresAt, l.ClickCount, l.CreatedAt, l.UpdatedAt)
 	if isConstraint(err) {
+		slog.Debug("store: create link failed", "code", l.Code, "error", ErrTaken)
 		return ErrTaken
 	}
 	if err != nil {
+		slog.Debug("store: create link failed", "code", l.Code, "error", err)
 		return fmt.Errorf("create link: %w", err)
 	}
+	s.cache.set(l.Code, l)
+	slog.Debug("store: link created", "code", l.Code)
 	return nil
 }
 
-// GetLink fetches a link by code, returning ErrNotFound if absent.
+// CreateLinks inserts many links in a single transaction (batch imports).
+// The returned slice mirrors CreateLink's semantics per item: ErrTaken for
+// codes that already exist. A non-constraint error aborts the whole batch.
+func (s *Store) CreateLinks(ctx context.Context, links []Link) ([]error, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	errs := make([]error, len(links))
+	for i := range links {
+		_, err := tx.ExecContext(ctx,
+			`INSERT INTO links (`+linkColumns+`) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+			links[i].Code, links[i].URL, links[i].Title, links[i].Description,
+			links[i].ExpiresAt, links[i].ClickCount, links[i].CreatedAt, links[i].UpdatedAt)
+		if isConstraint(err) {
+			errs[i] = ErrTaken
+			continue
+		}
+		if err != nil {
+			return nil, fmt.Errorf("create links: %w", err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	created := 0
+	for i, err := range errs {
+		if err == nil {
+			s.cache.set(links[i].Code, &links[i])
+			created++
+		}
+	}
+	slog.Debug("store: links created", "created", created, "failed", len(links)-created)
+	return errs, nil
+}
+
+// UpdateMeta refreshes a link's title/description after an async meta fetch.
+func (s *Store) UpdateMeta(ctx context.Context, code, title, description string, updatedAt int64) error {
+	_, err := s.db.ExecContext(ctx,
+		`UPDATE links SET title = ?, description = ?, updated_at = ? WHERE code = ?`,
+		title, description, updatedAt, code)
+	if err != nil {
+		slog.Debug("store: update meta failed", "code", code, "error", err)
+		return fmt.Errorf("update meta: %w", err)
+	}
+	s.cache.del(code)
+	slog.Debug("store: meta updated", "code", code)
+	return nil
+}
+
+// GetLink fetches a link by code, returning ErrNotFound if absent. Results
+// are served from the in-memory cache when fresh; every write invalidates the
+// affected entry.
 func (s *Store) GetLink(ctx context.Context, code string) (*Link, error) {
+	if l := s.cache.get(code); l != nil {
+		return l, nil
+	}
 	row := s.db.QueryRowContext(ctx, `SELECT `+linkColumns+` FROM links WHERE code = ?`, code)
 	l, err := scanLink(row)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -166,6 +243,7 @@ func (s *Store) GetLink(ctx context.Context, code string) (*Link, error) {
 	if err != nil {
 		return nil, fmt.Errorf("get link: %w", err)
 	}
+	s.cache.set(code, l)
 	return l, nil
 }
 
@@ -176,6 +254,7 @@ func (s *Store) UpdateLink(ctx context.Context, l *Link) error {
 		`UPDATE links SET url = ?, title = ?, description = ?, expires_at = ?, updated_at = ? WHERE code = ?`,
 		l.URL, l.Title, l.Description, l.ExpiresAt, l.UpdatedAt, l.Code)
 	if err != nil {
+		slog.Debug("store: update link failed", "code", l.Code, "error", err)
 		return fmt.Errorf("update link: %w", err)
 	}
 	n, err := res.RowsAffected()
@@ -183,8 +262,11 @@ func (s *Store) UpdateLink(ctx context.Context, l *Link) error {
 		return err
 	}
 	if n == 0 {
+		slog.Debug("store: update link failed", "code", l.Code, "error", ErrNotFound)
 		return ErrNotFound
 	}
+	s.cache.del(l.Code)
+	slog.Debug("store: link updated", "code", l.Code)
 	return nil
 }
 
@@ -214,11 +296,18 @@ func (s *Store) RenameLink(ctx context.Context, oldCode, newCode string, now int
 	if _, err := tx.ExecContext(ctx, `UPDATE daily_clicks SET code = ? WHERE code = ?`, newCode, oldCode); err != nil {
 		return fmt.Errorf("rename daily clicks: %w", err)
 	}
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	s.cache.del(oldCode)
+	s.cache.del(newCode)
+	slog.Debug("store: link renamed", "from", oldCode, "to", newCode)
+	return nil
 }
 
-// DeleteLink removes a link and its daily click records. Returns ErrNotFound
-// if the code was absent.
+// DeleteLink removes a link row. Its daily click records are deliberately
+// kept: the dashboard totals and trend chart count history even for links
+// that no longer exist. Returns ErrNotFound if the code was absent.
 func (s *Store) DeleteLink(ctx context.Context, code string) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -235,12 +324,77 @@ func (s *Store) DeleteLink(ctx context.Context, code string) error {
 		return err
 	}
 	if n == 0 {
+		slog.Debug("store: delete link failed", "code", code, "error", ErrNotFound)
 		return ErrNotFound
 	}
-	if _, err := tx.ExecContext(ctx, `DELETE FROM daily_clicks WHERE code = ?`, code); err != nil {
-		return fmt.Errorf("delete daily clicks: %w", err)
+	if err := tx.Commit(); err != nil {
+		return err
 	}
-	return tx.Commit()
+	s.cache.del(code)
+	slog.Debug("store: link deleted", "code", code)
+	return nil
+}
+
+// DeleteLinks removes many links in one transaction, returning how many rows
+// were actually deleted (absent codes are simply skipped). Daily click
+// records are deliberately kept, as in DeleteLink.
+func (s *Store) DeleteLinks(ctx context.Context, codes []string) (int64, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+	var deleted int64
+	for _, code := range codes {
+		res, err := tx.ExecContext(ctx, `DELETE FROM links WHERE code = ?`, code)
+		if err != nil {
+			return 0, fmt.Errorf("delete links: %w", err)
+		}
+		n, err := res.RowsAffected()
+		if err != nil {
+			return 0, err
+		}
+		deleted += n
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+	for _, code := range codes {
+		s.cache.del(code)
+	}
+	slog.Debug("store: links deleted", "deleted", deleted)
+	return deleted, nil
+}
+
+// CountExpired returns the number of links past their expiry (expires_at in
+// the past, never counting 0 = never expires).
+func (s *Store) CountExpired(ctx context.Context, now int64) (int64, error) {
+	var n int64
+	err := s.db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM links WHERE expires_at > 0 AND expires_at < ?`, now).Scan(&n)
+	if err != nil {
+		return 0, fmt.Errorf("count expired: %w", err)
+	}
+	return n, nil
+}
+
+// DeleteExpired removes every expired link in one transaction and returns
+// how many were deleted.
+func (s *Store) DeleteExpired(ctx context.Context, now int64) (int64, error) {
+	res, err := s.db.ExecContext(ctx,
+		`DELETE FROM links WHERE expires_at > 0 AND expires_at < ?`, now)
+	if err != nil {
+		return 0, fmt.Errorf("delete expired: %w", err)
+	}
+	// The sweep touches unknown codes; drop the whole cache to be safe.
+	s.cache.clear()
+	n, err := res.RowsAffected()
+	if err != nil {
+		slog.Debug("store: delete expired failed", "error", err)
+		return 0, err
+	}
+	slog.Debug("store: expired links deleted", "deleted", n)
+	return n, nil
 }
 
 // ListLinks returns links matching the options plus the total count of matches.
@@ -263,12 +417,25 @@ func (s *Store) ListLinks(ctx context.Context, opts ListOptions) ([]Link, int, e
 		order = "ASC"
 	}
 
-	var where string
+	var conds []string
 	var args []any
 	if opts.Query != "" {
-		where = ` WHERE code LIKE ? OR url LIKE ? OR title LIKE ?`
+		// Parens keep AND-joined expiry filters from binding inside the ORs.
+		conds = append(conds, `(code LIKE ? OR url LIKE ? OR title LIKE ? OR description LIKE ?)`)
 		like := "%" + opts.Query + "%"
-		args = []any{like, like, like}
+		args = []any{like, like, like, like}
+	}
+	switch opts.Expires {
+	case "expired":
+		conds = append(conds, `expires_at > 0 AND expires_at < ?`)
+		args = append(args, opts.Now)
+	case "active":
+		conds = append(conds, `(expires_at = 0 OR expires_at >= ?)`)
+		args = append(args, opts.Now)
+	}
+	where := ""
+	if len(conds) > 0 {
+		where = ` WHERE ` + strings.Join(conds, ` AND `)
 	}
 
 	var total int

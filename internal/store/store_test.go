@@ -126,7 +126,9 @@ func TestRenameLinkConflictReturnsErrTaken(t *testing.T) {
 	}
 }
 
-func TestDeleteLinkRemovesDailyClicks(t *testing.T) {
+// TestDeleteLinkKeepsDailyClicks: daily click records survive link deletion
+// so the dashboard history stays complete.
+func TestDeleteLinkKeepsDailyClicks(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
 	if err := s.CreateLink(ctx, sampleLink("abc")); err != nil {
@@ -145,8 +147,8 @@ func TestDeleteLinkRemovesDailyClicks(t *testing.T) {
 	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM daily_clicks WHERE code = 'abc'`).Scan(&n); err != nil {
 		t.Fatal(err)
 	}
-	if n != 0 {
-		t.Errorf("daily clicks not removed: %d rows", n)
+	if n != 1 {
+		t.Errorf("daily clicks lost on delete: %d rows, want 1", n)
 	}
 }
 
@@ -164,17 +166,26 @@ func TestListLinksPaginationAndSearch(t *testing.T) {
 		l := sampleLink(code)
 		l.CreatedAt = int64(i)
 		l.UpdatedAt = int64(i)
+		l.Description = "docs for " + code
 		if err := s.CreateLink(ctx, l); err != nil {
 			t.Fatal(err)
 		}
 	}
-	// Search.
+	// Search by url.
 	links, total, err := s.ListLinks(ctx, ListOptions{Query: "example.com/bb"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if total != 1 || len(links) != 1 || links[0].Code != "bbb" {
-		t.Errorf("search: got %d total, %d rows, %v", total, len(links), links)
+		t.Errorf("url search: got %d total, %d rows, %v", total, len(links), links)
+	}
+	// Search by description.
+	links, total, err = s.ListLinks(ctx, ListOptions{Query: "docs for dd"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if total != 1 || len(links) != 1 || links[0].Code != "ddd" {
+		t.Errorf("description search: got %d total, %d rows, %v", total, len(links), links)
 	}
 	// Pagination, default sort = created_at desc.
 	page1, total, err := s.ListLinks(ctx, ListOptions{Page: 1, PageSize: 2})

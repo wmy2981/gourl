@@ -21,11 +21,20 @@ test('saves site info and the change takes effect immediately', async ({ page, r
   await page.getByRole('button', { name: /save settings/i }).click()
 })
 
-test('adds and removes a blocked user agent', async ({ page }) => {
+test('saves a blocked user agent from the settings form', async ({ page, request }) => {
   await page.goto('/admin/settings')
-  await page.getByPlaceholder('curl').fill('E2ESpyBot')
-  await page.getByRole('button', { name: 'Add' }).click()
-  await expect(page.getByText('E2ESpyBot')).toBeVisible()
+  await page.getByPlaceholder('curl, Googlebot').fill('E2ESpyBot')
+  await page.getByRole('button', { name: /save settings/i }).click()
+  await expect(page.getByText('Settings saved')).toBeVisible()
+
+  // The block list is config-driven now; verify it landed (page fetch so the
+  // browser session cookie rides along — the request fixture is unauthenticated).
+  const body = await page.evaluate(async () => (await fetch('/api/v1/ua-blocks')).json())
+  expect(JSON.stringify(body.ua_blocks)).toContain('E2ESpyBot')
+
+  // Restore for the rest of the run.
+  await page.getByPlaceholder('curl, Googlebot').fill('')
+  await page.getByRole('button', { name: /save settings/i }).click()
 })
 
 test('creates an api token and the full value is shown once', async ({ page }) => {

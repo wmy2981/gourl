@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"fmt"
+	"log/slog"
 )
 
 // DailyCount is one daily click record to apply.
@@ -43,5 +44,16 @@ func (s *Store) ApplyCounts(ctx context.Context, totals map[string]int64, dailie
 			return fmt.Errorf("apply daily for %s/%s: %w", d.Code, d.Date, err)
 		}
 	}
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	// Click totals change links.click_count, which GetLink caches — drop the
+	// touched entries so the next read sees the fresh counts.
+	for code := range totals {
+		if code != "" {
+			s.cache.del(code)
+		}
+	}
+	slog.Debug("store: counts applied", "totals", len(totals), "dailies", len(dailies))
+	return nil
 }

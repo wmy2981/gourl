@@ -1,30 +1,35 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { ArrowRight, KeyRound } from 'lucide-react'
 import { api, ApiError } from '../lib/api'
-import { Button, Input, Label } from '../components/ui'
+import { Button, Input, Label, useToast } from '../components/ui'
 
 export default function Login() {
   const { t } = useTranslation()
+  const { toast } = useToast()
   const navigate = useNavigate()
+  // The configured service name replaces the gourl brand in the brand line;
+  // it comes from the public health endpoint so it works before any admin
+  // password exists (the config API refuses requests in setup mode).
+  const { data: health } = useQuery({ queryKey: ['health'], queryFn: api.health })
   const [password, setPassword] = useState('')
-  const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!password || busy) return
     setBusy(true)
-    setError('')
     try {
       await api.login(password)
       navigate('/admin', { replace: true })
     } catch (err) {
-      setError(
+      toast(
         err instanceof ApiError && err.code === 'auth_disabled'
           ? t('login.authDisabled')
           : t('login.wrongPassword'),
+        'error',
       )
     } finally {
       setBusy(false)
@@ -40,7 +45,7 @@ export default function Login() {
           </div>
           <h1 className="text-xl font-semibold">{t('login.heading')}</h1>
           <p className="mt-1 text-sm text-muted">
-            {__APP_NAME__} <span className="short-code">v{__APP_VERSION__}</span>
+            {health?.name || __APP_NAME__} <span className="short-code">v{__APP_VERSION__}</span>
           </p>
         </div>
 
@@ -53,8 +58,6 @@ export default function Login() {
           autoFocus
           autoComplete="current-password"
         />
-
-        {error && <p className="mt-3 text-sm text-danger">{error}</p>}
 
         <Button type="submit" disabled={busy || !password} className="mt-5 w-full">
           {t('login.signIn')}

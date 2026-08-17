@@ -99,6 +99,44 @@ func TestUABlockManagement(t *testing.T) {
 	}
 }
 
+// TestUpdateConfigSetsUABlocks: ua_blocks is a regular config field managed
+// from the settings page — a PUT replaces the whole list, and a PUT without
+// the field clears it.
+func TestUpdateConfigSetsUABlocks(t *testing.T) {
+	s, _ := newTestServer(t)
+
+	rec := do(t, s, http.MethodPut, "/api/v1/config", map[string]any{
+		"site": map[string]any{
+			"name": "UA Test", "title": "T", "keywords": "", "description": "",
+		},
+		"short_code_length": 4,
+		"ua_blocks":         []string{"Googlebot", "Bingbot"},
+	})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("put config status = %d, body %s", rec.Code, rec.Body.String())
+	}
+
+	rec = do(t, s, http.MethodGet, "/api/v1/ua-blocks", nil)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "Googlebot") {
+		t.Fatalf("ua blocks after PUT: %d %s", rec.Code, rec.Body.String())
+	}
+
+	// A second PUT without ua_blocks clears the list (full-replace semantics).
+	rec = do(t, s, http.MethodPut, "/api/v1/config", map[string]any{
+		"site": map[string]any{
+			"name": "UA Test", "title": "T", "keywords": "", "description": "",
+		},
+		"short_code_length": 4,
+	})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("second put config status = %d", rec.Code)
+	}
+	rec = do(t, s, http.MethodGet, "/api/v1/ua-blocks", nil)
+	if rec.Code != http.StatusOK || strings.Contains(rec.Body.String(), "Googlebot") {
+		t.Fatalf("ua blocks after clearing PUT: %d %s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestConfigGetAndUpdate(t *testing.T) {
 	s, _ := newTestServer(t)
 
@@ -111,7 +149,6 @@ func TestConfigGetAndUpdate(t *testing.T) {
 	rec = do(t, s, http.MethodPut, "/api/v1/config", map[string]any{
 		"site": map[string]any{
 			"name": "Renamed", "title": "T", "keywords": "", "description": "",
-			"header": "", "footer": "",
 		},
 		"short_code_length": 8,
 		"base_url":          "https://s.example.com",

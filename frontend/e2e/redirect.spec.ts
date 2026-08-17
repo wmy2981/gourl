@@ -5,16 +5,20 @@ test.beforeEach(async ({ request }) => {
   await apiLogin(request)
 })
 
+// maxRedirects: 0 — the request fixture follows redirects by default, which
+// would chase the 302 to the external target and report its status instead.
+const NO_REDIRECT = { maxRedirects: 0 } as const
+
 test('redirects a short code with 302 to the target', async ({ request }) => {
   await createLinkApi(request, { url: 'https://example.com/redirect-target', code: 'r302' })
-  const res = await request.get('/r302')
+  const res = await request.get('/r302', NO_REDIRECT)
   expect(res.status()).toBe(302)
   expect(res.headers()['location']).toBe('https://example.com/redirect-target')
 })
 
 test('redirects multi-level codes', async ({ request }) => {
   await createLinkApi(request, { url: 'https://example.com/multi', code: 'a/b' })
-  const res = await request.get('/a/b')
+  const res = await request.get('/a/b', NO_REDIRECT)
   expect(res.status()).toBe(302)
   expect(res.headers()['location']).toBe('https://example.com/multi')
 })
@@ -31,29 +35,33 @@ test('blocks matching user agents with 403 and does not count them', async ({ re
   // A normal UA redirects and is counted (flush runs every 500ms in e2e).
   const ok = await request.get('/ua-test', {
     headers: { 'User-Agent': 'Mozilla/5.0 Chrome/126' },
+    ...NO_REDIRECT,
   })
   expect(ok.status()).toBe(302)
 
-  const stats = await request.get('/api/v1/links/ua-test')
-  expect(stats.status()).toBe(200)
-  const link = await stats.json()
-  expect(link.click_count).toBe(1)
+  // The click lands in Redis first; wait for the 500ms flush to SQLite.
+  await expect
+    .poll(async () => {
+      const stats = await request.get('/api/v1/links/ua-test')
+      return stats.status() === 200 ? (await stats.json()).click_count : -1
+    }, { timeout: 10_000 })
+    .toBe(1)
 })
 
-test('shows an expired page with bilingual copy', async ({ request, page }) => {
+test('expired codes behave like missing ones (404, bilingual copy)', async ({ request, page }) => {
   await createLinkApi(request, {
     url: 'https://example.com/expired-target',
-    code: 'expired',
+    code: 'expire-me',
     expires_at: 1, // long past
   })
 
-  const pageEn = await page.request.get('/expired')
-  expect(pageEn.status()).toBe(200)
-  expect((await pageEn.text()).toLowerCase()).toContain('this link has expired')
+  const pageEn = await page.request.get('/expire-me')
+  expect(pageEn.status()).toBe(404)
+  expect((await pageEn.text()).toLowerCase()).toContain('page not found')
 
-  const pageZh = await page.request.get('/expired?lang=zh')
-  expect(pageZh.status()).toBe(200)
-  expect((await pageZh.text())).toContain('链接已过期')
+  const pageZh = await page.request.get('/expire-me?lang=zh')
+  expect(pageZh.status()).toBe(404)
+  expect((await pageZh.text())).toContain('页面不存在')
 })
 
 test('serves a 404 page for unknown codes and reserved prefixes', async ({ request }) => {

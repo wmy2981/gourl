@@ -6,9 +6,8 @@ on:
   pull_request:
     branches: [main, dev]
 
-concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+# No concurrency group: every push runs its own full CI, and a newer push
+# never cancels an older run.
 
 jobs:
   go-test:
@@ -20,6 +19,12 @@ jobs:
         with:
           go-version: '1.26'
           cache: true
+
+      - name: Sync brand icon from single source
+        run: |
+          mkdir -p frontend/src/assets internal/webui
+          cp assets/favicon.svg frontend/src/assets/icon.svg
+          cp assets/favicon.svg internal/webui/icon.svg
 
       - name: Build frontend into embed location
         working-directory: frontend
@@ -80,6 +85,12 @@ jobs:
       - name: Install frontend dependencies
         working-directory: frontend
         run: npm ci --no-audit --no-fund
+
+      - name: Sync brand icon from single source
+        run: |
+          mkdir -p frontend/src/assets internal/webui
+          cp assets/favicon.svg frontend/src/assets/icon.svg
+          cp assets/favicon.svg internal/webui/icon.svg
 
       - name: Build frontend into embed location
         working-directory: frontend
