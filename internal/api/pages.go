@@ -4,11 +4,9 @@ import (
 	"html/template"
 	"net/http"
 	"strings"
-
-	"github.com/wmy2981/gourl/internal/store"
 )
 
-// pageTmpl renders the public error pages (expired / not found).
+// pageTmpl renders the public error pages (blocked / not found).
 var pageTmpl = template.Must(template.New("page").Parse(`<!DOCTYPE html>
 <html lang="{{.Lang}}">
 <head>
@@ -64,16 +62,6 @@ func langOf(r *http.Request) string {
 		return "zh"
 	}
 	return "en"
-}
-
-func (s *Server) renderExpired(w http.ResponseWriter, r *http.Request, link *store.Link) {
-	cfg := s.cfg.Get()
-	lang := langOf(r)
-	heading, message := "This link has expired", "This short link is past its expiration date and is no longer available."
-	if lang == "zh" {
-		heading, message = "链接已过期", "该短链接已超过有效期，无法继续访问。"
-	}
-	s.renderPage(w, http.StatusOK, lang, heading, message, link.Code, cfg.Site.Title, cfg.Site.Description)
 }
 
 func (s *Server) renderNotFound(w http.ResponseWriter, r *http.Request) {

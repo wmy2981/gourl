@@ -96,7 +96,7 @@ func TestRedirectUABlockedNotCounted(t *testing.T) {
 	}
 }
 
-func TestRedirectExpiredShowsBilingualPage(t *testing.T) {
+func TestRedirectExpiredReturnsNotFound(t *testing.T) {
 	s, _ := newTestServer(t)
 	createLink(t, s, "abc", "https://example.com/target")
 	rec := do(t, s, http.MethodPatch, "/api/v1/links/abc", map[string]any{"expires_at": s.now() - 1})
@@ -104,17 +104,18 @@ func TestRedirectExpiredShowsBilingualPage(t *testing.T) {
 		t.Fatalf("set expiry: %d", rec.Code)
 	}
 
+	// Expired codes are indistinguishable from missing ones: a plain 404.
 	rec = get(t, s, "/abc", nil)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expired status = %d, want 200 page", rec.Code)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expired status = %d, want 404", rec.Code)
 	}
-	if !strings.Contains(rec.Body.String(), "This link has expired") {
+	if !strings.Contains(rec.Body.String(), "Page not found") {
 		t.Errorf("en page missing heading: %s", rec.Body.String())
 	}
 
 	rec = get(t, s, "/abc?lang=zh", nil)
-	if !strings.Contains(rec.Body.String(), "链接已过期") {
-		t.Errorf("zh page missing heading: %s", rec.Body.String())
+	if rec.Code != http.StatusNotFound || !strings.Contains(rec.Body.String(), "页面不存在") {
+		t.Errorf("zh page: status %d, body %s", rec.Code, rec.Body.String())
 	}
 }
 

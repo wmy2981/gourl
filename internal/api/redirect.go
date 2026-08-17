@@ -48,7 +48,8 @@ func (s *Server) redirect(w http.ResponseWriter, r *http.Request) {
 
 	now := s.now()
 	if link.ExpiresAt > 0 && link.ExpiresAt < now {
-		s.renderExpired(w, r, link)
+		// Expired codes look like any other missing link: a plain 404.
+		s.renderNotFound(w, r)
 		return
 	}
 
