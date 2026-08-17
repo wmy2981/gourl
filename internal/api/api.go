@@ -5,9 +5,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -114,12 +116,13 @@ func (s *Server) Handler() http.Handler {
 	return s.logRequests(s.ipBlock(mux))
 }
 
-// logRequests logs every HTTP request with status and latency, plus a
-// truncated copy of the response body so failures carry their payload into
-// the log. The level follows the status: >=500 error, >=400 warning (every
-// invalid or refused request is logged as a warning), everything else debug
-// — access logging sits at debug so the info level carries business events
-// only.
+// logRequests logs every HTTP request with status and latency. Response
+// bodies are only mirrored when they are JSON, flattened into key-value
+// attrs (error.code=…, error.message=…); HTML pages and other payloads are
+// never logged. The level follows the status: >=500 error, >=400 warning
+// (every invalid or refused request is logged as a warning), everything else
+// debug — access logging sits at debug so the info level carries business
+// events only.
 func (s *Server) logRequests(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
@@ -137,18 +140,17 @@ func (s *Server) logRequests(next http.Handler) http.Handler {
 			"status", sw.status,
 			"duration_ms", time.Since(start).Milliseconds(),
 			"remote", r.RemoteAddr,
-			"ua", r.UserAgent(),
 		}
-		if body := sw.body(); body != "" {
-			attrs = append(attrs, "body", body)
+		if bodyAttrs, ok := parseJSONAttrs(sw.buf.String()); ok {
+			attrs = append(attrs, bodyAttrs...)
 		}
 		switch {
 		case sw.status >= http.StatusInternalServerError:
 			slog.Error("http request failed", attrs...)
 		case sw.status >= http.StatusBadRequest:
 			// Every invalid or refused request lands here as a warning: bad
-			// payloads, missing auth, unknown codes, rate limits — the
-			// truncated body carries the API error code and message.
+			// payloads, missing auth, unknown codes, rate limits — the JSON
+			// attrs carry the API error code and message.
 			slog.Warn("http request rejected", attrs...)
 		default:
 			slog.Debug("http request", attrs...)
@@ -156,11 +158,12 @@ func (s *Server) logRequests(next http.Handler) http.Handler {
 	})
 }
 
-// maxBodyLog caps how much of a response body the request log mirrors.
-const maxBodyLog = 300
+// maxJSONBodyLog caps how much of a JSON response body is captured for the
+// request log. Bodies that do not fit (or do not parse) are dropped silently.
+const maxJSONBodyLog = 4096
 
-// statusWriter captures the response status code for request logging and a
-// truncated copy of the response body (unless disabled). It forwards Flush so
+// statusWriter captures the response status code for request logging and,
+// when the response is JSON, a copy of its body. It forwards Flush so
 // streaming handlers (the SSE log stream) work through it.
 type statusWriter struct {
 	http.ResponseWriter
@@ -172,16 +175,23 @@ type statusWriter struct {
 
 func (w *statusWriter) WriteHeader(code int) {
 	w.status = code
-	// SSE streams are unbounded: stop capturing once the content type says so.
-	if strings.HasPrefix(w.Header().Get("Content-Type"), "text/event-stream") {
-		w.stopped = true
+	if w.capBody {
+		ct := w.Header().Get("Content-Type")
+		// SSE streams are unbounded: stop capturing once the content type says
+		// so. Only JSON payloads are mirrored — HTML pages and other content
+		// types are never logged.
+		if strings.HasPrefix(ct, "text/event-stream") {
+			w.stopped = true
+		} else if !strings.Contains(ct, "json") {
+			w.capBody = false
+		}
 	}
 	w.ResponseWriter.WriteHeader(code)
 }
 
 func (w *statusWriter) Write(p []byte) (int, error) {
 	if w.capBody && !w.stopped {
-		if remaining := maxBodyLog - w.buf.Len(); remaining > 0 {
+		if remaining := maxJSONBodyLog - w.buf.Len(); remaining > 0 {
 			if len(p) > remaining {
 				w.buf.Write(p[:remaining])
 			} else {
@@ -192,11 +202,56 @@ func (w *statusWriter) Write(p []byte) (int, error) {
 	return w.ResponseWriter.Write(p)
 }
 
-func (w *statusWriter) body() string { return w.buf.String() }
-
 func (w *statusWriter) Flush() {
 	if f, ok := w.ResponseWriter.(http.Flusher); ok {
 		f.Flush()
+	}
+}
+
+// parseJSONAttrs flattens a JSON response body into log key-value attrs:
+// nested objects join with dots (error.code), arrays collapse to their item
+// count. It returns false for anything that does not parse as a JSON object.
+func parseJSONAttrs(s string) ([]any, bool) {
+	if s == "" {
+		return nil, false
+	}
+	var v any
+	if err := json.Unmarshal([]byte(s), &v); err != nil {
+		return nil, false
+	}
+	obj, ok := v.(map[string]any)
+	if !ok {
+		return nil, false
+	}
+	var out []any
+	flattenJSON(obj, "", &out)
+	return out, true
+}
+
+// flattenJSON walks a decoded JSON value, appending "key", value pairs in
+// stable (sorted) key order. Maps nest with dots; arrays collapse to their
+// item count so huge list payloads stay compact.
+func flattenJSON(v any, prefix string, out *[]any) {
+	switch t := v.(type) {
+	case map[string]any:
+		keys := make([]string, 0, len(t))
+		for k := range t {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			key := k
+			if prefix != "" {
+				key = prefix + "." + k
+			}
+			flattenJSON(t[k], key, out)
+		}
+	case []any:
+		*out = append(*out, prefix, fmt.Sprintf("[%d items]", len(t)))
+	case nil:
+		*out = append(*out, prefix, "null")
+	default:
+		*out = append(*out, prefix, t)
 	}
 }
 
