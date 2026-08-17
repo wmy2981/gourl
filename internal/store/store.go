@@ -45,9 +45,10 @@ type ListOptions struct {
 	Now     int64
 }
 
-// Store wraps the SQLite connection.
+// Store wraps the SQLite connection plus the in-memory link lookup cache.
 type Store struct {
-	db *sql.DB
+	db    *sql.DB
+	cache *linkCache
 }
 
 // Open opens (creating if needed) the SQLite database at path and runs
@@ -63,7 +64,7 @@ func Open(path string) (*Store, error) {
 		// so every goroutine (e.g. the async meta workers) sees the same data.
 		db.SetMaxOpenConns(1)
 	}
-	s := &Store{db: db}
+	s := &Store{db: db, cache: newLinkCache()}
 	if err := s.migrate(context.Background()); err != nil {
 		db.Close()
 		return nil, err
@@ -168,6 +169,7 @@ func (s *Store) CreateLink(ctx context.Context, l *Link) error {
 	if err != nil {
 		return fmt.Errorf("create link: %w", err)
 	}
+	s.cache.set(l.Code, l)
 	return nil
 }
 
@@ -197,6 +199,11 @@ func (s *Store) CreateLinks(ctx context.Context, links []Link) ([]error, error) 
 	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
+	for i, err := range errs {
+		if err == nil {
+			s.cache.set(links[i].Code, &links[i])
+		}
+	}
 	return errs, nil
 }
 
@@ -208,11 +215,17 @@ func (s *Store) UpdateMeta(ctx context.Context, code, title, description string,
 	if err != nil {
 		return fmt.Errorf("update meta: %w", err)
 	}
+	s.cache.del(code)
 	return nil
 }
 
-// GetLink fetches a link by code, returning ErrNotFound if absent.
+// GetLink fetches a link by code, returning ErrNotFound if absent. Results
+// are served from the in-memory cache when fresh; every write invalidates the
+// affected entry.
 func (s *Store) GetLink(ctx context.Context, code string) (*Link, error) {
+	if l := s.cache.get(code); l != nil {
+		return l, nil
+	}
 	row := s.db.QueryRowContext(ctx, `SELECT `+linkColumns+` FROM links WHERE code = ?`, code)
 	l, err := scanLink(row)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -221,6 +234,7 @@ func (s *Store) GetLink(ctx context.Context, code string) (*Link, error) {
 	if err != nil {
 		return nil, fmt.Errorf("get link: %w", err)
 	}
+	s.cache.set(code, l)
 	return l, nil
 }
 
@@ -240,6 +254,7 @@ func (s *Store) UpdateLink(ctx context.Context, l *Link) error {
 	if n == 0 {
 		return ErrNotFound
 	}
+	s.cache.del(l.Code)
 	return nil
 }
 
@@ -269,7 +284,12 @@ func (s *Store) RenameLink(ctx context.Context, oldCode, newCode string, now int
 	if _, err := tx.ExecContext(ctx, `UPDATE daily_clicks SET code = ? WHERE code = ?`, newCode, oldCode); err != nil {
 		return fmt.Errorf("rename daily clicks: %w", err)
 	}
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	s.cache.del(oldCode)
+	s.cache.del(newCode)
+	return nil
 }
 
 // DeleteLink removes a link row. Its daily click records are deliberately
@@ -293,7 +313,11 @@ func (s *Store) DeleteLink(ctx context.Context, code string) error {
 	if n == 0 {
 		return ErrNotFound
 	}
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	s.cache.del(code)
+	return nil
 }
 
 // DeleteLinks removes many links in one transaction, returning how many rows
@@ -317,7 +341,13 @@ func (s *Store) DeleteLinks(ctx context.Context, codes []string) (int64, error) 
 		}
 		deleted += n
 	}
-	return deleted, tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+	for _, code := range codes {
+		s.cache.del(code)
+	}
+	return deleted, nil
 }
 
 // CountExpired returns the number of links past their expiry (expires_at in
@@ -340,6 +370,8 @@ func (s *Store) DeleteExpired(ctx context.Context, now int64) (int64, error) {
 	if err != nil {
 		return 0, fmt.Errorf("delete expired: %w", err)
 	}
+	// The sweep touches unknown codes; drop the whole cache to be safe.
+	s.cache.clear()
 	return res.RowsAffected()
 }
 
