@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { ArrowRight, ShieldCheck } from 'lucide-react'
 import { api, ApiError } from '../lib/api'
@@ -13,6 +13,7 @@ export default function Setup() {
   const { t } = useTranslation()
   const { toast } = useToast()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   // The configured service name replaces the gourl brand in the brand line;
   // it comes from the public health endpoint so it works before any admin
   // password exists (the config API refuses requests in setup mode).
@@ -31,6 +32,10 @@ export default function Setup() {
     setBusy(true)
     try {
       await api.setupAdmin(password)
+      // The /admin route gates on authStatus.configured: refresh the cache
+      // before navigating, or the stale "unconfigured" value bounces the SPA
+      // straight back to the setup page (and later to login).
+      queryClient.setQueryData(['authStatus'], { configured: true })
       navigate('/admin', { replace: true })
     } catch (err) {
       toast(
