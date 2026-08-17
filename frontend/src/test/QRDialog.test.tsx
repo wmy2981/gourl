@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { describe, expect, it, vi } from 'vitest'
+import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import QRDialog from '../components/QRDialog'
 import type { Link } from '../lib/api'
@@ -83,5 +83,36 @@ describe('QRDialog', () => {
       />,
     )
     expect(activeHost()).toBe('d.example')
+  })
+
+  it('keeps the QR content while the dialog animates out', () => {
+    vi.useFakeTimers()
+    try {
+      const link = makeLink('abc', ['a.example', 'b.example'])
+      const { rerender } = render(
+        <QRDialog
+          link={link}
+          urls={makeUrls(link.code, ['a.example', 'b.example'])}
+          open={true}
+          onClose={() => {}}
+        />,
+      )
+      expect(activeHost()).toBe('a.example')
+
+      // The parent nulls the link and urls in the same render that closes —
+      // the panel must keep the QR (and its height) until pop-out finishes,
+      // not collapse to the error paragraph the moment close starts.
+      rerender(<QRDialog link={null} urls={[]} open={false} onClose={() => {}} />)
+      expect(activeHost()).toBe('a.example')
+      expect(screen.getByText('abc')).toBeInTheDocument()
+
+      // After the 180ms exit animation the dialog unmounts for good.
+      act(() => {
+        vi.advanceTimersByTime(200)
+      })
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
