@@ -2,11 +2,13 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"log/slog"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -112,36 +114,85 @@ func (s *Server) Handler() http.Handler {
 	return s.logRequests(s.ipBlock(mux))
 }
 
-// logRequests logs every HTTP request at debug level with status and latency.
-// Access logging sits at debug so the info level carries business events only
-// (and the log page's default view stays readable).
+// logRequests logs every HTTP request with status and latency, plus a
+// truncated copy of the response body so failures carry their payload into
+// the log. The level follows the status: >=500 error, >=400 warning (every
+// invalid or refused request is logged as a warning), everything else debug
+// — access logging sits at debug so the info level carries business events
+// only.
 func (s *Server) logRequests(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
-		sw := &statusWriter{ResponseWriter: w, status: http.StatusOK}
+		// The token-creation response contains the full token (shown exactly
+		// once) — never mirror it into the log.
+		sw := &statusWriter{
+			ResponseWriter: w,
+			status:         http.StatusOK,
+			capBody:        !(r.Method == http.MethodPost && r.URL.Path == "/api/v1/tokens"),
+		}
 		next.ServeHTTP(sw, r)
-		slog.Debug("http request",
+		attrs := []any{
 			"method", r.Method,
 			"path", r.URL.Path,
 			"status", sw.status,
 			"duration_ms", time.Since(start).Milliseconds(),
 			"remote", r.RemoteAddr,
 			"ua", r.UserAgent(),
-		)
+		}
+		if body := sw.body(); body != "" {
+			attrs = append(attrs, "body", body)
+		}
+		switch {
+		case sw.status >= http.StatusInternalServerError:
+			slog.Error("http request failed", attrs...)
+		case sw.status >= http.StatusBadRequest:
+			// Every invalid or refused request lands here as a warning: bad
+			// payloads, missing auth, unknown codes, rate limits — the
+			// truncated body carries the API error code and message.
+			slog.Warn("http request rejected", attrs...)
+		default:
+			slog.Debug("http request", attrs...)
+		}
 	})
 }
 
-// statusWriter captures the response status code for request logging. It also
-// forwards Flush so streaming handlers (the SSE log stream) work through it.
+// maxBodyLog caps how much of a response body the request log mirrors.
+const maxBodyLog = 300
+
+// statusWriter captures the response status code for request logging and a
+// truncated copy of the response body (unless disabled). It forwards Flush so
+// streaming handlers (the SSE log stream) work through it.
 type statusWriter struct {
 	http.ResponseWriter
-	status int
+	status  int
+	capBody bool
+	buf     bytes.Buffer
+	stopped bool
 }
 
 func (w *statusWriter) WriteHeader(code int) {
 	w.status = code
+	// SSE streams are unbounded: stop capturing once the content type says so.
+	if strings.HasPrefix(w.Header().Get("Content-Type"), "text/event-stream") {
+		w.stopped = true
+	}
 	w.ResponseWriter.WriteHeader(code)
 }
+
+func (w *statusWriter) Write(p []byte) (int, error) {
+	if w.capBody && !w.stopped {
+		if remaining := maxBodyLog - w.buf.Len(); remaining > 0 {
+			if len(p) > remaining {
+				w.buf.Write(p[:remaining])
+			} else {
+				w.buf.Write(p)
+			}
+		}
+	}
+	return w.ResponseWriter.Write(p)
+}
+
+func (w *statusWriter) body() string { return w.buf.String() }
 
 func (w *statusWriter) Flush() {
 	if f, ok := w.ResponseWriter.(http.Flusher); ok {
