@@ -76,6 +76,60 @@ func TestSwaggerUIServed(t *testing.T) {
 	}
 }
 
+// TestSPAIndexCarriesSiteMeta verifies the site description and keywords are
+// injected into the SPA shell head (every admin page shares this shell),
+// with values escaped for the HTML attribute context.
+func TestSPAIndexCarriesSiteMeta(t *testing.T) {
+	s, _ := newTestServer(t)
+	cfg := s.cfg.Get()
+	cfg.Site.Description = `Short links "service"`
+	cfg.Site.Keywords = "gourl, links"
+	if err := s.cfg.Update(cfg); err != nil {
+		t.Fatal(err)
+	}
+	rec := get(t, s, "/admin", nil)
+	body := rec.Body.String()
+	if !strings.Contains(body, `<meta name="description" content="Short links &#34;service&#34;">`) {
+		t.Errorf("description meta missing from SPA shell: %q", body)
+	}
+	if !strings.Contains(body, `<meta name="keywords" content="gourl, links">`) {
+		t.Errorf("keywords meta missing from SPA shell: %q", body)
+	}
+}
+
+// TestSPAIndexSkipsEmptyMeta: unset description/keywords produce no meta tags.
+func TestSPAIndexSkipsEmptyMeta(t *testing.T) {
+	s, _ := newTestServer(t)
+	rec := get(t, s, "/admin", nil)
+	body := rec.Body.String()
+	if strings.Contains(body, `name="description"`) || strings.Contains(body, `name="keywords"`) {
+		t.Errorf("empty site meta must not be injected: %q", body)
+	}
+}
+
+// TestNotFoundPageCarriesSiteMeta: the public 404 page carries both meta tags
+// too (it shares the site description and keywords with the SPA shell).
+func TestNotFoundPageCarriesSiteMeta(t *testing.T) {
+	s, _ := newTestServer(t)
+	cfg := s.cfg.Get()
+	cfg.Site.Description = "Short links service"
+	cfg.Site.Keywords = "gourl, links"
+	if err := s.cfg.Update(cfg); err != nil {
+		t.Fatal(err)
+	}
+	rec := get(t, s, "/missing-code-xyz", nil)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("missing code status = %d, want 404", rec.Code)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, `<meta name="description" content="Short links service">`) {
+		t.Errorf("404 page description meta missing: %q", body)
+	}
+	if !strings.Contains(body, `<meta name="keywords" content="gourl, links">`) {
+		t.Errorf("404 page keywords meta missing: %q", body)
+	}
+}
+
 // TestCustomIconTakesPrecedenceOverEmbedded confirms uploaded icons keep
 // their /assets/custom-icon.* route.
 func TestCustomIconTakesPrecedenceOverEmbedded(t *testing.T) {

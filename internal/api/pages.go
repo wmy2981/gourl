@@ -14,6 +14,7 @@ var pageTmpl = template.Must(template.New("page").Parse(`<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{{.SiteTitle}}</title>
 <meta name="description" content="{{.SiteDescription}}">
+<meta name="keywords" content="{{.SiteKeywords}}">
 <style>
   * { box-sizing: border-box; }
   body { font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
@@ -47,6 +48,7 @@ type pageData struct {
 	Lang            string
 	SiteTitle       string
 	SiteDescription string
+	SiteKeywords    string
 	Heading         string
 	Message         string
 	Detail          string
@@ -71,7 +73,7 @@ func (s *Server) renderNotFound(w http.ResponseWriter, r *http.Request) {
 	if lang == "zh" {
 		heading, message = "页面不存在", "您访问的短链接不存在或已被删除。"
 	}
-	s.renderPage(w, http.StatusNotFound, lang, heading, message, "", cfg.Site.Title, cfg.Site.Description)
+	s.renderPage(w, http.StatusNotFound, lang, heading, message, "", cfg.Site.Title, cfg.Site.Description, cfg.Site.Keywords)
 }
 
 // renderBlocked renders the 403 page explaining why the request was blocked,
@@ -96,17 +98,18 @@ func (s *Server) renderBlocked(w http.ResponseWriter, r *http.Request, kind, det
 			msg = "Your request was blocked. Matched IP rule: " + detail
 		}
 	}
-	s.renderPage(w, http.StatusForbidden, lang, heading, msg, "", cfg.Site.Title, cfg.Site.Description)
+	s.renderPage(w, http.StatusForbidden, lang, heading, msg, "", cfg.Site.Title, cfg.Site.Description, cfg.Site.Keywords)
 }
 
 // renderPage renders the page template from the live site config.
-func (s *Server) renderPage(w http.ResponseWriter, status int, lang, heading, message, detail, title, description string) {
+func (s *Server) renderPage(w http.ResponseWriter, status int, lang, heading, message, detail, title, description, keywords string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
 	_ = pageTmpl.Execute(w, pageData{
 		Lang:            lang,
 		SiteTitle:       title,
 		SiteDescription: description,
+		SiteKeywords:    keywords,
 		Heading:         heading,
 		Message:         message,
 		Detail:          detail,

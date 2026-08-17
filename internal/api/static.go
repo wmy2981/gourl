@@ -1,6 +1,9 @@
 package api
 
 import (
+	"bytes"
+	"fmt"
+	"html"
 	"io"
 	"io/fs"
 	"net/http"
@@ -8,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/wmy2981/gourl/internal/config"
 	"github.com/wmy2981/gourl/internal/webui"
 )
 
@@ -37,16 +41,42 @@ func (s *Server) favicon(w http.ResponseWriter, r *http.Request) {
 }
 
 // spaIndex serves the SPA shell for /admin and every nested admin route.
+// The site description and keywords from config.yaml are injected into the
+// <head> at serve time, so every admin page carries them (the SPA never
+// touches these meta tags).
 func (s *Server) spaIndex(w http.ResponseWriter, r *http.Request) {
 	index, err := webui.Dist().Open("index.html")
 	if err != nil {
 		http.NotFound(w, r)
 		return
 	}
-	defer index.Close()
+	data, err := io.ReadAll(index)
+	index.Close()
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache")
-	_, _ = io.Copy(w, index)
+	_, _ = w.Write(seoMeta(s.cfg.Get(), data))
+}
+
+// seoMeta returns the SPA shell with the site description/keywords meta tags
+// injected before <title>. Empty values are skipped; values are escaped for
+// the HTML attribute context.
+func seoMeta(cfg *config.Config, page []byte) []byte {
+	var b strings.Builder
+	if cfg.Site.Description != "" {
+		fmt.Fprintf(&b, `<meta name="description" content="%s">`+"\n", html.EscapeString(cfg.Site.Description))
+	}
+	if cfg.Site.Keywords != "" {
+		fmt.Fprintf(&b, `<meta name="keywords" content="%s">`+"\n", html.EscapeString(cfg.Site.Keywords))
+	}
+	if b.Len() == 0 {
+		return page
+	}
+	head := append([]byte(b.String()), []byte("<title>")...)
+	return bytes.Replace(page, []byte("<title>"), head, 1)
 }
 
 // assetsHandler serves uploaded custom icons first (single files in the
