@@ -90,12 +90,17 @@ export function Checkbox({
 
 /* ---------- Select ---------- */
 
+// popOutMs matches --animate-pop-out (0.18s): long enough for the exit
+// animation to finish before the panel unmounts.
+const popOutMs = 180
+
 // Custom dropdown replacing the native <select>: same amber-on-graphite
-// language as the rest of the UI, pop-in options panel, theme-aware.
-// The options panel renders through a portal with fixed positioning: glass
-// cards create their own stacking contexts (backdrop-blur), so an absolutely
-// positioned panel inside a card is covered by the next card — only a
-// top-level layer escapes that.
+// language as the rest of the UI, theme-aware. The options panel renders
+// through a portal with fixed positioning (glass cards create their own
+// stacking contexts via backdrop-blur, so an absolutely positioned panel
+// inside a card gets covered by the next card — only a top-level layer
+// escapes that) and plays the same pop-in/pop-out pair as the Links page's
+// inline base-URL menu: every close path animates out before unmounting.
 export function Select({
   value,
   onChange,
@@ -110,13 +115,23 @@ export function Select({
   className?: string
 }) {
   const [open, setOpen] = useState(false)
+  const [closing, setClosing] = useState(false)
   const [pos, setPos] = useState<{ top: number; left: number; width: number } | null>(null)
   const btnRef = useRef<HTMLButtonElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
 
+  const close = () => {
+    if (closing) return
+    setClosing(true)
+    setTimeout(() => {
+      setOpen(false)
+      setClosing(false)
+    }, popOutMs)
+  }
+
   const toggle = () => {
     if (open) {
-      setOpen(false)
+      close()
       return
     }
     const r = btnRef.current?.getBoundingClientRect()
@@ -129,24 +144,23 @@ export function Select({
     const onDown = (e: MouseEvent) => {
       const t = e.target as Node
       if (btnRef.current?.contains(t) || panelRef.current?.contains(t)) return
-      setOpen(false)
+      close()
     }
     document.addEventListener('mousedown', onDown)
     return () => document.removeEventListener('mousedown', onDown)
-  }, [open])
+  }, [open, closing])
 
   // The panel is position: fixed — scrolling or resizing under it would
   // detach it from the button, so close instead of drifting.
   useEffect(() => {
     if (!open) return
-    const close = () => setOpen(false)
     window.addEventListener('scroll', close, true)
     window.addEventListener('resize', close)
     return () => {
       window.removeEventListener('scroll', close, true)
       window.removeEventListener('resize', close)
     }
-  }, [open])
+  }, [open, closing])
 
   const current = options.find((o) => o.value === value)
 
@@ -163,16 +177,18 @@ export function Select({
         <span className="truncate">{current?.label}</span>
         <ChevronDown
           size={14}
-          className={`shrink-0 text-muted transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
+          className={`shrink-0 text-muted transition-transform duration-200 ${open || closing ? 'rotate-180' : ''}`}
         />
       </button>
-      {open &&
+      {(open || closing) &&
         pos &&
         createPortal(
           <div
             ref={panelRef}
             style={{ top: pos.top, left: pos.left, width: pos.width }}
-            className="fixed z-50 overflow-hidden rounded-xl border border-hairline bg-white p-1 shadow-[0_12px_40px_rgba(0,0,0,0.18)] dark:bg-[#1c1c1e] animate-pop-in"
+            className={`fixed z-50 overflow-hidden rounded-xl border border-hairline bg-white p-1 shadow-[0_12px_40px_rgba(0,0,0,0.18)] dark:bg-[#1c1c1e] ${
+              closing ? 'animate-pop-out' : 'animate-pop-in'
+            }`}
           >
             {options.map((o) => (
               <button
@@ -180,7 +196,7 @@ export function Select({
                 type="button"
                 onClick={() => {
                   onChange(o.value)
-                  setOpen(false)
+                  close()
                 }}
                 className={`flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm transition-colors ${
                   o.value === value
