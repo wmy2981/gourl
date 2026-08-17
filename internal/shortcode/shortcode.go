@@ -45,8 +45,13 @@ func Random(n int) (string, error) {
 	return string(buf), nil
 }
 
-// IsReserved reports whether the first segment of code matches the built-in
-// reserved list or any extra reserved prefix, case-insensitively.
+// IsReserved reports whether code is shadowed by the built-in reserved list
+// or any extra reserved entry. Built-ins match the first segment
+// case-insensitively (a multi-level code like "api/foo" is rejected because
+// the api route would shadow it). Extra entries behave like the codes they
+// protect: single-segment entries match the first segment, while
+// multi-segment entries match the full code by prefix, so "foo/bar" reserves
+// "foo/bar" and every code below it.
 func IsReserved(code string, extra []string) bool {
 	seg := code
 	if i := strings.IndexByte(code, '/'); i >= 0 {
@@ -57,8 +62,14 @@ func IsReserved(code string, extra []string) bool {
 			return true
 		}
 	}
+	lowerCode := strings.ToLower(code)
 	for _, r := range extra {
-		if strings.EqualFold(seg, r) {
+		if strings.Contains(r, "/") {
+			lower := strings.ToLower(r)
+			if lowerCode == lower || strings.HasPrefix(lowerCode, lower+"/") {
+				return true
+			}
+		} else if strings.EqualFold(seg, r) {
 			return true
 		}
 	}

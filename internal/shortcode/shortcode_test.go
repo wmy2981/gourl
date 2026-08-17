@@ -63,10 +63,29 @@ func TestIsReservedBuiltin(t *testing.T) {
 }
 
 func TestIsReservedExtra(t *testing.T) {
-	extra := []string{"foo", "Bar"}
-	for _, code := range []string{"foo", "FOO", "bar", "foo/x"} {
+	extra := []string{"foo", "Bar", "中文", "help/中文", "x/y"}
+	// Single-segment entries match the first segment, case-insensitively.
+	for _, code := range []string{"foo", "FOO", "bar", "BAR", "foo/x", "foo/a/b"} {
 		if !IsReserved(code, extra) {
 			t.Errorf("%q should be reserved via extra list", code)
+		}
+	}
+	// Chinese single-segment entries match their exact segment.
+	for _, code := range []string{"中文", "中文/x"} {
+		if !IsReserved(code, extra) {
+			t.Errorf("%q should be reserved via Chinese entry", code)
+		}
+	}
+	// Multi-segment entries reserve the full code and everything below it.
+	for _, code := range []string{"help/中文", "help/中文/a", "x/y", "x/y/z", "X/Y/abc"} {
+		if !IsReserved(code, extra) {
+			t.Errorf("%q should be reserved via multi-segment entry", code)
+		}
+	}
+	// Prefix matching respects segment boundaries.
+	for _, code := range []string{"x/yz", "x/z", "x", "help/中文abc"} {
+		if IsReserved(code, extra) {
+			t.Errorf("%q should not be reserved", code)
 		}
 	}
 	if IsReserved("baz", extra) {

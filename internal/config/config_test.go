@@ -57,8 +57,8 @@ func TestValidateRejectsBadConfigs(t *testing.T) {
 		{"base url not absolute", func(c *Config) { c.BaseURL = "s.example.com" }},
 		{"base url wrong scheme", func(c *Config) { c.BaseURL = "ftp://s.example.com" }},
 		{"extra base url invalid", func(c *Config) { c.ExtraBaseURLs = []string{"not-a-url"} }},
-		{"reserved code with slash", func(c *Config) { c.ReservedCodes = []string{"a/b"} }},
 		{"reserved code invalid char", func(c *Config) { c.ReservedCodes = []string{"a b"} }},
+		{"reserved code empty segment", func(c *Config) { c.ReservedCodes = []string{"foo//bar"} }},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -68,6 +68,14 @@ func TestValidateRejectsBadConfigs(t *testing.T) {
 				t.Fatal("expected validation error, got nil")
 			}
 		})
+	}
+}
+
+func TestValidateAcceptsChineseAndMultiSegmentReservedCodes(t *testing.T) {
+	c := Default()
+	c.ReservedCodes = []string{"中文", "帮助/指南", "foo/bar", "short"}
+	if err := c.Validate(); err != nil {
+		t.Fatalf("Validate: %v", err)
 	}
 }
 

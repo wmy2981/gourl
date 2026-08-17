@@ -12,9 +12,9 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 
+	"github.com/wmy2981/gourl/internal/shortcode"
 	"gopkg.in/yaml.v3"
 )
 
@@ -95,18 +95,15 @@ func isAbsoluteHTTPURL(s string) bool {
 	return err == nil && u.IsAbs() && (u.Scheme == "http" || u.Scheme == "https") && u.Host != ""
 }
 
-// validReservedCode accepts a non-empty reserved prefix of url-safe characters.
+// validReservedCode accepts a non-empty reserved entry. Entries are matched
+// against short codes, so they must be valid code shapes too: url-safe
+// characters (ASCII + CJK), non-empty segments, at most MaxSegments levels.
 func validReservedCode(s string) error {
 	if s == "" {
 		return fmt.Errorf("reserved_codes entries must not be empty")
 	}
-	if strings.ContainsAny(s, "/") {
-		return fmt.Errorf("reserved_codes entry %q must be a single segment (no '/')", s)
-	}
-	for _, r := range s {
-		if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '-' || r == '_') {
-			return fmt.Errorf("reserved_codes entry %q contains invalid character %q", s, r)
-		}
+	if err := shortcode.Validate(s); err != nil {
+		return fmt.Errorf("invalid reserved_codes entry %q: %w", s, err)
 	}
 	return nil
 }
