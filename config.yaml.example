@@ -28,5 +28,10 @@ reserved_codes: []
 # click counted). Managed from the settings page, persisted here.
 ua_blocks: []
 
+# Banned IP rules: single IP, CIDR network, or IPv4 dotted-quad wildcard
+# (e.g. 192.168.*.*). Matched requests are refused on every route — session,
+# API and health included — with a 403 page.
+ip_blocks: []
+
 # Custom icon file name inside the assets data directory (empty = built-in default).
 icon: ""

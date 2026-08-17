@@ -9,9 +9,12 @@ package config
 import (
 	"errors"
 	"fmt"
+	"net"
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/wmy2981/gourl/internal/shortcode"
@@ -34,6 +37,7 @@ type Config struct {
 	ExtraBaseURLs   []string `yaml:"extra_base_urls" json:"extra_base_urls"`
 	ReservedCodes   []string `yaml:"reserved_codes" json:"reserved_codes"`
 	UABlocks        []string `yaml:"ua_blocks" json:"ua_blocks"`
+	IPBlocks        []string `yaml:"ip_blocks" json:"ip_blocks"`
 	Icon            string   `yaml:"icon" json:"icon"`
 }
 
@@ -85,7 +89,42 @@ func (c *Config) Validate() error {
 			return err
 		}
 	}
+	for _, b := range c.IPBlocks {
+		if err := validIPBlock(b); err != nil {
+			return err
+		}
+	}
 	return nil
+}
+
+// validIPBlock accepts a single IP, a CIDR network, or an IPv4 dotted-quad
+// rule with "*" segments (e.g. 192.168.*.*).
+func validIPBlock(s string) error {
+	if s == "" {
+		return fmt.Errorf("ip_blocks entries must not be empty")
+	}
+	if _, _, err := net.ParseCIDR(s); err == nil {
+		return nil
+	}
+	if net.ParseIP(s) != nil {
+		return nil
+	}
+	if strings.Contains(s, "*") {
+		parts := strings.Split(s, ".")
+		if len(parts) == 4 {
+			for _, p := range parts {
+				if p == "*" {
+					continue
+				}
+				n, err := strconv.Atoi(p)
+				if err != nil || n < 0 || n > 255 {
+					return fmt.Errorf("invalid ip_blocks entry %q", s)
+				}
+			}
+			return nil
+		}
+	}
+	return fmt.Errorf("invalid ip_blocks entry %q: want IP, CIDR or dotted-quad with '*' segments", s)
 }
 
 func isAbsoluteHTTPURL(s string) bool {
@@ -132,6 +171,7 @@ func (m *Manager) Get() *Config {
 	cp.ExtraBaseURLs = append([]string(nil), m.cfg.ExtraBaseURLs...)
 	cp.ReservedCodes = append([]string(nil), m.cfg.ReservedCodes...)
 	cp.UABlocks = append([]string(nil), m.cfg.UABlocks...)
+	cp.IPBlocks = append([]string(nil), m.cfg.IPBlocks...)
 	if cp.ExtraBaseURLs == nil {
 		cp.ExtraBaseURLs = []string{}
 	}
@@ -140,6 +180,9 @@ func (m *Manager) Get() *Config {
 	}
 	if cp.UABlocks == nil {
 		cp.UABlocks = []string{}
+	}
+	if cp.IPBlocks == nil {
+		cp.IPBlocks = []string{}
 	}
 	return &cp
 }

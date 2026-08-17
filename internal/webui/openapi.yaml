@@ -448,6 +448,10 @@ components:
           type: array
           description: Blocked User-Agent patterns (case-insensitive substring match). Managed from the settings page like any other list field; PUT replaces the whole list.
           items: { type: string }
+        ip_blocks:
+          type: array
+          description: Banned IP rules — single IP, CIDR network, or IPv4 dotted-quad with "*" segments (e.g. 192.168.*.*). Matched requests are refused on every route (session, API and health included) with a 403 page.
+          items: { type: string }
         icon: { type: string }
 security:
   - bearerAuth: []

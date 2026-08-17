@@ -16,6 +16,7 @@ export default function Settings() {
   const [extraUrlsText, setExtraUrlsText] = useState('')
   const [reservedText, setReservedText] = useState('')
   const [uaText, setUaText] = useState('')
+  const [ipText, setIpText] = useState('')
   const [tokenNote, setTokenNote] = useState('')
   const [newToken, setNewToken] = useState('')
 
@@ -25,6 +26,7 @@ export default function Settings() {
       setExtraUrlsText(cfg.extra_base_urls.join('\n'))
       setReservedText(cfg.reserved_codes.join(', '))
       setUaText(cfg.ua_blocks.join(', '))
+      setIpText(cfg.ip_blocks.join(', '))
     }
   }, [cfg, form])
 
@@ -62,6 +64,10 @@ export default function Settings() {
         .map((s) => s.trim())
         .filter(Boolean),
       ua_blocks: uaText
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean),
+      ip_blocks: ipText
         .split(',')
         .map((s) => s.trim())
         .filter(Boolean),
@@ -193,6 +199,20 @@ export default function Settings() {
             onChange={(e) => setUaText(e.target.value)}
             placeholder={t('settings.uaPlaceholder')}
             aria-label={t('settings.uaPatterns')}
+          />
+        </Card>
+
+        {/* IP blocks: banned addresses are refused on every route, session,
+            API and health included */}
+        <Card className="p-6">
+          <h2 className="mb-1 text-sm font-medium text-muted">{t('settings.ipBlocks')}</h2>
+          <p className="mb-4 text-xs text-muted">{t('settings.ipBlockHint')}</p>
+          <Textarea
+            rows={3}
+            value={ipText}
+            onChange={(e) => setIpText(e.target.value)}
+            placeholder={t('settings.ipPlaceholder')}
+            aria-label={t('settings.ipPatterns')}
           />
         </Card>
 

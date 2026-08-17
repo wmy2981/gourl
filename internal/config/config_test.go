@@ -71,6 +71,21 @@ func TestValidateRejectsBadConfigs(t *testing.T) {
 	}
 }
 
+func TestValidateIPBlocks(t *testing.T) {
+	for _, bad := range []string{"", "999.1.2.3", "192.168.1", "not-an-ip", "192.168.*.x", "a.b.c.d"} {
+		c := Default()
+		c.IPBlocks = []string{bad}
+		if err := c.Validate(); err == nil {
+			t.Errorf("Validate(ip_blocks %q) should fail", bad)
+		}
+	}
+	c := Default()
+	c.IPBlocks = []string{"192.168.1.1", "10.0.0.0/8", "192.168.*.*", "2001:db8::1"}
+	if err := c.Validate(); err != nil {
+		t.Errorf("Validate(valid ip_blocks) = %v", err)
+	}
+}
+
 func TestValidateAcceptsChineseAndMultiSegmentReservedCodes(t *testing.T) {
 	c := Default()
 	c.ReservedCodes = []string{"中文", "帮助/指南", "foo/bar", "short"}

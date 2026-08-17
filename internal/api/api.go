@@ -100,7 +100,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /admin", s.spaIndex)
 	mux.HandleFunc("GET /admin/{path...}", s.spaIndex)
 	mux.HandleFunc("GET /{code...}", s.redirect)
-	return s.logRequests(mux)
+	return s.logRequests(s.ipBlock(mux))
 }
 
 // logRequests logs every HTTP request at debug level with status and latency.
