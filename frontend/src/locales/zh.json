@@ -132,8 +132,6 @@
     "siteTitle": "站点标题",
     "keywords": "关键词",
     "description": "描述",
-    "header": "页头 HTML（过期页）",
-    "footer": "页脚 HTML（过期页）",
     "behavior": "行为",
     "shortCodeLength": "随机短码位数",
     "baseUrl": "主基址",

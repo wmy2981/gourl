@@ -106,14 +106,6 @@ export default function Settings() {
               <Label htmlFor='cfg-description'>{t('settings.description')}</Label>
               <Input id='cfg-description' value={form.site.description} onChange={(e) => setSite('description', e.target.value)} />
             </div>
-            <div>
-              <Label htmlFor='cfg-header'>{t('settings.header')}</Label>
-              <Textarea id='cfg-header' rows={2} value={form.site.header} onChange={(e) => setSite('header', e.target.value)} />
-            </div>
-            <div>
-              <Label htmlFor='cfg-footer'>{t('settings.footer')}</Label>
-              <Textarea id='cfg-footer' rows={2} value={form.site.footer} onChange={(e) => setSite('footer', e.target.value)} />
-            </div>
           </div>
         </Card>
 

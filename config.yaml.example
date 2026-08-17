@@ -11,9 +11,6 @@ site:
   keywords: short link, url shortener
   # meta description.
   description: Lightweight self-hosted URL shortener
-  # Extra HTML injected into the header/footer of the expired page (empty to omit).
-  header: ""
-  footer: ""
 
 # Length of randomly generated short codes (4-32).
 short_code_length: 6

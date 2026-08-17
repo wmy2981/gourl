@@ -53,8 +53,6 @@ export interface SiteInfo {
   title: string
   keywords: string
   description: string
-  header: string
-  footer: string
 }
 
 export interface AppConfig {

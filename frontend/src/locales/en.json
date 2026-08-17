@@ -132,8 +132,6 @@
     "siteTitle": "Site title",
     "keywords": "Keywords",
     "description": "Description",
-    "header": "Header HTML (expired page)",
-    "footer": "Footer HTML (expired page)",
     "behavior": "Behavior",
     "shortCodeLength": "Random code length",
     "baseUrl": "Primary base URL",

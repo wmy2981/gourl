@@ -440,8 +440,6 @@ components:
             title: { type: string }
             keywords: { type: string }
             description: { type: string }
-            header: { type: string }
-            footer: { type: string }
         short_code_length: { type: integer, minimum: 4, maximum: 32 }
         base_url: { type: string }
         extra_base_urls: { type: array, items: { type: string } }

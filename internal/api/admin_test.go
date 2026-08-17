@@ -108,7 +108,6 @@ func TestUpdateConfigSetsUABlocks(t *testing.T) {
 	rec := do(t, s, http.MethodPut, "/api/v1/config", map[string]any{
 		"site": map[string]any{
 			"name": "UA Test", "title": "T", "keywords": "", "description": "",
-			"header": "", "footer": "",
 		},
 		"short_code_length": 4,
 		"ua_blocks":         []string{"Googlebot", "Bingbot"},
@@ -126,7 +125,6 @@ func TestUpdateConfigSetsUABlocks(t *testing.T) {
 	rec = do(t, s, http.MethodPut, "/api/v1/config", map[string]any{
 		"site": map[string]any{
 			"name": "UA Test", "title": "T", "keywords": "", "description": "",
-			"header": "", "footer": "",
 		},
 		"short_code_length": 4,
 	})
@@ -151,7 +149,6 @@ func TestConfigGetAndUpdate(t *testing.T) {
 	rec = do(t, s, http.MethodPut, "/api/v1/config", map[string]any{
 		"site": map[string]any{
 			"name": "Renamed", "title": "T", "keywords": "", "description": "",
-			"header": "", "footer": "",
 		},
 		"short_code_length": 8,
 		"base_url":          "https://s.example.com",

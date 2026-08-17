@@ -8,8 +8,7 @@ import (
 	"github.com/wmy2981/gourl/internal/store"
 )
 
-// pageTmpl renders the public error pages (expired / not found). Site header
-// and footer come from the admin-configured site info and are trusted HTML.
+// pageTmpl renders the public error pages (expired / not found).
 var pageTmpl = template.Must(template.New("page").Parse(`<!DOCTYPE html>
 <html lang="{{.Lang}}">
 <head>
@@ -29,23 +28,20 @@ var pageTmpl = template.Must(template.New("page").Parse(`<!DOCTYPE html>
   p { color: #6e6e73; line-height: 1.6; margin: 0; font-size: 15px; }
   .code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px;
           color: #86868b; margin-top: 16px; }
-  .site-header, .site-footer { margin: 12px 0; font-size: 13px; color: #6e6e73; }
   @media (prefers-color-scheme: dark) {
     body { background: #1d1d1f; color: #f5f5f7; }
     .page { background: rgba(28,28,30,0.7); box-shadow: 0 8px 40px rgba(0,0,0,0.4); }
-    p, .code, .site-header, .site-footer { color: #a1a1a6; }
+    p, .code { color: #a1a1a6; }
   }
   @media (max-width: 480px) { .page { padding: 32px 20px; } h1 { font-size: 22px; } }
 </style>
 </head>
 <body>
-<div class="site-header">{{.Header}}</div>
 <main class="page">
   <h1>{{.Heading}}</h1>
   <p>{{.Message}}</p>
   {{if .Detail}}<p class="code">{{.Detail}}</p>{{end}}
 </main>
-<div class="site-footer">{{.Footer}}</div>
 </body>
 </html>`))
 
@@ -56,8 +52,6 @@ type pageData struct {
 	Heading         string
 	Message         string
 	Detail          string
-	Header          template.HTML
-	Footer          template.HTML
 }
 
 // langOf resolves the request language: explicit ?lang= wins, then
@@ -79,7 +73,7 @@ func (s *Server) renderExpired(w http.ResponseWriter, r *http.Request, link *sto
 	if lang == "zh" {
 		heading, message = "链接已过期", "该短链接已超过有效期，无法继续访问。"
 	}
-	s.renderPage(w, http.StatusOK, lang, heading, message, link.Code, cfg.Site.Title, cfg.Site.Description, cfg.Site.Header, cfg.Site.Footer)
+	s.renderPage(w, http.StatusOK, lang, heading, message, link.Code, cfg.Site.Title, cfg.Site.Description)
 }
 
 func (s *Server) renderNotFound(w http.ResponseWriter, r *http.Request) {
@@ -89,11 +83,11 @@ func (s *Server) renderNotFound(w http.ResponseWriter, r *http.Request) {
 	if lang == "zh" {
 		heading, message = "页面不存在", "您访问的短链接不存在或已被删除。"
 	}
-	s.renderPage(w, http.StatusNotFound, lang, heading, message, "", cfg.Site.Title, cfg.Site.Description, cfg.Site.Header, cfg.Site.Footer)
+	s.renderPage(w, http.StatusNotFound, lang, heading, message, "", cfg.Site.Title, cfg.Site.Description)
 }
 
 // renderPage renders the page template from the live site config.
-func (s *Server) renderPage(w http.ResponseWriter, status int, lang, heading, message, detail, title, description, header, footer string) {
+func (s *Server) renderPage(w http.ResponseWriter, status int, lang, heading, message, detail, title, description string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
 	_ = pageTmpl.Execute(w, pageData{
@@ -103,7 +97,5 @@ func (s *Server) renderPage(w http.ResponseWriter, status int, lang, heading, me
 		Heading:         heading,
 		Message:         message,
 		Detail:          detail,
-		Header:          template.HTML(header),
-		Footer:          template.HTML(footer),
 	})
 }

@@ -24,8 +24,6 @@ type Site struct {
 	Title       string `yaml:"title" json:"title"`
 	Keywords    string `yaml:"keywords" json:"keywords"`
 	Description string `yaml:"description" json:"description"`
-	Header      string `yaml:"header" json:"header"`
-	Footer      string `yaml:"footer" json:"footer"`
 }
 
 // Config is the YAML business configuration.
