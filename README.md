@@ -52,9 +52,10 @@ echo "SESSION_SECRET=$(openssl rand -hex 32)" > .env
 docker compose up -d
 ```
 
-Open http://localhost:8080 — with no password configured you land on the
-one-time setup page where the first visitor sets the admin password (stored
-as a bcrypt hash in `config.yaml`). After that it's the admin console.
+Open the web UI (the app listens on port 8080 unless `PORT` overrides it) —
+with no password configured you land on the one-time setup page where the
+first visitor sets the admin password (stored as a bcrypt hash in
+`config.yaml`). After that it's the admin console.
 Data (SQLite, uploaded icons, embedded Redis rdb, rotating logs) persists in
 `./data`, config in `./config` (the settings page writes back to it).
 
@@ -84,8 +85,7 @@ version.
 | `CONFIG_PATH` | `config.yaml` | Business config (site info, base URLs, …) |
 | `ASSETS_DIR` | `data/assets` | Uploaded icon storage |
 | `TZ` | container default | Daily click buckets and expiry are interpreted in it |
-| `LOG_LEVEL` | `info` | `debug` / `info` / `warning` / `error` |
-| `LOG_FORMAT` | `text` | `json` for structured output (logs go to stderr) |
+| `LOG_FORMAT` | `text` | `json` for structured output (logs go to stderr). The log **level** lives in `config.yaml` (`log_level`, settings page) — no env var |
 | `LOG_DIR` | — | Optional directory for a rotating file mirror of the logs (e.g. `/app/data/log` on the mounted volume; 10 MB × 5 backups × 30 days, gzip) |
 
 Business settings live in `config.yaml` (see `config.yaml.example`): site
@@ -96,9 +96,9 @@ login rate limit, the per-second link access budget, the admin `password_hash`
 
 ## API documentation
 
-Open http://localhost:8080/docs/ — an interactive Swagger UI covering every
-endpoint, served from the single binary (`/docs/openapi.yaml` is the raw
-OpenAPI 3.0 spec). API base path is `/api/v1`; admin endpoints accept a
+Open `/docs/` on the running instance — an interactive Swagger UI covering
+every endpoint, served from the single binary (`/docs/openapi.yaml` is the
+raw OpenAPI 3.0 spec). API base path is `/api/v1`; admin endpoints accept a
 session cookie or `Authorization: Bearer <token>` (tokens are created in
 Settings).
 

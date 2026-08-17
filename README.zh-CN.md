@@ -50,8 +50,9 @@ echo "SESSION_SECRET=$(openssl rand -hex 32)" > .env
 docker compose up -d
 ```
 
-访问 http://localhost:8080 —— 未配置密码时会进入一次性 Setup 页面，
-由第一个访问者设置管理员密码（bcrypt 哈希保存在 `config.yaml`），之后进入管理后台。
+打开 Web 界面（服务默认监听 8080 端口，可用 `PORT` 覆盖）—— 未配置密码时
+会进入一次性 Setup 页面，由第一个访问者设置管理员密码（bcrypt 哈希保存在
+`config.yaml`），之后进入管理后台。
 数据（SQLite、上传图标、内置 Redis 的 rdb、轮转日志）持久化在 `./data`，
 配置在 `./config`（设置页会写回其中）。
 
@@ -78,8 +79,7 @@ Redis 与 gourl。容器内的 Redis "vm.overcommit_memory" 警告无害可忽�
 | `CONFIG_PATH` | `config.yaml` | 业务配置（站点信息、基址等） |
 | `ASSETS_DIR` | `data/assets` | 上传图标存储 |
 | `TZ` | 容器默认 | 每日统计切日与过期时间按此时区解释 |
-| `LOG_LEVEL` | `info` | `debug` / `info` / `warning` / `error` |
-| `LOG_FORMAT` | `text` | `json` 结构化输出（日志走 stderr） |
+| `LOG_FORMAT` | `text` | `json` 结构化输出（日志走 stderr）。日志**等级**在 `config.yaml` 的 `log_level` 中配置（设置页），不再使用环境变量 |
 | `LOG_DIR` | — | 可选：日志镜像写入该目录的轮转文件（如挂载卷 `/app/data/log`；10 MB × 5 份 × 30 天，gzip） |
 
 业务配置在 `config.yaml`（见 `config.yaml.example`）：服务名称/标题/关键词/描述、
@@ -88,7 +88,7 @@ Redis 与 gourl。容器内的 Redis "vm.overcommit_memory" 警告无害可忽�
 
 ## API 文档
 
-访问 http://localhost:8080/docs/ —— 覆盖全部端点的交互式 Swagger UI，
+在运行中的实例打开 `/docs/` —— 覆盖全部端点的交互式 Swagger UI，
 随单个二进制内置（`/docs/openapi.yaml` 为原始 OpenAPI 3.0 规范）。
 API 基础路径 `/api/v1`；管理端点接受会话 Cookie 或
 `Authorization: Bearer <token>`（Token 在设置页创建）。

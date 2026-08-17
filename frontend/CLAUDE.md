@@ -29,15 +29,18 @@ Subdirectory instructions for the React SPA admin console. Root-level convention
 ## Design
 
 - UI accent is **amber** on graphite neutrals (Apple-style glassmorphism); never default blue-purple gradients. The **brand icon is amber `#f59e0b`** too (user-specified, shares the accent color)
-- Motion runs on **CSS tokens** (`--animate-*` in `index.css`) for pages/dialogs/drawers and on **`motion` (framer-motion)** for toasts: a stacked pile (newest in front, rear cards peek 12px, hover expands, spring 380/32), content-sized cards with measured heights. Do not reintroduce a global `prefers-reduced-motion` kill-switch — it was removed on purpose (the owner's OS has it enabled and wants the animations)
+- Motion runs on **CSS tokens** (`--animate-*` in `index.css`) for pages/dialogs and on **`motion` (framer-motion)** for toasts: a stacked pile (newest in front, rear cards peek 12px, hover expands, spring 380/32), content-sized cards with measured heights. Do not reintroduce a global `prefers-reduced-motion` kill-switch — it was removed on purpose (the owner's OS has it enabled and wants the animations)
+- The **mobile drawer slides via inline transform + transition** (gesture-aware, see Layout.tsx): open/close/gesture all share one `translateX` state machine, no class-animation path. Edge-swipe opens it from the right 24px of the viewport, fingers drag with clamping, release settles past the halfway point
 - Every user-facing warning/error goes through the toast system — no inline error paragraphs, and no native browser validation bubbles: required-field checks are custom + toast (e.g. `form.urlRequired`)
 - Form controls come from `ui.tsx`: `Select` (custom dropdown — never raw `<select>`, its options panel reuses the pop-in motion), `Checkbox` (drawn, never raw `<input type="checkbox">` — the OS palette clashes with both themes), `DateInput` (fixed yyyy/MM/dd + native picker via showPicker). All aria-labels must be i18n keys
-- Dates render as `yyyy/MM/dd` (DateInput) and `yyyy/MM/dd HH:mm` (list columns, see `formatDate` in Links.tsx) — never `toLocaleString()`/native date-input display, whose format follows the browser locale
+- Dates render as `yyyy/MM/dd` (DateInput) and `yyyy/MM/dd HH:mm` (list columns, see `formatDate` in Links.tsx) — never `toLocaleString()`/native date-input display, whose format follows the browser locale. **Exception**: the dashboard trend-chart x-axis ticks are `MM/dd` (the tooltip keeps the full date)
+- Dialogs: `Dialog` accepts `headerActions` (buttons rendered next to the close button — the QR dialog's JPEG download uses it). Dialogs lock page scroll while open (built into `Dialog`) — don't add per-dialog scroll locks
 - Batch create (`BatchCreateDialog` + `lib/batch.ts`) parses strict lines `[code](date)url`, flags format errors before submit, and keeps failed lines editable for the retry button (server-side `code_taken` etc.)
 - The log page (`pages/Logs.tsx`) streams via `EventSource` (`api.logStream`), auto-reconnects, and renders history oldest-first; attrs are hidden below `sm` so messages never collapse on phones
 - Scrollbars are themed globally in `index.css` (webkit pseudo-elements + Firefox `scrollbar-color`); don't restyle per-container
-- Dialogs lock page scroll while open (built into `Dialog`) — don't add per-dialog scroll locks
 - Follow the frontend-design skill's two-pass process (token system first, then implementation) for UI work
 - All copy is bilingual via `react-i18next`; `src/locales/en.json` and `zh.json` must keep identical key sets (enforced by a vitest test)
 - Forms must associate `<Label htmlFor>` with input `id` — accessibility and Playwright's `getByLabel` depend on it
-- Settings lists (reserved codes, UA blocks) are **comma-separated** textareas applied by the save button; extra base URLs stay newline-separated
+- Settings lists (reserved codes, UA blocks, IP blocks) are **comma-separated** textareas applied by the save button; extra base URLs stay newline-separated; the log level is a `Select` with the four levels
+- Auth pages: `/admin/login` and `/admin/setup` both fetch the site config for the brand line (`site.name`, fallback `__APP_NAME__`); the browser tab shows the service name there, the site title in the console (`App.tsx`, keyed on `location.pathname`). `App` routes unconfigured servers (`authStatus.configured === false`) to the setup page and back once configured
+- List layout: the title renders **under the destination URL** (destination cell), not in the short-code cell; table headers are `whitespace-nowrap`
