@@ -38,6 +38,7 @@ Subdirectory instructions for the React SPA admin console. Root-level convention
 - Batch create (`BatchCreateDialog` + `lib/batch.ts`) parses strict lines `[code](date)url`, flags format errors before submit, and keeps failed lines editable for the retry button (server-side `code_taken` etc.)
 - The log page (`pages/Logs.tsx`) streams via `EventSource` (`api.logStream`), auto-reconnects, and renders history oldest-first; attrs are hidden below `sm` so messages never collapse on phones
 - Scrollbars are themed globally in `index.css` (webkit pseudo-elements + Firefox `scrollbar-color`); don't restyle per-container
+- **Short URLs are assembled client-side**: `linkUrls(code, cfg)` in `lib/api.ts` mirrors the old backend fullURLs — base_url (fallback `location.protocol//location.host`) plus extra_base_urls, trailing slashes trimmed, deduplicated. The backend link payload carries only `code` + `id`; QRDialog receives the assembled urls as a prop from Links. The link form's http/https buttons use `applyScheme` (fill / swap / leave alone)
 - Follow the frontend-design skill's two-pass process (token system first, then implementation) for UI work
 - All copy is bilingual via `react-i18next`; `src/locales/en.json` and `zh.json` must keep identical key sets (enforced by a vitest test)
 - Forms must associate `<Label htmlFor>` with input `id` — accessibility and Playwright's `getByLabel` depend on it
