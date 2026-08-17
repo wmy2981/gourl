@@ -7,8 +7,8 @@ import type { Link } from '../lib/api'
 
 // Shows the QR code for a link. With multiple base URLs every variant is
 // switchable — each URL carries its own code. The header download button
-// saves the current variant as a JPEG: white background, the short code
-// printed beneath the matrix, named {code}.jpg.
+// saves the current variant as a JPEG: white background, a wide 8-module
+// quiet zone, the short code printed beneath the matrix, named {code}.jpg.
 export default function QRDialog({
   link,
   open,
@@ -90,7 +90,8 @@ export default function QRDialog({
               <QRCodeCanvas
                 ref={canvasRef}
                 value={active}
-                size={196}
+                size={300}
+                marginSize={8}
                 fgColor="#1d1d1f"
                 bgColor="#ffffff"
                 style={{ display: 'none' }}
