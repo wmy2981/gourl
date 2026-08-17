@@ -6,7 +6,11 @@ info:
 
     Admin endpoints accept either a session cookie (from
     `POST /api/v1/auth/login`) or `Authorization: Bearer <token>` (tokens are
-    created in Settings). The redirect route `GET /{code}` is public.
+    created in Settings). With no admin password configured the server runs
+    in setup mode: admin endpoints refuse with `403 setup_required` (bearer
+    tokens still authenticate) until the setup flow (`POST /api/v1/auth/setup`)
+    sets the first password. The redirect route `GET /{code}` is always
+    public and never requires auth.
   version: "0.1.0"
 servers:
   - url: /api/v1
@@ -104,6 +108,8 @@ paths:
         - { name: sort, in: query, schema: { type: string, enum: [created_at, clicks, code] } }
         - { name: order, in: query, schema: { type: string, enum: [asc, desc] } }
       responses:
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/SetupRequired" }
         "200":
           description: Link list with total count
           content:
@@ -124,6 +130,8 @@ paths:
           application/json:
             schema: { $ref: "#/components/schemas/CreateLink" }
       responses:
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/SetupRequired" }
         "201": { description: Created, returns the link with full short URLs }
         "400": { description: Invalid url/code or reserved code }
         "409": { description: Code already in use }
@@ -143,6 +151,8 @@ paths:
                   maxItems: 500
                   items: { type: string }
       responses:
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/SetupRequired" }
         "200":
           description: Number of links actually deleted (absent codes are skipped). Daily click history is kept, as always.
           content:
@@ -169,6 +179,8 @@ paths:
                   maxItems: 500
                   items: { $ref: "#/components/schemas/CreateLink" }
       responses:
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/SetupRequired" }
         "201":
           description: Per-item results (status created/updated/skipped/error) with created/failed counts
   /links/expired:
@@ -176,6 +188,8 @@ paths:
       tags: [links]
       summary: Count links past their expiry
       responses:
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/SetupRequired" }
         "200":
           description: Number of expired links (drives the clear-expired confirmation)
           content:
@@ -188,6 +202,8 @@ paths:
       tags: [links]
       summary: Delete every expired link (daily click history is kept)
       responses:
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/SetupRequired" }
         "200":
           description: Number of deleted links
           content:
@@ -203,6 +219,8 @@ paths:
       tags: [links]
       summary: Get a link
       responses:
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/SetupRequired" }
         "200": { description: Link }
         "404": { description: Not found }
     patch:
@@ -221,6 +239,8 @@ paths:
                 description: { type: string }
                 expires_at: { type: integer }
       responses:
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/SetupRequired" }
         "200": { description: Updated link }
         "404": { description: Not found }
         "409": { description: New code already in use }
@@ -228,6 +248,8 @@ paths:
       tags: [links]
       summary: Delete a link (its daily click records are deliberately kept for history)
       responses:
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/SetupRequired" }
         "204": { description: Deleted }
         "404": { description: Not found }
   /export.csv:
@@ -235,6 +257,8 @@ paths:
       tags: [links]
       summary: Export all links as CSV (UTF-8 with BOM)
       responses:
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/SetupRequired" }
         "200":
           description: CSV attachment
           content:
@@ -244,6 +268,8 @@ paths:
       tags: [links]
       summary: Export all links as a JSON array of the same 7 fields the CSV carries
       responses:
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/SetupRequired" }
         "200":
           description: JSON array of {code, url, title, description, expires_at, click_count, created_at}
           content:
@@ -260,6 +286,8 @@ paths:
         - { name: limit, in: query, schema: { type: integer, default: 200, maximum: 1000 } }
         - { name: offset, in: query, schema: { type: integer, default: 0 }, description: "Records to skip (newest first) for paging" }
       responses:
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/SetupRequired" }
         "200":
           description: Log records plus history availability
           content:
@@ -277,6 +305,8 @@ paths:
       summary: Server-Sent Events stream of live log records
       description: "Each frame is an `event: log` carrying a LogRecord as JSON; a comment ping keeps the connection alive. Requires an authenticated session cookie or bearer token."
       responses:
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/SetupRequired" }
         "200":
           description: text/event-stream
           content:
@@ -287,6 +317,8 @@ paths:
       summary: List blocked User-Agent patterns
       description: Programmatic access — the settings page manages these patterns through the Config resource (GET/PUT /config, field ua_blocks).
       responses:
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/SetupRequired" }
         "200": { description: List }
     post:
       tags: [ua-blocks]
@@ -301,6 +333,8 @@ paths:
               properties:
                 pattern: { type: string }
       responses:
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/SetupRequired" }
         "201": { description: Created }
         "409": { description: Pattern already exists }
   /ua-blocks/{id}:
@@ -310,6 +344,8 @@ paths:
       parameters:
         - { name: id, in: path, required: true, schema: { type: integer } }
       responses:
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/SetupRequired" }
         "204": { description: Deleted }
         "404": { description: Not found }
   /tokens:
@@ -317,6 +353,8 @@ paths:
       tags: [tokens]
       summary: List API tokens (preview only — full token never returned)
       responses:
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/SetupRequired" }
         "200": { description: Token list }
     post:
       tags: [tokens]
@@ -330,6 +368,8 @@ paths:
               properties:
                 note: { type: string }
       responses:
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/SetupRequired" }
         "201": { description: Token created with full value }
   /tokens/{id}:
     delete:
@@ -338,6 +378,8 @@ paths:
       parameters:
         - { name: id, in: path, required: true, schema: { type: integer } }
       responses:
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/SetupRequired" }
         "204": { description: Revoked }
         "404": { description: Not found }
   /config:
@@ -345,6 +387,8 @@ paths:
       tags: [config]
       summary: Get the full site configuration
       responses:
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/SetupRequired" }
         "200": { description: Config, schema: { $ref: "#/components/schemas/Config" } }
     put:
       tags: [config]
@@ -355,6 +399,8 @@ paths:
           application/json:
             schema: { $ref: "#/components/schemas/Config" }
       responses:
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/SetupRequired" }
         "200": { description: Updated config }
         "400": { description: Invalid config }
   /icon:
@@ -370,18 +416,24 @@ paths:
               properties:
                 icon: { type: string, format: binary }
       responses:
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/SetupRequired" }
         "200": { description: Uploaded, config icon updated }
         "400": { description: Wrong type or too large }
     delete:
       tags: [config]
       summary: Reset to the built-in default icon
       responses:
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/SetupRequired" }
         "200": { description: Reset }
   /dashboard:
     get:
       tags: [dashboard]
       summary: Aggregate metrics and the last 14 days of clicks
       responses:
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/SetupRequired" }
         "200":
           description: Dashboard data
           content:
@@ -404,6 +456,11 @@ components:
     bearerAuth:
       type: http
       scheme: bearer
+  responses:
+    Unauthorized:
+      description: Missing or invalid session cookie / bearer token
+    SetupRequired:
+      description: "setup_required — no admin password configured yet, run the setup flow first (bearer tokens still authenticate)"
   schemas:
     Link:
       type: object
