@@ -28,7 +28,17 @@ const (
 
 func main() {
 	// Keep e2e output readable: the temp config below pins log_level to
-	// warning, the same quiet level the old LOG_LEVEL env provided.
+	// warning, the same quiet level the old LOG_LEVEL env provided. LOG_DIR
+	// points at a temp dir so the default ./data/log never lands in the
+	// repository working tree.
+	logDir, err := os.MkdirTemp("", "gourl-e2e-log-")
+	if err != nil {
+		slog.Error("log dir failed", "error", err)
+		os.Exit(1)
+	}
+	defer os.RemoveAll(logDir)
+	_ = os.Setenv("LOG_DIR", logDir)
+
 	logx.Init(slog.LevelInfo)
 
 	port := os.Getenv("E2E_PORT")

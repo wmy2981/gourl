@@ -12,20 +12,19 @@ services:
       # Variables come from the .env file next to this compose file (loaded
       # automatically), e.g.:
       #   SESSION_SECRET=$(openssl rand -hex 32)
+      # Without SESSION_SECRET the server generates an ephemeral secret on
+      # startup (sessions then do not survive a restart).
       # The admin password is NOT set here: with no password_hash in the
       # config file the first visitor configures it through the /admin/setup
       # flow (or a legacy ADMIN_PASSWORD is migrated once into config.yaml).
-      SESSION_SECRET: ${SESSION_SECRET:-please-change-me}
-      # Business config inside the mounted ./config directory (create
-      # config/config.yaml from config.yaml.example; defaults work without it).
-      CONFIG_PATH: /app/config/config.yaml
+      # Business config lives in the mounted ./config directory (create
+      # config/config.yaml from config.yaml.example; the built-in defaults,
+      # which point at ./config and ./data — /app/… inside the container —
+      # work without it).
       # Uncomment to use an external Redis instead of the embedded one:
       # REDIS_ADDR: redis:6379
       # Local timezone: daily click buckets and expires_at are interpreted in it.
       TZ: ${TZ:-Asia/Shanghai}
-      # Rotating log files land in ./data/log on the host (persisted with the
-      # data volume, size-rotated with lumberjack).
-      LOG_DIR: /app/data/log
     volumes:
       # Directory mounts only: Docker creates missing file mounts as
       # directories, which would break CONFIG_PATH. Writable so the settings

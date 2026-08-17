@@ -33,7 +33,16 @@ func main() {
 	// traced to the exact build.
 	slog.Info("gourl version", "version", version.Version)
 
-	cfgPath := envOr("CONFIG_PATH", "config.yaml")
+	// Defaults point at ./config and ./data (the container mounts these as
+	// /app/config and /app/data); both directories are created here so the
+	// config write-back and the database always have a home.
+	cfgPath := envOr("CONFIG_PATH", "./config/config.yaml")
+	if dir := filepath.Dir(cfgPath); dir != "" && dir != "." {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			slog.Error("create config dir failed", "dir", dir, "error", err)
+			os.Exit(1)
+		}
+	}
 	cfg, err := config.NewManager(cfgPath)
 	if err != nil {
 		slog.Error("config load failed", "path", cfgPath, "error", err)
@@ -41,7 +50,7 @@ func main() {
 	}
 	logx.SetLevel(logx.ParseLevel(cfg.Get().LogLevel))
 
-	dbPath := envOr("DB_PATH", "data/gourl.db")
+	dbPath := envOr("DB_PATH", "./data/gourl.db")
 	if dir := filepath.Dir(dbPath); dir != "" && dir != "." {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			slog.Error("create data dir failed", "dir", dir, "error", err)

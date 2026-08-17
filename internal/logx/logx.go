@@ -5,9 +5,10 @@
 //   - Level: business config field `log_level` (settings page), changeable at
 //     runtime via SetLevel; the LOG_LEVEL env var is gone.
 //   - LOG_FORMAT: json for structured JSON output, anything else = text
-//   - LOG_DIR: optional directory for a rotating file mirror of the logs
-//     (e.g. a directory on the mounted volume so logs persist across
-//     container restarts). Files are size-rotated by lumberjack.
+//   - LOG_DIR: directory for a rotating file mirror of the logs (default
+//     ./data/log, resolved under the container's mounted /app/data so logs
+//     persist across restarts). Set it to "" to disable the file mirror.
+//     Files are size-rotated by lumberjack.
 //
 // Logs go to stderr so stdout stays clean for anything piping it.
 //
@@ -71,22 +72,24 @@ func Init(level slog.Level) {
 	levelVar.Set(level)
 	opts := &slog.HandlerOptions{Level: levelVar}
 
-	// Mirror to a rotating file on the mounted volume when LOG_DIR is set;
+	// Mirror to a rotating file (default ./data/log on the mounted volume);
 	// stderr stays in the chain so docker logs still sees everything.
 	var w io.Writer = os.Stderr
-	if dir := os.Getenv("LOG_DIR"); dir != "" {
-		if err := os.MkdirAll(dir, 0o755); err != nil {
-			slog.Warn("log dir unavailable, stderr only", "dir", dir, "err", err)
-		} else {
-			fileSink = &lumberjack.Logger{
-				Filename:   filepath.Join(dir, "gourl.log"),
-				MaxSize:    10, // MB per file
-				MaxBackups: 5,
-				MaxAge:     30, // days
-				Compress:   true,
-			}
-			w = io.MultiWriter(os.Stderr, fileSink)
+	dir := os.Getenv("LOG_DIR")
+	if dir == "" {
+		dir = "./data/log"
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		slog.Warn("log dir unavailable, stderr only", "dir", dir, "err", err)
+	} else {
+		fileSink = &lumberjack.Logger{
+			Filename:   filepath.Join(dir, "gourl.log"),
+			MaxSize:    10, // MB per file
+			MaxBackups: 5,
+			MaxAge:     30, // days
+			Compress:   true,
 		}
+		w = io.MultiWriter(os.Stderr, fileSink)
 	}
 
 	var handler slog.Handler = slog.NewTextHandler(w, opts)

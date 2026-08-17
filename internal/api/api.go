@@ -59,7 +59,7 @@ func NewServer(st *store.Store, cfg *config.Manager, ctr *counter.Counter) *Serv
 		fetcher:   fetcher.New(fetcher.Options{}),
 		admin:     resolveAdminAuth(cfg),
 		loginRate: newLoginLimiter(),
-		assetsDir: envOr("ASSETS_DIR", "data/assets"),
+		assetsDir: envOr("ASSETS_DIR", "./data/assets"),
 		startTime: time.Now(),
 		now:       func() int64 { return timeNow() },
 	}
