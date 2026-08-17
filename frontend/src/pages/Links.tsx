@@ -15,6 +15,7 @@ import {
   Pencil,
   Plus,
   QrCode,
+  RefreshCw,
   Search,
   Trash2,
 } from 'lucide-react'
@@ -96,7 +97,7 @@ export default function Links() {
     return () => window.removeEventListener('scroll', onScroll, true)
   }, [urlMenu])
 
-  const { data, isLoading, isError } = useQuery({
+  const { data, isLoading, isError, isFetching } = useQuery({
     queryKey: ['links', query, expires, page],
     queryFn: () => api.listLinks({ q: query, expires, page, page_size: PAGE_SIZE }),
     placeholderData: (prev) => prev,
@@ -185,6 +186,17 @@ export default function Links() {
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold tracking-tight">{t('links.heading')}</h1>
         <div className="flex flex-wrap gap-2">
+          <Button
+            variant="outline"
+            onClick={() => {
+              invalidate()
+              queryClient.invalidateQueries({ queryKey: ['config'] })
+            }}
+            aria-label={t('links.refresh')}
+            className="!px-2.5"
+          >
+            <RefreshCw size={16} className={isFetching ? 'animate-spin' : ''} />
+          </Button>
           <Button variant="outline" onClick={() => setImportOpen(true)}>
             <FilePlus2 size={16} />
             {t('links.import')}

@@ -54,6 +54,7 @@
   },
   "links": {
     "heading": "Links",
+    "refresh": "Refresh",
     "search": "Search code, URL, title or description…",
     "create": "New link",
     "import": "Import",
