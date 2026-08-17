@@ -134,6 +134,25 @@ export default function Layout() {
     }
   }
 
+  // Open slides the drawer in: it mounts at the closed position and settles
+  // to 0 on the next frame, so the first paint happens off-screen and the
+  // transition animates the slide-in (mounting at 0 got no transition, so
+  // the drawer used to pop in without its fade/slide animation). The
+  // requestAnimationFrame also lets a gesture that started in between take
+  // over the transform.
+  const openMobile = () => {
+    if (settleTimerRef.current) {
+      clearTimeout(settleTimerRef.current)
+      settleTimerRef.current = null
+    }
+    setMobileClosing(false)
+    setMobileOpen(true)
+    setSettleTo(DRAWER_W)
+    requestAnimationFrame(() => {
+      if (!dragActiveRef.current) setSettleTo(0)
+    })
+  }
+
   // Close slides the drawer out (transform target) before unmounting it.
   const closeMobile = () => {
     if (mobileClosing) return
@@ -227,7 +246,7 @@ export default function Layout() {
           <AppIcon size={22} />
           <span className="font-semibold">{siteName}</span>
         </div>
-        <button onClick={() => setMobileOpen(true)} aria-label={t('app.menu')} className="rounded-lg p-1.5">
+        <button onClick={openMobile} aria-label={t('app.menu')} className="rounded-lg p-1.5">
           <Menu size={20} />
         </button>
       </div>

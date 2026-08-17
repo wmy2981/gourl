@@ -59,9 +59,17 @@ test('vertical scrolling on the right edge does not open the drawer', async ({ p
   await expect(drawerNav(page)).toBeHidden()
 })
 
-test('hamburger opens the drawer and tapping the backdrop closes it', async ({ page }) => {
+test('hamburger opens the drawer with a slide-in and backdrop tap closes it', async ({ page }) => {
   await login(page)
   await page.getByRole('button', { name: /menu/i }).click()
+  // The drawer must slide in from the right, not pop in at its open spot:
+  // right after the click its translateX is still far from 0 (a first paint
+  // at 0 used to get no transition at all).
+  const tx = await page.evaluate(() => {
+    const drawer = [...document.querySelectorAll('nav')].at(-1)?.closest('.w-64')
+    return drawer ? new DOMMatrixReadOnly(getComputedStyle(drawer).transform).m41 : -1
+  })
+  expect(tx).toBeGreaterThan(100)
   await expect(drawerNav(page)).toBeVisible()
   // Tap the backdrop (left of the drawer).
   await page.mouse.click(40, 400)
