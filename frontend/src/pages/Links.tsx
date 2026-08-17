@@ -382,13 +382,13 @@ export default function Links() {
                           )}
                       </div>
                     )}
-                    {link.title && <div className="mt-0.5 max-w-[240px] truncate text-xs text-muted/80">{link.title}</div>}
                   </td>
                   <td className="max-w-[280px] px-5 py-3">
                     <div className="route-line mb-1.5" />
                     <a href={link.url} target="_blank" rel="noreferrer" className="block truncate text-muted transition-colors hover:text-accent-deep dark:hover:text-accent">
                       {link.url}
                     </a>
+                    {link.title && <div className="mt-0.5 max-w-[240px] truncate text-xs text-muted/80">{link.title}</div>}
                   </td>
                   <td className="max-w-[220px] px-5 py-3 text-muted/80">
                     {link.description ? (
