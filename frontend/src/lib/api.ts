@@ -25,7 +25,21 @@ export interface Link {
   click_count: number
   created_at: number
   updated_at: number
-  urls: string[]
+}
+
+// linkUrls assembles every complete short URL for a code from the config
+// (mirroring the old backend fullURLs): the base URL — or the current
+// location when unset — plus every extra base URL, deduplicated, trailing
+// slashes trimmed.
+export function linkUrls(code: string, cfg: AppConfig): string[] {
+  const bases: string[] = []
+  const push = (base: string) => {
+    const trimmed = base.trim().replace(/\/+$/, '')
+    if (trimmed && !bases.includes(trimmed)) bases.push(trimmed)
+  }
+  push(cfg.base_url || `${location.protocol}//${location.host}`)
+  for (const extra of cfg.extra_base_urls) push(extra)
+  return bases.map((b) => `${b}/${code}`)
 }
 
 export interface LinkListResponse {

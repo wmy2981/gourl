@@ -27,7 +27,6 @@ export interface Link {
   click_count: number
   created_at: number
   updated_at: number
-  urls: string[]
 }
 
 export async function createLinkApi(

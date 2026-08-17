@@ -58,10 +58,9 @@ func (s *Server) listLinks(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	slog.Debug("links listed", "total", total, "page", opts.Page, "actor", actorFrom(r))
-	cfg := s.cfg.Get()
 	out := make([]linkJSON, 0, len(links))
 	for i := range links {
-		out = append(out, toLinkJSON(&links[i], fullURLs(cfg, r, links[i].Code)))
+		out = append(out, toLinkJSON(&links[i]))
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"links":     out,
@@ -176,7 +175,7 @@ func (s *Server) createLink(w http.ResponseWriter, r *http.Request) {
 	// never delays the response; the meta lands on a later list refetch.
 	s.meta.enqueue(code, req.URL)
 	slog.Info("link created", "code", code, "url", req.URL, "actor", actorFrom(r))
-	writeJSON(w, http.StatusCreated, toLinkJSON(link, fullURLs(cfg, r, code)))
+	writeJSON(w, http.StatusCreated, toLinkJSON(link))
 }
 
 // getLink handles GET /api/v1/links/{code}.
@@ -191,7 +190,7 @@ func (s *Server) getLink(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	slog.Debug("link fetched", "code", link.Code, "actor", actorFrom(r))
-	writeJSON(w, http.StatusOK, toLinkJSON(link, fullURLs(s.cfg.Get(), r, link.Code)))
+	writeJSON(w, http.StatusOK, toLinkJSON(link))
 }
 
 // updateLinkRequest is the PATCH /api/v1/links/{code} body. Pointer fields
@@ -286,7 +285,7 @@ func (s *Server) updateLink(w http.ResponseWriter, r *http.Request) {
 		s.meta.enqueue(link.Code, link.URL)
 	}
 	slog.Info("link updated", "code", link.Code, "actor", actorFrom(r))
-	writeJSON(w, http.StatusOK, toLinkJSON(link, fullURLs(cfg, r, link.Code)))
+	writeJSON(w, http.StatusOK, toLinkJSON(link))
 }
 
 // deleteLink handles DELETE /api/v1/links/{code}.

@@ -18,7 +18,7 @@ import {
   Search,
   Trash2,
 } from 'lucide-react'
-import { api, ApiError, type Link } from '../lib/api'
+import { api, ApiError, linkUrls, type Link } from '../lib/api'
 import { copyText } from '../lib/clipboard'
 import { Button, Card, Checkbox, Dialog, Input, Select, useToast } from '../components/ui'
 import LinkFormDialog from '../components/LinkFormDialog'
@@ -101,6 +101,10 @@ export default function Links() {
     queryFn: () => api.listLinks({ q: query, expires, page, page_size: PAGE_SIZE }),
     placeholderData: (prev) => prev,
   })
+
+  // Short URLs are assembled here from the config (base URL + extras); the
+  // backend no longer returns them per link.
+  const { data: cfg } = useQuery({ queryKey: ['config'], queryFn: api.getConfig })
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['links'] })
 
@@ -278,8 +282,9 @@ export default function Links() {
             </thead>
             <tbody>
               {data.links.map((link) => {
+                const urls = cfg ? linkUrls(link.code, cfg) : []
                 const idx = urlIdx[link.code] ?? 0
-                const current = link.urls[idx] ?? link.urls[0]
+                const current = urls[idx] ?? urls[0]
                 return (
                 <tr key={link.code} className="border-b border-hairline/60 last:border-0 hover:bg-black/[0.02] dark:hover:bg-white/[0.03]">
                   <td className="px-5 py-3">
@@ -338,7 +343,7 @@ export default function Links() {
                           className="flex max-w-[240px] items-center gap-1 text-xs text-muted transition-colors hover:text-accent-deep dark:hover:text-accent"
                         >
                           <span className="truncate">{current}</span>
-                          {link.urls.length > 1 && (
+                          {urls.length > 1 && (
                             <ChevronDown
                               size={12}
                               className={`shrink-0 opacity-60 transition-transform duration-200 ${
@@ -349,7 +354,7 @@ export default function Links() {
                         </button>
                         {urlMenu === link.code &&
                           menuPos &&
-                          link.urls.length > 1 &&
+                          urls.length > 1 &&
                           createPortal(
                             <>
                               <div className="fixed inset-0 z-40" onClick={closeUrlMenu} />
@@ -359,7 +364,7 @@ export default function Links() {
                                 }`}
                                 style={{ left: menuPos.x, top: menuPos.y }}
                               >
-                                {link.urls.map((u, i) => (
+                                {urls.map((u, i) => (
                                   <button
                                     key={u}
                                     onClick={() => {
@@ -460,6 +465,7 @@ export default function Links() {
       {/* The QR dialog opens on the base URL picked via the row dropdown. */}
       <QRDialog
         link={qrLink}
+        urls={qrLink && cfg ? linkUrls(qrLink.code, cfg) : []}
         open={qrLink !== null}
         onClose={() => setQrLink(null)}
         initialIndex={qrLink ? (urlIdx[qrLink.code] ?? 0) : 0}

@@ -132,7 +132,7 @@ paths:
       responses:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/SetupRequired" }
-        "201": { description: Created, returns the link with full short URLs }
+        "201": { description: Created, returns the link }
         "400": { description: "Invalid url/code, reserved code, or description_too_long (over 500 characters)" }
         "409": { description: Code already in use }
     delete:
@@ -465,7 +465,7 @@ components:
     Link:
       type: object
       properties:
-        code: { type: string }
+        code: { type: string, description: "Short URL code; full URLs are assembled client-side from the config" }
         url: { type: string }
         title: { type: string }
         description: { type: string }
@@ -473,10 +473,6 @@ components:
         click_count: { type: integer }
         created_at: { type: integer }
         updated_at: { type: integer }
-        urls:
-          type: array
-          description: Full short URLs (primary + extra base URLs)
-          items: { type: string }
     CreateLink:
       type: object
       required: [url]

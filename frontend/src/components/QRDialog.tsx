@@ -11,11 +11,14 @@ import type { Link } from '../lib/api'
 // quiet zone, the short code printed beneath the matrix, named {code}.jpg.
 export default function QRDialog({
   link,
+  urls,
   open,
   onClose,
   initialIndex = 0,
 }: {
   link: Link | null
+  /** Complete short URLs for the link, assembled by the parent from config. */
+  urls: string[]
   open: boolean
   onClose: () => void
   /** Base URL picked on the links row; the dialog opens on that variant. */
@@ -53,16 +56,15 @@ export default function QRDialog({
   useEffect(() => {
     if (link) setShown(link)
   }, [link])
-  const urls = shown?.urls ?? []
   const [index, setIndex] = useState(0)
   useEffect(() => {
     // Clamp against the *incoming* link's URLs: on the first render `shown`
     // still holds null (or the previous link), so clamping against `urls`
     // would drop the picked variant back to 0 — and on reopen it would clamp
     // with the previous link's URL count.
-    if (open && link) setIndex(Math.min(initialIndex, Math.max(link.urls.length - 1, 0)))
+    if (open && link) setIndex(Math.min(initialIndex, Math.max(urls.length - 1, 0)))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, link, initialIndex])
+  }, [open, link, initialIndex, urls])
   const active = urls[Math.min(index, Math.max(urls.length - 1, 0))]
 
   return (

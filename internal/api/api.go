@@ -278,20 +278,21 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	}
 }
 
-// linkJSON is the wire representation of a link.
+// linkJSON is the wire representation of a link. Short URLs are assembled
+// client-side from the config (base_url + extra_base_urls); the API carries
+// only the code.
 type linkJSON struct {
-	Code        string   `json:"code"`
-	URL         string   `json:"url"`
-	Title       string   `json:"title"`
-	Description string   `json:"description"`
-	ExpiresAt   int64    `json:"expires_at"`
-	ClickCount  int64    `json:"click_count"`
-	CreatedAt   int64    `json:"created_at"`
-	UpdatedAt   int64    `json:"updated_at"`
-	URLs        []string `json:"urls"`
+	Code        string `json:"code"`
+	URL         string `json:"url"`
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	ExpiresAt   int64  `json:"expires_at"`
+	ClickCount  int64  `json:"click_count"`
+	CreatedAt   int64  `json:"created_at"`
+	UpdatedAt   int64  `json:"updated_at"`
 }
 
-func toLinkJSON(l *store.Link, urls []string) linkJSON {
+func toLinkJSON(l *store.Link) linkJSON {
 	return linkJSON{
 		Code:        l.Code,
 		URL:         l.URL,
@@ -301,6 +302,5 @@ func toLinkJSON(l *store.Link, urls []string) linkJSON {
 		ClickCount:  l.ClickCount,
 		CreatedAt:   l.CreatedAt,
 		UpdatedAt:   l.UpdatedAt,
-		URLs:        urls,
 	}
 }
