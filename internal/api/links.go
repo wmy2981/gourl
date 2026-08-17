@@ -44,6 +44,7 @@ func (s *Server) listLinks(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "internal_error", "failed to list links")
 		return
 	}
+	slog.Debug("links listed", "total", total, "page", opts.Page, "actor", actorFrom(r))
 	cfg := s.cfg.Get()
 	out := make([]linkJSON, 0, len(links))
 	for i := range links {
@@ -172,6 +173,7 @@ func (s *Server) getLink(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "internal_error", "failed to get link")
 		return
 	}
+	slog.Debug("link fetched", "code", link.Code, "actor", actorFrom(r))
 	writeJSON(w, http.StatusOK, toLinkJSON(link, fullURLs(s.cfg.Get(), r, link.Code)))
 }
 

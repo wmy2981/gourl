@@ -1,6 +1,7 @@
 package api
 
 import (
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -17,11 +18,13 @@ func (s *Server) health(w http.ResponseWriter, r *http.Request) {
 	if err := s.counter.Ping(r.Context()); err != nil {
 		redisStatus = "error"
 		status = http.StatusServiceUnavailable
+		slog.Error("health: redis down", "error", err)
 	}
 	sqliteStatus := "ok"
 	if err := s.store.Ping(r.Context()); err != nil {
 		sqliteStatus = "error"
 		status = http.StatusServiceUnavailable
+		slog.Error("health: sqlite down", "error", err)
 	}
 
 	writeJSON(w, status, map[string]any{

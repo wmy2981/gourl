@@ -196,6 +196,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 // authStatus handles GET /api/v1/auth/status: tells the SPA whether an admin
 // password exists, so it can route to the setup page before login.
 func (s *Server) authStatus(w http.ResponseWriter, r *http.Request) {
+	slog.Debug("auth status", "configured", s.admin.sessionEnabled(), "remote", r.RemoteAddr)
 	writeJSON(w, http.StatusOK, map[string]bool{"configured": s.admin.sessionEnabled()})
 }
 
@@ -283,9 +284,11 @@ func (s *Server) requireAuth(next http.HandlerFunc) http.HandlerFunc {
 			// No admin password yet: the management API is locked until the
 			// setup flow configures one (bearer tokens keep working, so
 			// scripted access is unaffected).
+			slog.Warn("admin api refused: setup required", "path", r.URL.Path, "remote", r.RemoteAddr)
 			writeError(w, http.StatusForbidden, "setup_required", "admin password not configured, complete the setup flow first")
 			return
 		default:
+			slog.Debug("admin auth rejected", "path", r.URL.Path, "remote", r.RemoteAddr)
 			writeError(w, http.StatusUnauthorized, "unauthorized", "authentication required")
 			return
 		}

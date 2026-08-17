@@ -19,6 +19,7 @@ func (s *Server) listUABlocks(w http.ResponseWriter, r *http.Request) {
 	for i, p := range blocks {
 		out = append(out, map[string]any{"id": i + 1, "pattern": p})
 	}
+	slog.Debug("ua blocks listed", "count", len(blocks), "actor", actorFrom(r))
 	writeJSON(w, http.StatusOK, map[string]any{"ua_blocks": out})
 }
 

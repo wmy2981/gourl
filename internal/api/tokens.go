@@ -37,6 +37,7 @@ func (s *Server) listTokens(w http.ResponseWriter, r *http.Request) {
 			"created_at":  t.CreatedAt,
 		})
 	}
+	slog.Debug("tokens listed", "count", len(tokens), "actor", actorFrom(r))
 	writeJSON(w, http.StatusOK, map[string]any{"tokens": out})
 }
 

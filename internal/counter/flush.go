@@ -78,6 +78,7 @@ func (f *Flusher) FlushOnce(ctx context.Context) error {
 		f.addBack(ctx, vals)
 		return fmt.Errorf("apply counts: %w", err)
 	}
+	slog.Debug("counters flushed", "keys", len(keys), "links", len(totals), "dailies", len(dailies))
 	return nil
 }
 

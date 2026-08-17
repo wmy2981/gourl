@@ -9,6 +9,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/url"
 	"os"
@@ -229,8 +230,10 @@ func (m *Manager) Update(c *Config) error {
 		return fmt.Errorf("marshal config: %w", err)
 	}
 	if err := atomicWrite(m.path, data); err != nil {
+		slog.Debug("config write failed", "path", m.path, "error", err)
 		return err
 	}
+	slog.Debug("config written", "path", m.path)
 	m.mu.Lock()
 	m.cfg = c
 	m.mu.Unlock()

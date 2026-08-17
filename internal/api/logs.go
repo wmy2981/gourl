@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"time"
@@ -29,6 +30,7 @@ func (s *Server) logHistory(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "internal_error", "failed to read logs")
 		return
 	}
+	slog.Debug("log history read", "limit", limit, "offset", offset, "count", len(records))
 	writeJSON(w, http.StatusOK, map[string]any{
 		"available": logx.HistoryEnabled(),
 		"records":   records,
@@ -39,6 +41,8 @@ func (s *Server) logHistory(w http.ResponseWriter, r *http.Request) {
 // live log records. Subscribers that fall behind are dropped by logx; a
 // keep-alive comment every 30s holds the connection through idle periods.
 func (s *Server) logStream(w http.ResponseWriter, r *http.Request) {
+	slog.Debug("log stream opened", "remote", r.RemoteAddr)
+	defer slog.Debug("log stream closed", "remote", r.RemoteAddr)
 	w.Header().Set("Content-Type", "text/event-stream; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("X-Accel-Buffering", "no")
@@ -63,6 +67,7 @@ func (s *Server) logStream(w http.ResponseWriter, r *http.Request) {
 			// Comments are ignored by EventSource and keep the connection
 			// alive through proxies with idle timeouts.
 			if _, err := w.Write([]byte(": ping\n\n")); err != nil {
+				slog.Debug("log stream write failed", "error", err)
 				return
 			}
 			rc.Flush()
@@ -85,6 +90,7 @@ func writeSSEEvent(w http.ResponseWriter, rc *http.ResponseController, rec logx.
 		return
 	}
 	if _, err := w.Write([]byte("\n\n")); err != nil {
+		slog.Debug("log stream write failed", "error", err)
 		return
 	}
 	rc.Flush()

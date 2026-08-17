@@ -24,6 +24,7 @@ func (s *Server) redirect(w http.ResponseWriter, r *http.Request) {
 
 	cfg := s.cfg.Get()
 	if shortcode.IsReserved(code, cfg.ReservedCodes) {
+		slog.Debug("redirect: reserved code", "code", code, "remote", r.RemoteAddr)
 		s.renderNotFound(w, r)
 		return
 	}
@@ -47,9 +48,11 @@ func (s *Server) redirect(w http.ResponseWriter, r *http.Request) {
 	link, err := s.store.GetLink(r.Context(), code)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
+			slog.Debug("redirect: code not found", "code", code, "remote", r.RemoteAddr)
 			s.renderNotFound(w, r)
 			return
 		}
+		slog.Error("redirect: lookup failed", "code", code, "error", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
@@ -57,6 +60,7 @@ func (s *Server) redirect(w http.ResponseWriter, r *http.Request) {
 	now := s.now()
 	if link.ExpiresAt > 0 && link.ExpiresAt < now {
 		// Expired codes look like any other missing link: a plain 404.
+		slog.Debug("redirect: code expired", "code", code, "remote", r.RemoteAddr)
 		s.renderNotFound(w, r)
 		return
 	}
@@ -67,6 +71,7 @@ func (s *Server) redirect(w http.ResponseWriter, r *http.Request) {
 		slog.Warn("count click failed", "code", code, "error", err)
 	}
 
+	slog.Debug("link redirected", "code", code, "url", link.URL, "remote", r.RemoteAddr)
 	http.Redirect(w, r, link.URL, http.StatusFound)
 }
 

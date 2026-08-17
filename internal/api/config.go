@@ -11,6 +11,7 @@ import (
 
 // getConfig handles GET /api/v1/config.
 func (s *Server) getConfig(w http.ResponseWriter, r *http.Request) {
+	slog.Debug("config fetched", "actor", actorFrom(r))
 	writeJSON(w, http.StatusOK, s.cfg.Get())
 }
 
@@ -33,6 +34,6 @@ func (s *Server) updateConfig(w http.ResponseWriter, r *http.Request) {
 	}
 	// The log level is part of the business config now: apply it immediately.
 	logx.SetLevel(logx.ParseLevel(cfg.LogLevel))
-	slog.Info("config updated", "actor", actorFrom(r))
+	slog.Info("config updated", "actor", actorFrom(r), "log_level", cfg.LogLevel)
 	writeJSON(w, http.StatusOK, s.cfg.Get())
 }

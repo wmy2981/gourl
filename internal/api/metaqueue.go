@@ -55,6 +55,7 @@ func (q *metaQueue) loop() {
 			slog.Debug("fetch meta failed, leaving empty", "url", job.url, "error", err)
 			continue
 		}
+		slog.Debug("fetch meta ok", "code", job.code, "url", job.url, "title_len", len(title))
 		if err := q.st.UpdateMeta(context.Background(), job.code, title, desc, time.Now().Unix()); err != nil {
 			// The link may have been deleted in the meantime; nothing to fix.
 			slog.Debug("store meta failed", "code", job.code, "error", err)

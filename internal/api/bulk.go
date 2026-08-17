@@ -40,6 +40,7 @@ func (s *Server) expiredCount(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "internal_error", "failed to count expired links")
 		return
 	}
+	slog.Debug("expired links counted", "count", count, "actor", actorFrom(r))
 	writeJSON(w, http.StatusOK, map[string]any{"count": count})
 }
 

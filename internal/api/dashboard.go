@@ -1,6 +1,7 @@
 package api
 
 import (
+	"log/slog"
 	"net/http"
 	"time"
 )
@@ -30,6 +31,7 @@ func (s *Server) dashboard(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	slog.Debug("dashboard stats", "links_total", linksTotal, "clicks_total", clicksTotal, "actor", actorFrom(r))
 	writeJSON(w, http.StatusOK, map[string]any{
 		"links_total":  linksTotal,
 		"clicks_total": clicksTotal,

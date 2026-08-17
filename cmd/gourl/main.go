@@ -49,6 +49,7 @@ func main() {
 		os.Exit(1)
 	}
 	logx.SetLevel(logx.ParseLevel(cfg.Get().LogLevel))
+	slog.Info("log level applied", "level", cfg.Get().LogLevel)
 
 	dbPath := envOr("DB_PATH", "./data/gourl.db")
 	if dir := filepath.Dir(dbPath); dir != "" && dir != "." {

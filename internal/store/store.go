@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 
 	sqlite3 "modernc.org/sqlite"
@@ -164,12 +165,15 @@ func (s *Store) CreateLink(ctx context.Context, l *Link) error {
 		`INSERT INTO links (`+linkColumns+`) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
 		l.Code, l.URL, l.Title, l.Description, l.ExpiresAt, l.ClickCount, l.CreatedAt, l.UpdatedAt)
 	if isConstraint(err) {
+		slog.Debug("store: create link failed", "code", l.Code, "error", ErrTaken)
 		return ErrTaken
 	}
 	if err != nil {
+		slog.Debug("store: create link failed", "code", l.Code, "error", err)
 		return fmt.Errorf("create link: %w", err)
 	}
 	s.cache.set(l.Code, l)
+	slog.Debug("store: link created", "code", l.Code)
 	return nil
 }
 
@@ -199,11 +203,14 @@ func (s *Store) CreateLinks(ctx context.Context, links []Link) ([]error, error) 
 	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
+	created := 0
 	for i, err := range errs {
 		if err == nil {
 			s.cache.set(links[i].Code, &links[i])
+			created++
 		}
 	}
+	slog.Debug("store: links created", "created", created, "failed", len(links)-created)
 	return errs, nil
 }
 
@@ -213,9 +220,11 @@ func (s *Store) UpdateMeta(ctx context.Context, code, title, description string,
 		`UPDATE links SET title = ?, description = ?, updated_at = ? WHERE code = ?`,
 		title, description, updatedAt, code)
 	if err != nil {
+		slog.Debug("store: update meta failed", "code", code, "error", err)
 		return fmt.Errorf("update meta: %w", err)
 	}
 	s.cache.del(code)
+	slog.Debug("store: meta updated", "code", code)
 	return nil
 }
 
@@ -245,6 +254,7 @@ func (s *Store) UpdateLink(ctx context.Context, l *Link) error {
 		`UPDATE links SET url = ?, title = ?, description = ?, expires_at = ?, updated_at = ? WHERE code = ?`,
 		l.URL, l.Title, l.Description, l.ExpiresAt, l.UpdatedAt, l.Code)
 	if err != nil {
+		slog.Debug("store: update link failed", "code", l.Code, "error", err)
 		return fmt.Errorf("update link: %w", err)
 	}
 	n, err := res.RowsAffected()
@@ -252,9 +262,11 @@ func (s *Store) UpdateLink(ctx context.Context, l *Link) error {
 		return err
 	}
 	if n == 0 {
+		slog.Debug("store: update link failed", "code", l.Code, "error", ErrNotFound)
 		return ErrNotFound
 	}
 	s.cache.del(l.Code)
+	slog.Debug("store: link updated", "code", l.Code)
 	return nil
 }
 
@@ -289,6 +301,7 @@ func (s *Store) RenameLink(ctx context.Context, oldCode, newCode string, now int
 	}
 	s.cache.del(oldCode)
 	s.cache.del(newCode)
+	slog.Debug("store: link renamed", "from", oldCode, "to", newCode)
 	return nil
 }
 
@@ -311,12 +324,14 @@ func (s *Store) DeleteLink(ctx context.Context, code string) error {
 		return err
 	}
 	if n == 0 {
+		slog.Debug("store: delete link failed", "code", code, "error", ErrNotFound)
 		return ErrNotFound
 	}
 	if err := tx.Commit(); err != nil {
 		return err
 	}
 	s.cache.del(code)
+	slog.Debug("store: link deleted", "code", code)
 	return nil
 }
 
@@ -347,6 +362,7 @@ func (s *Store) DeleteLinks(ctx context.Context, codes []string) (int64, error) 
 	for _, code := range codes {
 		s.cache.del(code)
 	}
+	slog.Debug("store: links deleted", "deleted", deleted)
 	return deleted, nil
 }
 
@@ -372,7 +388,13 @@ func (s *Store) DeleteExpired(ctx context.Context, now int64) (int64, error) {
 	}
 	// The sweep touches unknown codes; drop the whole cache to be safe.
 	s.cache.clear()
-	return res.RowsAffected()
+	n, err := res.RowsAffected()
+	if err != nil {
+		slog.Debug("store: delete expired failed", "error", err)
+		return 0, err
+	}
+	slog.Debug("store: expired links deleted", "deleted", n)
+	return n, nil
 }
 
 // ListLinks returns links matching the options plus the total count of matches.
