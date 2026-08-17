@@ -63,6 +63,7 @@
     "exportTitle": "Pick an export format",
     "exportCsv": "CSV",
     "exportJson": "JSON",
+    "exportHint": "For database parsing, use the db-export script (<1>GitHub download</1>)",
     "shortUrl": "Short URL",
     "destination": "Destination",
     "description": "Description",

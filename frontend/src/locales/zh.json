@@ -63,6 +63,7 @@
     "exportTitle": "选择导出格式",
     "exportCsv": "CSV",
     "exportJson": "JSON",
+    "exportHint": "解析数据库请使用 db-export 脚本（<1>GitHub 下载</1>）",
     "shortUrl": "短链接",
     "destination": "目标地址",
     "description": "说明",

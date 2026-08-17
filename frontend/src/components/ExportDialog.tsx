@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useTranslation } from 'react-i18next'
+import { Trans, useTranslation } from 'react-i18next'
 import { FileJson, FileSpreadsheet } from 'lucide-react'
 import { api } from '../lib/api'
 import { Button, Dialog, useToast } from './ui'
@@ -72,6 +72,20 @@ export default function ExportDialog({
           {t('links.exportJson')}
         </button>
       </div>
+      <p className="mt-3 text-center text-xs text-muted">
+        <Trans i18nKey="links.exportHint">
+          For database parsing, use the db-export script (
+          <a
+            href="https://raw.githubusercontent.com/wmy2981/gourl/main/scripts/db-export.mts"
+            target="_blank"
+            rel="noreferrer"
+            className="text-accent underline-offset-2 hover:underline"
+          >
+            GitHub download
+          </a>
+          )
+        </Trans>
+      </p>
       <div className="mt-4 flex justify-end">
         <Button variant="ghost" onClick={onClose}>
           {t('form.cancel')}
