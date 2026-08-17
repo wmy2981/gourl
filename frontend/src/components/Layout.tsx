@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
@@ -41,14 +41,72 @@ export default function Layout() {
   const { data: cfg } = useQuery({ queryKey: ['config'], queryFn: api.getConfig })
   const siteName = cfg?.site.name || __APP_NAME__
 
-  // Close plays the slide-out before unmounting the drawer.
+  // Edge-swipe gesture: dragging the drawer by touch. dragX is the drawer's
+  // left-edge position in px (0 = fully open, DRAWER_W = fully closed) while a
+  // finger is down; settleTo is the target position during the release
+  // animation. Non-gesture open/close also runs through the same transform,
+  // so the drawer always slides — no class-animation jump on release.
+  const DRAWER_W = 256 // w-64
+  const [dragX, setDragX] = useState<number | null>(null)
+  const [settleTo, setSettleTo] = useState<number | null>(null)
+  const dragStartRef = useRef<number | null>(null)
+  const settleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => () => {
+    if (settleTimerRef.current) clearTimeout(settleTimerRef.current)
+  }, [])
+
+  const onDrawerTouchStart = (e: React.TouchEvent) => {
+    const touch = e.touches[0]
+    // Trigger zone: the right 24px of the viewport, phones only (the drawer
+    // exists only below md).
+    if (!touch || window.innerWidth >= 768 || touch.clientX < window.innerWidth - 24) return
+    if (settleTimerRef.current) {
+      clearTimeout(settleTimerRef.current)
+      settleTimerRef.current = null
+    }
+    setSettleTo(null)
+    dragStartRef.current = touch.clientX
+    setDragX(mobileOpen ? 0 : DRAWER_W)
+  }
+
+  const onDrawerTouchMove = (e: React.TouchEvent) => {
+    if (dragX === null || dragStartRef.current === null) return
+    const start = mobileOpen ? 0 : DRAWER_W
+    const dx = dragStartRef.current - e.touches[0].clientX // >0 = dragging left
+    setDragX(Math.max(0, Math.min(DRAWER_W, start + dx)))
+  }
+
+  const finishDrawerGesture = () => {
+    if (dragX === null) return
+    dragStartRef.current = null
+    const open = dragX < DRAWER_W / 2
+    setSettleTo(open ? 0 : DRAWER_W)
+    setDragX(null)
+    if (open) {
+      setMobileOpen(true)
+      settleTimerRef.current = setTimeout(() => setSettleTo(null), 320)
+    } else {
+      // Close: keep the drawer mounted while the slide-out plays, exactly
+      // like the X button path.
+      setMobileClosing(true)
+      setTimeout(() => {
+        setMobileClosing(false)
+        setMobileOpen(false)
+        setSettleTo(null)
+      }, 320)
+    }
+  }
+
+  // Close slides the drawer out (transform target) before unmounting it.
   const closeMobile = () => {
     if (mobileClosing) return
     setMobileClosing(true)
+    setSettleTo(DRAWER_W)
     setTimeout(() => {
       setMobileClosing(false)
       setMobileOpen(false)
-    }, 220)
+      setSettleTo(null)
+    }, 320)
   }
 
   const lang = (i18n.language ?? 'en').startsWith('zh') ? 'zh' : 'en'
@@ -110,7 +168,13 @@ export default function Layout() {
   )
 
   return (
-    <div className="flex min-h-screen">
+    <div
+      className="flex min-h-screen"
+      onTouchStart={onDrawerTouchStart}
+      onTouchMove={onDrawerTouchMove}
+      onTouchEnd={finishDrawerGesture}
+      onTouchCancel={finishDrawerGesture}
+    >
       {/* Desktop sidebar */}
       <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col overflow-y-auto border-r border-hairline bg-white/50 p-5 backdrop-blur-xl dark:bg-white/[0.04] md:flex">
         {sidebarContent}
@@ -133,9 +197,11 @@ export default function Layout() {
             onClick={closeMobile}
           />
           <div
-            className={`absolute inset-y-0 right-0 flex w-64 flex-col overflow-y-auto bg-canvas p-5 shadow-2xl dark:bg-canvas-dark ${
-              mobileClosing ? 'animate-slide-out-right' : 'animate-slide-in-right'
-            }`}
+            className="absolute inset-y-0 right-0 flex w-64 flex-col overflow-y-auto bg-canvas p-5 shadow-2xl dark:bg-canvas-dark"
+            style={{
+              transform: `translateX(${settleTo ?? dragX ?? (mobileOpen ? 0 : DRAWER_W)}px)`,
+              transition: dragX !== null ? 'none' : 'transform 0.3s cubic-bezier(0.32, 0.72, 0, 1)',
+            }}
           >
             <button onClick={closeMobile} className="mb-4 self-end rounded-lg p-1.5" aria-label={t('common.close')}>
               <X size={20} />
