@@ -133,7 +133,7 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/SetupRequired" }
         "201": { description: Created, returns the link with full short URLs }
-        "400": { description: Invalid url/code or reserved code }
+        "400": { description: "Invalid url/code, reserved code, or description_too_long (over 500 characters)" }
         "409": { description: Code already in use }
     delete:
       tags: [links]
@@ -484,7 +484,7 @@ components:
         url: { type: string, description: "Absolute http(s) URL" }
         code: { type: string, description: "Optional custom code, may contain / (≤5 levels, ASCII or Chinese); empty = random" }
         title: { type: string }
-        description: { type: string }
+        description: { type: string, maxLength: 500, description: "At most 500 characters (runes)" }
         expires_at:
           oneOf:
             - type: integer

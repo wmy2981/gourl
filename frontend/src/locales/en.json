@@ -131,6 +131,7 @@
     "invalidUrl": "Destination must be an absolute http(s) URL",
     "invalidDate": "Invalid date — use yyyy/MM/dd",
     "invalidCode": "Invalid short code",
+    "descriptionTooLong": "Description must be at most 500 characters",
     "codeTaken": "This short code is already in use",
     "reserved": "This short code is a reserved system path",
     "importFromFile": "Import from file"

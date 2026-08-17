@@ -373,6 +373,9 @@ func (s *Server) resolveCode(item createLinkRequest, cfg *config.Config) (string
 	if !isAbsoluteHTTPURL(item.URL) {
 		return "", &codeError{"invalid_request", "url must be an absolute http(s) URL"}
 	}
+	if msg, ok := checkDescription(item.Description); !ok {
+		return "", &codeError{"description_too_long", msg}
+	}
 	if item.ExpiresAt != nil && *item.ExpiresAt < 0 {
 		return "", &codeError{"invalid_request", "expires_at must be >= 0"}
 	}

@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/wmy2981/gourl/internal/shortcode"
 	"github.com/wmy2981/gourl/internal/store"
@@ -17,10 +18,22 @@ import (
 
 func timeNow() int64 { return time.Now().Unix() }
 
+// maxDescriptionLen caps the description on create/update/import. Counted in
+// runes so CJK text gets its full 500 characters, not 500 bytes.
+const maxDescriptionLen = 500
+
 // isAbsoluteHTTPURL rejects anything but http/https absolute URLs.
 func isAbsoluteHTTPURL(s string) bool {
 	u, err := url.Parse(s)
 	return err == nil && u.IsAbs() && (u.Scheme == "http" || u.Scheme == "https") && u.Host != ""
+}
+
+// checkDescription validates the description length against maxDescriptionLen.
+func checkDescription(description string) (message string, ok bool) {
+	if utf8.RuneCountInString(description) > maxDescriptionLen {
+		return "description must be at most 500 characters", false
+	}
+	return "", true
 }
 
 // listLinks handles GET /api/v1/links.
@@ -108,6 +121,10 @@ func (s *Server) createLink(w http.ResponseWriter, r *http.Request) {
 	}
 	if !isAbsoluteHTTPURL(req.URL) {
 		writeError(w, http.StatusBadRequest, "invalid_request", "url must be an absolute http(s) URL")
+		return
+	}
+	if msg, ok := checkDescription(req.Description); !ok {
+		writeError(w, http.StatusBadRequest, "description_too_long", msg)
 		return
 	}
 	if req.ExpiresAt != nil && *req.ExpiresAt < 0 {
@@ -221,6 +238,10 @@ func (s *Server) updateLink(w http.ResponseWriter, r *http.Request) {
 		link.Title = *req.Title
 	}
 	if req.Description != nil {
+		if msg, ok := checkDescription(*req.Description); !ok {
+			writeError(w, http.StatusBadRequest, "description_too_long", msg)
+			return
+		}
 		link.Description = *req.Description
 	}
 	if req.ExpiresAt != nil {

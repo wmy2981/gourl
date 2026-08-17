@@ -79,7 +79,9 @@ export default function LinkFormDialog({
                 ? t('form.invalidCode')
                 : err.code === 'invalid_request'
                   ? t('form.invalidUrl')
-                  : err.message,
+                  : err.code === 'description_too_long'
+                    ? t('form.descriptionTooLong')
+                    : err.message,
           'error',
         )
       } else {
@@ -117,6 +119,7 @@ export default function LinkFormDialog({
           <Textarea
             id="link-description"
             rows={2}
+            maxLength={500}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder={t('form.descriptionPlaceholder')}
