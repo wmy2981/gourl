@@ -89,9 +89,6 @@ func (s *Server) batchCreate(w http.ResponseWriter, r *http.Request) {
 		if p.item.ExpiresAt != nil {
 			links[i].ExpiresAt = int64(*p.item.ExpiresAt)
 		}
-		if p.item.ClickCount != nil {
-			links[i].ClickCount = *p.item.ClickCount
-		}
 		if p.item.CreatedAt != nil {
 			links[i].CreatedAt = *p.item.CreatedAt
 		}
@@ -182,9 +179,6 @@ func (s *Server) applyConflictUpdate(r *http.Request, item createLinkRequest, co
 	}
 	if item.ExpiresAt != nil {
 		link.ExpiresAt = int64(*item.ExpiresAt)
-	}
-	if item.ClickCount != nil {
-		link.ClickCount = *item.ClickCount
 	}
 	if item.CreatedAt != nil {
 		link.CreatedAt = *item.CreatedAt

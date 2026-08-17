@@ -86,15 +86,15 @@ func (e *expiryValue) UnmarshalJSON(b []byte) error {
 	return fmt.Errorf("expires_at must be a unix timestamp or yyyy-mm-dd")
 }
 
-// createLinkRequest is the POST /api/v1/links body. click_count/created_at
-// are honored on batch imports only (single creates ignore them).
+// createLinkRequest is the POST /api/v1/links body. created_at is honored on
+// batch imports only (single creates ignore it); click_count is deliberately
+// not accepted anywhere — imports must never fabricate click history.
 type createLinkRequest struct {
 	URL         string       `json:"url"`
 	Code        string       `json:"code"`
 	Title       string       `json:"title"`
 	Description string       `json:"description"`
 	ExpiresAt   *expiryValue `json:"expires_at"`
-	ClickCount  *int64       `json:"click_count"`
 	CreatedAt   *int64       `json:"created_at"`
 }
 

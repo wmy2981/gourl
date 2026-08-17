@@ -235,8 +235,10 @@ func TestBatchCreateMetaAndOverrides(t *testing.T) {
 	if l.Title != "The Title" || l.Description != "The Description" {
 		t.Fatalf("meta not stored: %+v", l)
 	}
-	if l.ClickCount != 42 || l.CreatedAt != 1000 {
-		t.Fatalf("overrides not stored: %+v", l)
+	// click_count is dropped on import — click history must never be
+	// fabricated; created_at is honored.
+	if l.ClickCount != 0 || l.CreatedAt != 1000 {
+		t.Fatalf("click_count must be dropped, created_at honored: %+v", l)
 	}
 	want := time.Date(2030, 1, 2, 0, 0, 0, 0, time.Local).Unix()
 	if l.ExpiresAt != want {
