@@ -141,6 +141,10 @@ func restartGourl() error {
 	return p.Signal(os.Interrupt)
 }
 
+// restartGourlFn is indirection over restartGourl so tests can observe the
+// restart without a container.
+var restartGourlFn = restartGourl
+
 func loadConfig() (*config.Manager, error) {
 	return config.NewManager(cfgPath())
 }
@@ -485,7 +489,7 @@ func cmdReset(args []string) int {
 	}
 	switch targets[0] {
 	case "password":
-		return resetConfigField(yes, "clear the admin password? the server enters setup mode", func(cur *config.Config) { cur.PasswordHash = "" })
+		return resetPassword(yes)
 	case "uablock":
 		return resetConfigField(yes, "clear all blocked user-agent patterns?", func(cur *config.Config) { cur.UABlocks = []string{} })
 	case "ipblock":
@@ -530,8 +534,34 @@ func resetConfigField(yes bool, prompt string, mutate func(*config.Config)) int 
 	return 0
 }
 
+// resetPassword clears the admin password and restarts the service: the
+// container comes back in setup mode with a fresh bootstrap code.
+func resetPassword(yes bool) int {
+	if err := confirm(yes, "clear the admin password and restart the service? the server will start in setup mode"); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	m, err := loadConfig()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "load config: %v\n", err)
+		return 1
+	}
+	cur := m.Get()
+	cur.PasswordHash = ""
+	if err := m.Update(cur); err != nil {
+		fmt.Fprintf(os.Stderr, "update config: %v\n", err)
+		return 1
+	}
+	fmt.Println("admin password cleared; restarting the service now")
+	if err := restartGourlFn(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	return 0
+}
+
 func resetConfigFile(yes bool) int {
-	if err := confirm(yes, "delete the config file and reload? the server starts with defaults"); err != nil {
+	if err := confirm(yes, "delete the config file and restart the service? the server starts with defaults"); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
@@ -539,8 +569,8 @@ func resetConfigFile(yes bool) int {
 		fmt.Fprintf(os.Stderr, "remove config: %v\n", err)
 		return 1
 	}
-	fmt.Println("config file removed; restarting")
-	if err := restartGourl(); err != nil {
+	fmt.Println("config file removed; restarting the service now")
+	if err := restartGourlFn(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
@@ -572,7 +602,7 @@ func resetTokens(yes bool) int {
 }
 
 func resetDB(yes bool) int {
-	if err := confirm(yes, "delete the database? click history is deleted with it"); err != nil {
+	if err := confirm(yes, "delete the database and restart the service? click history is deleted with it"); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
@@ -582,8 +612,8 @@ func resetDB(yes bool) int {
 			return 1
 		}
 	}
-	fmt.Println("database deleted; restarting")
-	if err := restartGourl(); err != nil {
+	fmt.Println("database deleted; restarting the service now")
+	if err := restartGourlFn(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
@@ -591,7 +621,7 @@ func resetDB(yes bool) int {
 }
 
 func resetRedis(yes bool) int {
-	if err := confirm(yes, "wipe the Redis click buffer?"); err != nil {
+	if err := confirm(yes, "wipe the Redis click buffer and restart the service?"); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
@@ -605,8 +635,8 @@ func resetRedis(yes bool) int {
 		fmt.Fprintf(os.Stderr, "flush redis: %v\n", err)
 		return 1
 	}
-	fmt.Println("redis wiped; restarting")
-	if err := restartGourl(); err != nil {
+	fmt.Println("redis wiped; restarting the service now")
+	if err := restartGourlFn(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
@@ -616,7 +646,7 @@ func resetRedis(yes bool) int {
 func resetAll(yes bool) int {
 	dataDir := filepath.Dir(dbPath())
 	confDir := filepath.Dir(cfgPath())
-	if err := confirm(yes, fmt.Sprintf("delete %s and %s and reload? ALL data is lost", confDir, dataDir)); err != nil {
+	if err := confirm(yes, fmt.Sprintf("delete %s and %s and restart the service? ALL data is lost", confDir, dataDir)); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
@@ -629,8 +659,8 @@ func resetAll(yes bool) int {
 			return 1
 		}
 	}
-	fmt.Println("data and config directories deleted; restarting")
-	if err := restartGourl(); err != nil {
+	fmt.Println("data and config directories deleted; restarting the service now")
+	if err := restartGourlFn(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
@@ -671,11 +701,12 @@ func cmdRestart(args []string) int {
 		fmt.Fprintln(os.Stderr, "usage: gourl restart [-y]")
 		return 2
 	}
-	if err := confirm(yes, "restart the server?"); err != nil {
+	if err := confirm(yes, "restart the service?"); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
-	if err := restartGourl(); err != nil {
+	fmt.Println("restarting the service now")
+	if err := restartGourlFn(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}

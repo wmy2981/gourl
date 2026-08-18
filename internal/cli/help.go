@@ -31,19 +31,20 @@ SENSITIVE OPERATIONS
   Without a terminal and without -y the operation is refused.
 
 RESET TARGETS
-  password       clear the admin password from the config (server enters setup mode)
+  password       clear the admin password and restart the service (setup mode)
   uablock        clear the blocked user-agent patterns
   ipblock        clear the banned IP rules
-  config         delete the config file and reload the service (defaults)
+  config         delete the config file and restart the service (defaults)
   sessions       revoke every admin session (session epoch bump)
   api            revoke every API token (soft delete, like the API)
-  db             delete the SQLite database and reload the service
-  redis          wipe the Redis click buffer and reload the service
-  --all          delete the data and config directories and reload the service
+  db             delete the SQLite database and restart the service
+  redis          wipe the Redis click buffer and restart the service
+  --all          delete the data and config directories and restart the service
   (no target)    print this list
 
-  reset config, db, redis, --all and restart stop the gourl process; the
-  container restart policy starts it again. Click history lives in the
+  reset password, config, db, redis, --all and restart stop the gourl
+  process; the container restart policy starts it again — the confirmation
+  prompt and the final message both say so. Click history lives in the
   database and is deleted with it.
 
 ENVIRONMENT
@@ -59,15 +60,15 @@ EXIT CODES
 const resetHelpText = `usage: gourl reset <target> [-y]
 
 RESET TARGETS
-  password       clear the admin password from the config (server enters setup mode)
+  password       clear the admin password and restart the service (setup mode)
   uablock        clear the blocked user-agent patterns
   ipblock        clear the banned IP rules
-  config         delete the config file and reload the service (defaults)
+  config         delete the config file and restart the service (defaults)
   sessions       revoke every admin session (session epoch bump)
   api            revoke every API token (soft delete, like the API)
-  db             delete the SQLite database and reload the service
-  redis          wipe the Redis click buffer and reload the service
-  --all          delete the data and config directories and reload the service
+  db             delete the SQLite database and restart the service
+  redis          wipe the Redis click buffer and restart the service
+  --all          delete the data and config directories and restart the service
 `
 
 func printHelp() {

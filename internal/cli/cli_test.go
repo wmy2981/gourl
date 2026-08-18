@@ -185,11 +185,20 @@ func TestConfigShowHidesPasswordHash(t *testing.T) {
 	}
 }
 
-func TestResetPasswordClearsHash(t *testing.T) {
+// TestResetPasswordRestarts: reset password clears the hash AND restarts the
+// service (the container comes back in setup mode with a fresh code).
+func TestResetPasswordRestarts(t *testing.T) {
 	writeConfig(t, "site:\n  name: test\npassword_hash: $2a$10$secret\n")
+	restarted := false
+	restartGourlFn = func() error { restarted = true; return nil }
+	defer func() { restartGourlFn = restartGourl }()
+
 	code := cmdReset([]string{"-y", "password"})
 	if code != 0 {
 		t.Fatalf("reset password exit = %d", code)
+	}
+	if !restarted {
+		t.Error("reset password must restart the service")
 	}
 	data, err := os.ReadFile(cfgPath())
 	if err != nil {
@@ -197,6 +206,16 @@ func TestResetPasswordClearsHash(t *testing.T) {
 	}
 	if strings.Contains(string(data), "$2a$10$secret") {
 		t.Error("reset password must remove the hash from the config file")
+	}
+}
+
+func TestRestartCommand(t *testing.T) {
+	restarted := false
+	restartGourlFn = func() error { restarted = true; return nil }
+	defer func() { restartGourlFn = restartGourl }()
+	code := cmdRestart([]string{"-y"})
+	if code != 0 || !restarted {
+		t.Errorf("restart exit = %d, restarted = %v", code, restarted)
 	}
 }
 
