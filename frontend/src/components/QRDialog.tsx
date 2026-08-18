@@ -13,8 +13,12 @@ import iconUrl from '../assets/icon.svg'
 // look the dialog shows on screen.
 const DL_W = 340
 const DL_QR = 300
-const DL_HEAD = 64
-const DL_FOOT = 34
+// Balanced card layout: the brand zone is tall enough that the centered
+// badge sits well inside the panel top (16px, the old 64px left only 3px),
+// and the code sits just under the QR with a small gap (baseline 9px below
+// it), leaving the rest of the footer zone as air below the code.
+const DL_HEAD = 90
+const DL_FOOT = 30
 const DL_NAME = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
 
 // Shows the QR code for a link. With multiple base URLs every variant is
@@ -69,7 +73,7 @@ export default function QRDialog({
     ctx.font = '12px ui-monospace, SFMono-Regular, Menlo, monospace'
     ctx.textAlign = 'center'
     ctx.textBaseline = 'alphabetic'
-    ctx.fillText(shown?.code ?? '', DL_W / 2, DL_HEAD + DL_QR + DL_FOOT - 10)
+    ctx.fillText(shown?.code ?? '', DL_W / 2, DL_HEAD + DL_QR + 9)
   }
 
   const download = async () => {
