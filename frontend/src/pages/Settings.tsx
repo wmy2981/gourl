@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { KeyRound, PlugZap, Plus, Trash2, Upload } from 'lucide-react'
 import { api, ApiError, getServerConfig, isApp, setServerConfig, type AppConfig } from '../lib/api'
 import { copyText } from '../lib/clipboard'
-import { Button, Card, Input, Label, Select, Textarea, useToast } from '../components/ui'
+import { Button, Card, Dialog, Input, Label, Select, Textarea, useToast } from '../components/ui'
 
 export default function Settings() {
   const { t } = useTranslation()
@@ -22,6 +22,7 @@ export default function Settings() {
   const [ipText, setIpText] = useState('')
   const [tokenNote, setTokenNote] = useState('')
   const [newToken, setNewToken] = useState('')
+  const [confirmDisconnect, setConfirmDisconnect] = useState(false)
 
   useEffect(() => {
     if (cfg && !form) {
@@ -107,16 +108,33 @@ export default function Settings() {
             <p className="mb-3 text-sm text-muted">
               {t('settings.connectedTo')} <span className="short-code">{server?.url ?? '—'}</span>
             </p>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setServerConfig(null)
-                navigate('/admin/connect', { replace: true })
-              }}
-            >
+            <Button variant="outline" onClick={() => setConfirmDisconnect(true)}>
               <PlugZap size={15} />
               {t('settings.disconnectApp')}
             </Button>
+            {/* Disconnecting drops the stored {url, token} — confirm first. */}
+            <Dialog
+              open={confirmDisconnect}
+              onClose={() => setConfirmDisconnect(false)}
+              title={t('settings.disconnectApp')}
+            >
+              <p className="text-sm text-muted">{t('settings.disconnectConfirm')}</p>
+              <div className="mt-5 flex justify-end gap-2">
+                <Button variant="ghost" onClick={() => setConfirmDisconnect(false)}>
+                  {t('form.cancel')}
+                </Button>
+                <Button
+                  variant="danger"
+                  onClick={() => {
+                    setConfirmDisconnect(false)
+                    setServerConfig(null)
+                    navigate('/admin/connect', { replace: true })
+                  }}
+                >
+                  {t('settings.disconnectApp')}
+                </Button>
+              </div>
+            </Dialog>
           </Card>
         )}
 
