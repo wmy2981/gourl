@@ -241,7 +241,8 @@
     "cancel": "Cancel",
     "clear": "Clear",
     "pickDate": "Pick a date",
-    "dismiss": "Dismiss"
+    "dismiss": "Dismiss",
+    "back": "← Back"
   },
   "footer": {
     "openSource": "Github"

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { KeyRound } from 'lucide-react'
+import { ArrowLeft, KeyRound } from 'lucide-react'
 import { api, ApiError } from '../lib/api'
 import { Button, Input, Label, useToast } from '../components/ui'
 
@@ -53,6 +53,14 @@ export default function ChangePassword() {
   return (
     <div className="flex min-h-screen items-center justify-center p-4">
       <form onSubmit={submit} className="glass w-full max-w-sm p-8">
+        {/* The page is opened from the settings page (new tab in the web
+            console, same view in the app); back returns to it. */}
+        <div className="mb-4 flex justify-start">
+          <Button variant="ghost" className="!p-1.5" onClick={() => navigate('/admin/settings')}>
+            <ArrowLeft size={16} />
+            {t('common.back')}
+          </Button>
+        </div>
         <div className="mb-6 text-center">
           <div className="mb-3 inline-block rounded-2xl bg-accent-soft p-3">
             <KeyRound className="text-accent-deep dark:text-accent" size={28} />
