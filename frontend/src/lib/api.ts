@@ -275,7 +275,53 @@ export const api = {
   logHistory: (limit = 200, offset = 0) =>
     request<LogHistoryResponse>(`/api/v1/logs?limit=${limit}&offset=${offset}`),
   logStream: (onLog: (rec: LogRecord) => void, onError?: () => void) => {
-    const es = new EventSource('/api/v1/logs/stream')
+    const server = getServerConfig()
+    const url = server
+      ? `${server.url.replace(/\/+$/, '')}/api/v1/logs/stream`
+      : '/api/v1/logs/stream'
+    if (server) {
+      // Token mode: EventSource cannot send an Authorization header, so parse
+      // the SSE stream over fetch. Frames are `event: log\ndata: {...}\n\n`.
+      const abort = new AbortController()
+      fetch(url, { headers: { Authorization: `Bearer ${server.token}` }, signal: abort.signal })
+        .then((res) => {
+          if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`)
+          const reader = res.body.getReader()
+          const decoder = new TextDecoder()
+          let buf = ''
+          const pump = (): Promise<void> =>
+            reader
+              .read()
+              .then(({ done, value }) => {
+                if (done) {
+                  onError?.()
+                  return
+                }
+                buf += decoder.decode(value, { stream: true })
+                let idx: number
+                while ((idx = buf.indexOf('\n\n')) >= 0) {
+                  const dataLine = buf
+                    .slice(0, idx)
+                    .split('\n')
+                    .find((l) => l.startsWith('data:'))
+                  buf = buf.slice(idx + 2)
+                  if (dataLine) {
+                    try {
+                      onLog(JSON.parse(dataLine.slice(5).trim()) as LogRecord)
+                    } catch {
+                      // malformed frame: ignore
+                    }
+                  }
+                }
+                return pump()
+              })
+              .catch(() => onError?.())
+          return pump()
+        })
+        .catch(() => onError?.())
+      return { close: () => abort.abort() }
+    }
+    const es = new EventSource(url)
     es.addEventListener('log', (e) => {
       try {
         onLog(JSON.parse((e as MessageEvent).data) as LogRecord)
