@@ -24,20 +24,23 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Build the SPA
+      - name: Install dependencies
         working-directory: frontend
-        run: |
-          npm ci
-          npm run build
+        run: npm ci
 
       - name: Sync brand icon from single source
         working-directory: frontend
         run: |
+          # Must run before the vite build (Layout.tsx imports src/assets/icon.svg)
           mkdir -p src/assets
           cp ../assets/favicon.svg src/assets/icon.svg
-          # Legacy launcher bitmaps from the same favicon (needs sharp,
-          # installed by npm ci above); the platform scales/centers/masks them.
+          # Legacy launcher bitmaps from the same favicon (needs sharp, just
+          # installed); the platform scales/centers/masks them.
           node scripts/sync-android-icon.mjs
+
+      - name: Build the SPA
+        working-directory: frontend
+        run: npm run build
 
       - name: Sync web assets into the Android project
         working-directory: frontend
