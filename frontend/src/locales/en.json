@@ -71,6 +71,7 @@
   "links": {
     "heading": "Links",
     "refresh": "Refresh",
+    "refreshed": "Refreshed",
     "search": "Search code, URL, title or description…",
     "create": "New link",
     "import": "Import",

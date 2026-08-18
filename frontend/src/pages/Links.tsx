@@ -188,9 +188,13 @@ export default function Links() {
         <div className="flex flex-wrap gap-2">
           <Button
             variant="outline"
-            onClick={() => {
-              invalidate()
-              queryClient.invalidateQueries({ queryKey: ['config'] })
+            onClick={async () => {
+              // await the refetch so the toast lands after the data is fresh.
+              await Promise.all([
+                invalidate(),
+                queryClient.invalidateQueries({ queryKey: ['config'] }),
+              ])
+              toast(t('links.refreshed'))
             }}
             aria-label={t('links.refresh')}
             className="!px-2.5"
