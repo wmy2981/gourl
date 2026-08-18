@@ -9,6 +9,7 @@ frontend/dist
 frontend/test-results
 frontend/playwright-report
 frontend/tsconfig.tsbuildinfo
+frontend/android
 internal/webui/dist
 docs
 *.md
