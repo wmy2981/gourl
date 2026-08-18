@@ -1,17 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Brand icon foreground: the white link glyph from assets/favicon.svg
-     (Material link path), centered on the amber background at 3.6x so the
-     glyph stays inside the adaptive-icon safe zone. -->
+     (Material link path) on the amber background. The 24dp glyph is scaled
+     2.8x and translated so its center lands on the 108dp canvas center
+     (54,54): translate = 54 - 12*2.8 = 20.4. At this size the glyph spans
+     x[26,82] y[34.4,73.6] — fully inside the adaptive-icon safe zone
+     (diameter-66 center circle), and its 56dp width is ~85% of the zone,
+     matching the glyph/background ratio of assets/favicon.svg. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
     <group
-        android:scaleX="3.6"
-        android:scaleY="3.6"
-        android:translateX="25.2"
-        android:translateY="25.2">
+        android:scaleX="2.8"
+        android:scaleY="2.8"
+        android:translateX="20.4"
+        android:translateY="20.4">
         <path
             android:fillColor="#FFFFFF"
             android:pathData="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z" />
