@@ -48,8 +48,8 @@
     "failed": "连接失败——请检查地址和 token",
     "step1": "在浏览器中打开你的 gourl 管理后台并登录",
     "step2": "设置 → API tokens → 创建 token",
-    "step3": "将服务器地址和 token 粘贴到上方",
-    "openServer": "在浏览器中打开服务器"
+    "step3": "将服务器地址和 token 输入到上方",
+    "openServer": "在浏览器中打开服务器页面"
   },
   "changePassword": {
     "heading": "修改管理员密码",
@@ -96,7 +96,7 @@
     "exportTitle": "选择导出格式",
     "exportCsv": "CSV",
     "exportJson": "JSON",
-    "exportHint": "解析数据库请使用 db-export 脚本（<1>GitHub 下载</1>）",
+    "exportHint": "解析数据库请使用 db-export 脚本（<1>GitHub 链接</1>）",
     "shortUrl": "短链接",
     "destination": "目标地址",
     "description": "说明",
@@ -235,8 +235,8 @@
     "disconnectConfirm": "断开后将清除已保存的服务器连接，并返回连接页面。",
     "tokenRevokeConfirm": "删除后该 token 将立即失效，所有使用它的请求都会失败，App 将断开连接。此操作不可撤销。",
     "connConnected": "已连接",
-    "connUnauthorized": "连接已失效（token 无效）",
-    "connUnreachable": "无法连接服务器",
+    "connUnauthorized": "Token 无效",
+    "connUnreachable": "无法连接",
     "connChecking": "检查中…"
   },
   "common": {

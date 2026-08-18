@@ -48,8 +48,8 @@
     "failed": "Connection failed — check the address and token",
     "step1": "Open your gourl web console in a browser and sign in",
     "step2": "Settings → API tokens → create a token",
-    "step3": "Paste the server address and token above",
-    "openServer": "Open the server in the browser"
+    "step3": "Input the server address and token above",
+    "openServer": "Open the server page in the browser"
   },
   "changePassword": {
     "heading": "Change admin password",
@@ -96,7 +96,7 @@
     "exportTitle": "Pick an export format",
     "exportCsv": "CSV",
     "exportJson": "JSON",
-    "exportHint": "For database parsing, use the db-export script (<1>GitHub download</1>)",
+    "exportHint": "For database parsing, use the db-export script (<1>GitHub link</1>)",
     "shortUrl": "Short URL",
     "destination": "Destination",
     "description": "Description",
@@ -235,7 +235,7 @@
     "disconnectConfirm": "This will drop the stored server connection and return to the connect screen.",
     "tokenRevokeConfirm": "Deleting this token revokes it immediately. Every request using it will fail and the app will disconnect. This cannot be undone.",
     "connConnected": "Connected",
-    "connUnauthorized": "Connection invalid (token rejected)",
+    "connUnauthorized": "Token rejected",
     "connUnreachable": "Cannot reach the server",
     "connChecking": "Checking…"
   },
