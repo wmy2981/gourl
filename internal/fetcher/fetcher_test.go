@@ -6,6 +6,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"golang.org/x/net/html"
 )
 
 // The fetcher reaches any host — internal networks included — so the
@@ -32,6 +34,40 @@ func TestFetchExtractsTitleAndDescription(t *testing.T) {
 	}
 	if desc != "A long description here" {
 		t.Errorf("description = %q", desc)
+	}
+}
+
+// Title extraction falls back through og:title/twitter:title and the first
+// <h1>: internal devices often serve pages with no <title> tag at all.
+func TestExtractMetaFallbackChain(t *testing.T) {
+	// <title> wins over og:title.
+	doc, err := html.Parse(strings.NewReader(`<html><head><title>Real Title</title>
+		<meta property="og:title" content="OG Title"></head><body></body></html>`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if title, _ := extractMeta(doc); title != "Real Title" {
+		t.Errorf("title = %q, want the <title> tag to win", title)
+	}
+
+	// No <title>: og:title is used.
+	doc, _ = html.Parse(strings.NewReader(`<html><head>
+		<meta property="og:title" content="OG Title"></head><body></body></html>`))
+	if title, _ := extractMeta(doc); title != "OG Title" {
+		t.Errorf("title = %q, want og:title fallback", title)
+	}
+
+	// No <title> and no og:title: the first <h1> is used.
+	doc, _ = html.Parse(strings.NewReader(`<html><head></head><body>
+		<h1>Device Status</h1><p>body</p></body></html>`))
+	if title, _ := extractMeta(doc); title != "Device Status" {
+		t.Errorf("title = %q, want the h1 fallback", title)
+	}
+
+	// Nothing at all stays empty.
+	doc, _ = html.Parse(strings.NewReader(`<html><body><p>plain</p></body></html>`))
+	if title, _ := extractMeta(doc); title != "" {
+		t.Errorf("title = %q, want empty", title)
 	}
 }
 

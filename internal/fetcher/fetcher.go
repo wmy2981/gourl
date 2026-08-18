@@ -100,9 +100,13 @@ func (f *Fetcher) Fetch(ctx context.Context, rawURL string) (title, description 
 	return t, d, nil
 }
 
-// extractMeta walks the tree for the first <title> and the first
+// extractMeta walks the tree for a title and a description. The title falls
+// back in order: <title>, then og:title/twitter:title, then the first <h1> —
+// many internal devices serve pages without a <title> tag yet still show a
+// heading worth keeping. The description comes from the first
 // <meta name="description">.
 func extractMeta(root *html.Node) (title, description string) {
+	var firstH1 string
 	var walk func(*html.Node)
 	walk = func(n *html.Node) {
 		if n.Type == html.ElementNode {
@@ -110,6 +114,10 @@ func extractMeta(root *html.Node) (title, description string) {
 			case "title":
 				if title == "" {
 					title = textContent(n)
+				}
+			case "h1":
+				if firstH1 == "" {
+					firstH1 = textContent(n)
 				}
 			case "meta":
 				var name, content string
@@ -121,8 +129,11 @@ func extractMeta(root *html.Node) (title, description string) {
 						content = a.Val
 					}
 				}
-				if description == "" && strings.EqualFold(name, "description") {
+				switch {
+				case description == "" && strings.EqualFold(name, "description"):
 					description = content
+				case title == "" && (strings.EqualFold(name, "og:title") || strings.EqualFold(name, "twitter:title")):
+					title = content
 				}
 			}
 		}
@@ -131,6 +142,9 @@ func extractMeta(root *html.Node) (title, description string) {
 		}
 	}
 	walk(root)
+	if title == "" && firstH1 != "" {
+		title = firstH1
+	}
 	return title, description
 }
 
