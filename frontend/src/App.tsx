@@ -49,7 +49,13 @@ export default function App() {
       if (dialog) {
         dialog.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
       } else {
-        App.exitApp()
+        // Back sends the app to the launcher with its state intact; the
+        // native bridge moves the task to the background (exitApp would kill
+        // the process and lose the SPA state).
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const bridge = (window as any).GourlBridge
+        if (bridge?.moveToBackground) bridge.moveToBackground()
+        else App.exitApp()
       }
     })
     const openHandler = App.addListener('appUrlOpen', (event: { url: string }) => {
