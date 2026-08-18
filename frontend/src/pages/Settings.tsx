@@ -103,15 +103,21 @@ export default function Settings() {
       <div className="flex flex-col gap-6">
         {/* App connection (Capacitor token mode only) */}
         {isApp() && (
-          <Card className="p-6">
-            <h2 className="mb-2 text-sm font-medium text-muted">{t('settings.appConnection')}</h2>
-            <p className="mb-3 text-sm text-muted">
-              {t('settings.connectedTo')} <span className="short-code">{server?.url ?? '—'}</span>
-            </p>
-            <Button variant="outline" onClick={() => setConfirmDisconnect(true)}>
-              <PlugZap size={15} />
-              {t('settings.disconnectApp')}
-            </Button>
+          <>
+            <Card className="p-6">
+              <h2 className="mb-2 text-sm font-medium text-muted">{t('settings.appConnection')}</h2>
+              <p className="mb-3 text-sm text-muted">
+                {t('settings.connectedTo')} <span className="short-code">{server?.url ?? '—'}</span>
+              </p>
+              <Button variant="outline" onClick={() => setConfirmDisconnect(true)}>
+                <PlugZap size={15} />
+                {t('settings.disconnectApp')}
+              </Button>
+            </Card>
+            {/* The dialog is a sibling of the card, never inside it: the card's
+                backdrop-blur creates a containing block that traps the dialog's
+                fixed-positioned overlay inside the card area (the header got
+                clipped). Page-level rendering keeps it like every other dialog. */}
             {/* Disconnecting drops the stored {url, token} — confirm first. */}
             <Dialog
               open={confirmDisconnect}
@@ -135,7 +141,7 @@ export default function Settings() {
                 </Button>
               </div>
             </Dialog>
-          </Card>
+          </>
         )}
 
         {/* Site information */}
