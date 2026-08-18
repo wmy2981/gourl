@@ -1,9 +1,8 @@
 // Downloads that work in both the web console and the Capacitor app.
-// Web: a classic <a download>. App: @capgo/capacitor-file-sharer's save()
-// writes into the system Downloads directory (Android MediaStore,
-// Download/gourl/ subfolder) — the caller shows the returned path in a toast.
+// Web: a classic <a download>. App: the native GourlBridge (MainActivity)
+// writes into the system Downloads/gourl directory via MediaStore and the
+// caller shows the returned path in a toast.
 
-import { FileSharer } from '@capgo/capacitor-file-sharer'
 import { isApp } from './api'
 
 /**
@@ -29,13 +28,12 @@ export async function saveDownload(
     URL.revokeObjectURL(a.href)
     return null
   }
-  await FileSharer.save({
-    filename,
-    contentType: mime,
-    base64Data: base64 ? data : utf8ToBase64(data),
-    android: { saveDirectory: 'downloads', relativePath: 'Download/gourl' },
-  })
-  return `Download/gourl/${filename}`
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const bridge = (window as any).GourlBridge
+  if (!bridge?.saveToDownloads) throw new Error('native download bridge unavailable')
+  const path: string | null = bridge.saveToDownloads(filename, base64 ? data : utf8ToBase64(data), mime)
+  if (!path) throw new Error('ERR_FILE_SAVE_FAILED')
+  return path
 }
 
 /** Blob → base64 (the app-side payload for binary downloads). */
