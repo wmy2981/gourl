@@ -357,6 +357,11 @@ function TokenSection({
   const { toast } = useToast()
   const queryClient = useQueryClient()
   const { data } = useQuery({ queryKey: ['tokens'], queryFn: api.tokens })
+  // In the app, /docs/ lives on the remote server (not the WebView origin) —
+  // link straight to it and hand it to the system browser via _system.
+  const appMode = isApp()
+  const server = getServerConfig()
+  const docsUrl = appMode && server ? `${server.url.replace(/\/+$/, '')}/docs/` : '/docs/'
 
   return (
     <Card className="p-6">
@@ -366,8 +371,8 @@ function TokenSection({
       <p className="mb-4 text-xs text-muted">{t('settings.tokenNeverExpires')}</p>
       <p className="mb-4">
         <a
-          href="/docs/"
-          target="_blank"
+          href={docsUrl}
+          target={appMode ? '_system' : '_blank'}
           rel="noreferrer"
           className="text-sm font-medium text-accent-deep transition-colors hover:text-accent dark:text-accent"
         >
