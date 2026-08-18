@@ -14,6 +14,7 @@ internal/webui/dist/
 # Generated copies of assets/favicon.svg (single source of truth is the repo root)
 frontend/src/assets/icon.svg
 internal/webui/icon.svg
+*.png
 
 # Runtime data (SQLite, uploaded icons)
 data/
