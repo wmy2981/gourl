@@ -56,9 +56,12 @@ func New() *Fetcher {
 	return f
 }
 
-// Fetch returns the page title and meta description of rawURL. Any failure
-// (network, SSRF policy, non-HTML content, oversize body) returns an error;
-// callers should treat errors as "no title available" and continue.
+// Fetch returns the page title and meta description of rawURL. Fetching is
+// lenient on purpose: internal services often answer with odd status codes
+// or content types yet still carry a <title>, so any response body is
+// parsed (bounded by the size cap) and "no title" is the result, not an
+// error. Failures that do return an error are network/URL problems the
+// caller cannot fix here.
 func (f *Fetcher) Fetch(ctx context.Context, rawURL string) (title, description string, err error) {
 	slog.Debug("fetching title", "url", rawURL)
 	if err := validateFetchURL(rawURL); err != nil {
@@ -78,14 +81,6 @@ func (f *Fetcher) Fetch(ctx context.Context, rawURL string) (title, description 
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return "", "", fmt.Errorf("status %d", resp.StatusCode)
-	}
-	ct := resp.Header.Get("Content-Type")
-	if ct != "" && !strings.Contains(ct, "html") {
-		return "", "", fmt.Errorf("content-type %q is not html", ct)
-	}
-
 	body, err := io.ReadAll(io.LimitReader(resp.Body, defaultMaxBody+1))
 	if err != nil {
 		return "", "", fmt.Errorf("read body: %w", err)
@@ -101,7 +96,7 @@ func (f *Fetcher) Fetch(ctx context.Context, rawURL string) (title, description 
 	t, d := extractMeta(doc)
 	t = truncate(clean(t), f.titleLimit)
 	d = truncate(clean(d), f.descriptionMax)
-	slog.Debug("title fetched", "url", rawURL, "title_len", len(t), "description_len", len(d))
+	slog.Debug("title fetched", "url", rawURL, "status", resp.StatusCode, "title_len", len(t), "description_len", len(d))
 	return t, d, nil
 }
 

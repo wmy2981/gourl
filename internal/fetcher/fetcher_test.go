@@ -35,16 +35,34 @@ func TestFetchExtractsTitleAndDescription(t *testing.T) {
 	}
 }
 
-func TestFetchRejectsNonHTML(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+// Lenient fetching: internal services often reply with odd status codes or
+// content types yet still carry a <title> — both are parsed now, and an
+// unparseable body yields an empty title instead of an error.
+func TestFetchLenientOnStatusAndContentType(t *testing.T) {
+	odd := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		w.Header().Set("Content-Type", "text/html")
+		w.Write([]byte("<title>login page</title>"))
+	}))
+	defer odd.Close()
+
+	f := New()
+	title, _, err := f.Fetch(context.Background(), odd.URL)
+	if err != nil {
+		t.Fatalf("Fetch 401 page: %v", err)
+	}
+	if title != "login page" {
+		t.Errorf("title = %q, want login page", title)
+	}
+
+	jsonSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"x":1}`))
 	}))
-	defer srv.Close()
+	defer jsonSrv.Close()
 
-	f := New()
-	if _, _, err := f.Fetch(context.Background(), srv.URL); err == nil {
-		t.Fatal("expected error for non-html content")
+	if _, _, err := f.Fetch(context.Background(), jsonSrv.URL); err != nil {
+		t.Fatalf("Fetch json body: %v", err)
 	}
 }
 

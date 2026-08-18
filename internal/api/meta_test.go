@@ -145,6 +145,31 @@ func TestUpdateTitleDoesNotRefetch(t *testing.T) {
 	}
 }
 
+// Lenient fetching parses odd responses too; a refetch that finds nothing
+// usable must not wipe meta the link already has.
+func TestEmptyFetchResultKeepsExistingMeta(t *testing.T) {
+	s, _ := newTestServer(t)
+	s.fetcher = &mockFetcher{title: "First Title"}
+	do(t, s, http.MethodPost, "/api/v1/links", map[string]any{
+		"url":  "https://example.com/page",
+		"code": "abc",
+	})
+	waitMeta(t, s, "abc", "First Title")
+
+	s.fetcher = &mockFetcher{} // no title, no description
+	do(t, s, http.MethodPatch, "/api/v1/links/abc", map[string]any{
+		"url": "https://example.com/new",
+	})
+	time.Sleep(100 * time.Millisecond)
+	l, err := s.store.GetLink(context.Background(), "abc")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if l.Title != "First Title" {
+		t.Errorf("title = %q, want the previous title kept", l.Title)
+	}
+}
+
 // The async worker must not leave a deleted link dangling (store miss is a
 // debug note, never a crash or a stuck worker).
 func TestMetaAfterDeleteIsHarmless(t *testing.T) {
