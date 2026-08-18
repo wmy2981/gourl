@@ -73,23 +73,27 @@ export default function ChangePassword() {
           autoComplete="current-password"
         />
 
-        <Label htmlFor="new-password">{t('changePassword.new')}</Label>
-        <Input
-          id="new-password"
-          type="password"
-          value={newPassword}
-          onChange={(e) => setNewPassword(e.target.value)}
-          autoComplete="new-password"
-        />
+        <div className="mt-4">
+          <Label htmlFor="new-password">{t('changePassword.new')}</Label>
+          <Input
+            id="new-password"
+            type="password"
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+            autoComplete="new-password"
+          />
+        </div>
 
-        <Label htmlFor="confirm-password">{t('changePassword.confirm')}</Label>
-        <Input
-          id="confirm-password"
-          type="password"
-          value={confirm}
-          onChange={(e) => setConfirm(e.target.value)}
-          autoComplete="new-password"
-        />
+        <div className="mt-4">
+          <Label htmlFor="confirm-password">{t('changePassword.confirm')}</Label>
+          <Input
+            id="confirm-password"
+            type="password"
+            value={confirm}
+            onChange={(e) => setConfirm(e.target.value)}
+            autoComplete="new-password"
+          />
+        </div>
 
         <Button
           type="submit"
