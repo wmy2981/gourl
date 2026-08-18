@@ -56,6 +56,7 @@ export default function Settings() {
       base_url: form.base_url,
       login_rate_max_attempts: form.login_rate_max_attempts,
       login_rate_lock_seconds: form.login_rate_lock_seconds,
+      session_ttl_minutes: form.session_ttl_minutes,
       link_rate_per_second: form.link_rate_per_second,
       log_level: form.log_level,
       icon: form.icon,
@@ -175,6 +176,17 @@ export default function Settings() {
                 onChange={(e) => set('login_rate_lock_seconds', Number(e.target.value))}
               />
               <p className="mt-1 text-xs text-muted">{t('settings.loginRateLockHint')}</p>
+            </div>
+            <div>
+              <Label htmlFor='cfg-session-ttl'>{t('settings.sessionTTL')}</Label>
+              <Input
+                id='cfg-session-ttl'
+                type="number"
+                min={0}
+                value={form.session_ttl_minutes}
+                onChange={(e) => set('session_ttl_minutes', Number(e.target.value))}
+              />
+              <p className="mt-1 text-xs text-muted">{t('settings.sessionTTLHint')}</p>
             </div>
             <div>
               <Label htmlFor='cfg-link-rate'>{t('settings.linkRate')}</Label>

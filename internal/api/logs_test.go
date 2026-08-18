@@ -41,9 +41,9 @@ func TestLogHistoryReadsFile(t *testing.T) {
 	logx.Init(slog.LevelDebug)
 	t.Cleanup(logx.Close)
 
+	s, _ := newTestServer(t)
 	slog.Info("history marker", "code", "abc")
 
-	s, _ := newTestServer(t)
 	rec := do(t, s, http.MethodGet, "/api/v1/logs?limit=10", nil)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("history status = %d, body %s", rec.Code, rec.Body.String())

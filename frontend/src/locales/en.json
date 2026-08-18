@@ -160,6 +160,8 @@
     "loginRateLock": "Lock duration (seconds)",
     "loginRateHint": "Failed attempts allowed per IP before locking (0 = disabled)",
     "loginRateLockHint": "How long the IP stays locked after too many failures (0 = disabled)",
+    "sessionTTL": "Session expiry (minutes)",
+    "sessionTTLHint": "How long an admin session stays valid (0 = never expires, minimum 5; changes affect new logins only)",
     "linkRate": "Link access limit (per second)",
     "linkRateHint": "Max short-link redirects per second across all codes (0 = unlimited)",
     "logLevel": "Log level",

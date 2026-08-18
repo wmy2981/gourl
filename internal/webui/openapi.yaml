@@ -547,6 +547,10 @@ components:
           type: integer
           minimum: 0
           description: How long a locked IP stays locked after too many failed logins, in seconds (0 disables the limiter). Default 300.
+        session_ttl_minutes:
+          type: integer
+          minimum: 0
+          description: How long an admin session stays valid, in minutes. 0 means sessions never expire; the minimum is 5. Only affects newly issued sessions. Default 10080 (7 days).
         link_rate_per_second:
           type: integer
           minimum: 0

@@ -19,7 +19,7 @@ import (
 // logins while further setups are refused.
 func TestSetupFlow(t *testing.T) {
 	s, _ := newTestServer(t)
-	s.admin = newAdminAuth("", "test-secret") // setup mode
+	enterSetupMode(t, s)
 
 	rec := do(t, s, http.MethodGet, "/api/v1/auth/status", nil)
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"configured":false`) {

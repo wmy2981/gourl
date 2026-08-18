@@ -59,6 +59,8 @@ func TestValidateRejectsBadConfigs(t *testing.T) {
 		{"extra base url invalid", func(c *Config) { c.ExtraBaseURLs = []string{"not-a-url"} }},
 		{"reserved code invalid char", func(c *Config) { c.ReservedCodes = []string{"a b"} }},
 		{"reserved code empty segment", func(c *Config) { c.ReservedCodes = []string{"foo//bar"} }},
+		{"session ttl below minimum", func(c *Config) { c.SessionTTLMinutes = 4 }},
+		{"session ttl negative", func(c *Config) { c.SessionTTLMinutes = -1 }},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -68,6 +70,40 @@ func TestValidateRejectsBadConfigs(t *testing.T) {
 				t.Fatal("expected validation error, got nil")
 			}
 		})
+	}
+}
+
+func TestValidateSessionTTL(t *testing.T) {
+	for _, good := range []int{0, 5, 30, 10080} {
+		c := Default()
+		c.SessionTTLMinutes = good
+		if err := c.Validate(); err != nil {
+			t.Errorf("Validate(session_ttl_minutes %d) = %v", good, err)
+		}
+	}
+	for _, bad := range []int{-5, 1, 4} {
+		c := Default()
+		c.SessionTTLMinutes = bad
+		if err := c.Validate(); err == nil {
+			t.Errorf("Validate(session_ttl_minutes %d) should fail", bad)
+		}
+	}
+}
+
+func TestLoadKeepsSessionTTLDefaultForOldFiles(t *testing.T) {
+	// A config file written before session_ttl_minutes existed must keep the
+	// 7-day default instead of falling into the 0 = never expire branch.
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yaml")
+	if err := os.WriteFile(path, []byte("site:\n  name: legacy\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.SessionTTLMinutes != 10080 {
+		t.Errorf("session_ttl_minutes = %d, want the 7-day default 10080", cfg.SessionTTLMinutes)
 	}
 }
 

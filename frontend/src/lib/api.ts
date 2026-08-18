@@ -80,6 +80,7 @@ export interface AppConfig {
   ip_blocks: string[]
   login_rate_max_attempts: number
   login_rate_lock_seconds: number
+  session_ttl_minutes: number
   link_rate_per_second: number
   log_level: string
   icon: string
