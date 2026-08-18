@@ -11,28 +11,15 @@ plus Redis — that's all it takes to run your own short links.
 
 ## Features
 
-- **Short links** — custom or auto-generated codes, multi-level paths (`link1/link2`), configurable length
-- **Link management** — modern admin console (Apple-style glassmorphism, responsive, dark mode)
-- **Delayed counting** — clicks buffered in Redis, flushed to SQLite every 30s to absorb bursts; lookups are served from an in-memory TTL cache
-- **History preserved, deletions soft** — click totals and the trend chart keep counting even after a link is deleted; deletions only flag the row (never remove it), so a freed short code can be reused while the new link counts from zero
-- **Auto titles** — asynchronously fetches `title`/`description` for any reachable host, internal networks included
-- **Stable ids & edit snapshots** — every link carries a stable autoincrement id; each edit appends an immutable snapshot to the backups table (`b-1, b-2, …`), and the db-export script dumps links (soft-deleted included), tokens, daily clicks and backups as JSON arrays (the export dialog links to its GitHub download)
-- **Any-scheme targets** — destinations may be `tcp://`, `openapp://`, `mailto:` … (non-http(s) targets skip title fetching); the form's http/https buttons fill or swap the prefix
-- **Self-link guard** — targets pointing at this instance's own short links are rejected on create, edit and import
-- **UA & IP blocking** — User-Agent patterns and IP rules (exact IP, CIDR, `192.168.*.*` wildcards) get a 403 naming the matched rule and are never counted; IP bans cover every route
-- **Expiry** — per-link `expires_at` (0 = never); expired codes behave like missing ones (plain 404)
-- **REST API** — full JSON API with bearer tokens for integration
-- **Setup flow** — on first start with no password the management API stays locked (403 `setup_required`, bearer tokens still work) and the first visitor sets one via `/admin/setup`; the bcrypt hash lives in `config.yaml`, never in the environment
-- **Rate limiting** — per-IP login lockout (default 10 failures / 300 s) and a shared per-second redirect budget (default 100/s), both configurable
-- **Customization** — site name, title, keywords, description, uploaded icon (SVG/PNG, one-click reset)
-- **Multi-base URLs** — extra base URLs are served side by side; pick which one a link row shows or copies
-- **i18n** — English and Chinese, auto-detected with a manual switcher
-- **QR codes, CSV/JSON export, batch import** — paste JSON or load a `.csv`/`.json` file; import conflicts resolve as error/skip/update with per-status counts; parsing is lenient (case-insensitive fields, date formats, number/string coercion); `click_count` is never imported
-- **Batch ops** — bulk create (one strict-syntax line per link), cross-page bulk delete, one-click clear-expired, expiry filter with expired-row highlighting
-- **Live log page** — Server-Sent Events stream with level/keyword/time filters and `.log` export; history from the mirrored file
-- **Chinese short codes** — custom codes may contain simplified Chinese characters; extra reserved codes too (multi-segment entries reserve their whole subtree)
-- **API documentation** — interactive Swagger UI at `/docs/`
-- **Structured logging** — slog with 4 levels (debug/info/warning/error), text or JSON, mirrored to a rotating file in `./data/log`; every API request is logged with status, latency and a response-body summary (errors/warnings follow the HTTP status)
+- **Short links** — auto-generated or custom codes, multi-level paths, simplified Chinese supported; per-link expiry and QR-code download
+- **Admin console** — responsive, glassmorphism UI with light/dark/system themes and English/Chinese; REST API with bearer tokens and Swagger UI at `/docs/`
+- **Click stats** — buffered in Redis and flushed to SQLite every 30s; history survives link deletion (soft deletes only)
+- **Auto titles** — async `title`/`description` fetching for any reachable host, internal networks included
+- **Security** — setup requires a one-time bootstrap code from the server log; bcrypt admin password, configurable session expiry, per-IP login lockout, UA/IP blocking, self-link guard
+- **Batch & import/export** — bulk create/delete, clear-expired, lenient CSV/JSON import with conflict policies, full JSON export
+- **Edit snapshots** — every edit appends an immutable backup (`b-1, b-2, …`)
+- **Container CLI** — `gourl reset …`, `gourl db export`, `gourl status`, `gourl webui on|off`, `gourl restart` and more, inside the container
+- **Structured logging** — slog with 4 levels, mirrored to a rotating file, live log page via SSE
 
 ## Stack
 
@@ -45,65 +32,41 @@ Single container — the image embeds a Redis instance, so one `compose up`
 is the whole deployment.
 
 ```bash
-# 1. Config directory (optional — defaults work without it):
-#    copy config.yaml.example to config/config.yaml and adjust as needed.
-
-# 2. Create the .env file next to docker-compose.yml:
+# 1. Optional: copy config.yaml.example to config/config.yaml and adjust.
+# 2. Create .env next to docker-compose.yml:
 echo "SESSION_SECRET=$(openssl rand -hex 32)" > .env
 
 # 3. Start
 docker compose up -d
 ```
 
-Open the web UI (the app listens on port 8080 unless `PORT` overrides it) —
-with no password configured you land on the one-time setup page where the
-first visitor sets the admin password (stored as a bcrypt hash in
-`config.yaml`). After that it's the admin console.
-Data (SQLite, uploaded icons, embedded Redis rdb, rotating logs) persists in
-`./data`, config in `./config` (the settings page writes back to it).
+Open the web UI on port 8080 — with no password configured you land on the
+setup page (enter the code from the server log, then set the admin password).
+Data lives in `./data`, config in `./config`.
 
-First deployment needs nothing extra: the entrypoint runs as root only long
-enough to chown the freshly created `./data` and `./config` bind mounts to
-the unprivileged gourl user, then drops privileges (su-exec) for Redis and
-gourl. The Redis "vm.overcommit_memory" warning is harmless in containers.
-
-Images are built and published by GitHub Actions on [GHCR](https://github.com/wmy2981/gourl/pkgs/container/gourl):
-`ghcr.io/wmy2981/gourl:latest` (releases, main branch) or `:dev` (pre-releases).
-To deploy a pre-release: `GOURL_IMAGE=ghcr.io/wmy2981/gourl:dev docker compose up -d`.
-
-Pre-release images embed the commit hash in the version string
-(`0.1.0 (abc1234)`), visible in `/api/v1/health` and the admin footer, so a
-running dev build identifies its exact commit; main builds keep the plain
-version.
+Images are published on [GHCR](https://github.com/wmy2981/gourl/pkgs/container/gourl):
+`ghcr.io/wmy2981/gourl:latest` (releases) or `:dev` (pre-releases). Run the CLI
+with `docker compose exec app gourl <command>`.
 
 ## Configuration
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `ADMIN_PASSWORD` | — | Legacy env password. If set and `config.yaml` has no `password_hash`, it is migrated once — hashed and written back to the config file — and ignored afterwards. Prefer the setup flow. |
-| `SESSION_SECRET` | auto-generated | Signs admin session cookies. When unset a strong random secret is generated at startup (in memory only — sessions then do not survive a restart); **set it in production** so sessions persist across restarts |
-| `REDIS_ADDR` | `localhost:6379` | Click-counter buffer |
-| `DB_PATH` | `./data/gourl.db` | SQLite file |
+| `SESSION_SECRET` | auto-generated | Signs admin sessions — set it so sessions survive restarts |
 | `PORT` | `8080` | HTTP listen port |
-| `CONFIG_PATH` | `./config/config.yaml` | Business config (site info, base URLs, …) |
-| `ASSETS_DIR` | `./data/assets` | Uploaded icon storage |
-| `TZ` | container default | Daily click buckets and expiry are interpreted in it |
-| `LOG_FORMAT` | `text` | `json` for structured output (logs go to stderr). The log **level** lives in `config.yaml` (`log_level`, settings page) — no env var |
-| `LOG_DIR` | `./data/log` | Directory for a rotating file mirror of the logs (resolved under the container's `/app/data`; 10 MB × 5 backups × 30 days, gzip) |
+| `DB_PATH` | `./data/gourl.db` | SQLite file |
+| `REDIS_ADDR` | `localhost:6379` | Click-counter buffer (embedded Redis when unset) |
+| `CONFIG_PATH` | `./config/config.yaml` | Business config file |
+| `LOG_DIR` | `./data/log` | Rotating log mirror |
 
-Business settings live in `config.yaml` (see `config.yaml.example`): site
-name/title/keywords/description, random code length, primary + extra base
-URLs, extra reserved codes, User-Agent block patterns, IP ban rules, the
-login rate limit, the per-second link access budget, the admin `password_hash`
-(set by the setup flow), and the custom icon.
+Business settings (site info, base URLs, reserved codes, rate limits, log
+level, …) live in `config.yaml` — see `config.yaml.example`.
 
 ## API documentation
 
-Open `/docs/` on the running instance — an interactive Swagger UI covering
-every endpoint, served from the single binary (`/docs/openapi.yaml` is the
-raw OpenAPI 3.0 spec). API base path is `/api/v1`; admin endpoints accept a
-session cookie or `Authorization: Bearer <token>` (tokens are created in
-Settings).
+Open `/docs/` on the running instance for the interactive Swagger UI.
+API base path is `/api/v1`; admin endpoints accept a session cookie or
+`Authorization: Bearer <token>` (tokens are created in Settings).
 
 ## Development
 
