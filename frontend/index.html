@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <title>gourl</title>
     <script>
@@ -10,9 +10,11 @@
       // bundle runs too late and lets a light flash through on dark setups.
       ;(function () {
         var saved = localStorage.getItem('gourl-theme')
+        // 'system' (or nothing yet) follows the OS; only an explicit 'light'
+        // forces light. The SPA keeps watching for OS changes afterwards.
         var dark =
           saved === 'dark' ||
-          (!saved && window.matchMedia('(prefers-color-scheme: dark)').matches)
+          (saved !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches)
         if (dark) document.documentElement.classList.add('dark')
       })()
     </script>

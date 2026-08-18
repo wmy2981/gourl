@@ -2,10 +2,13 @@ package api
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
+	"time"
 )
 
 // doWith performs a request with an optional session cookie and bearer token.
@@ -45,8 +48,9 @@ func TestLoginSuccessSetsSessionCookie(t *testing.T) {
 	if cookie.HttpOnly != true || cookie.SameSite != http.SameSiteLaxMode {
 		t.Errorf("cookie flags: HttpOnly=%v SameSite=%v", cookie.HttpOnly, cookie.SameSite)
 	}
-	if cookie.MaxAge != int(sessionTTL.Seconds()) {
-		t.Errorf("MaxAge = %d, want %d", cookie.MaxAge, int(sessionTTL.Seconds()))
+	wantMaxAge := sessionMaxAge(time.Duration(s.cfg.Get().SessionTTLMinutes) * time.Minute)
+	if cookie.MaxAge != wantMaxAge {
+		t.Errorf("MaxAge = %d, want %d", cookie.MaxAge, wantMaxAge)
 	}
 }
 
@@ -60,7 +64,7 @@ func TestLoginWrongPassword(t *testing.T) {
 
 func TestLoginWhenAuthDisabled(t *testing.T) {
 	s, _ := newTestServer(t)
-	s.admin = newAdminAuth("", "secret") // trusted-network mode
+	enterSetupMode(t, s)
 	rec := do(t, s, http.MethodPost, "/api/v1/auth/login", map[string]any{"password": "x"})
 	if rec.Code != http.StatusForbidden {
 		t.Errorf("status = %d, want 403", rec.Code)
@@ -119,7 +123,7 @@ func TestBearerTokenAuthenticates(t *testing.T) {
 
 func TestSetupModeRefusesAdminAPI(t *testing.T) {
 	s, _ := newTestServer(t)
-	s.admin = newAdminAuth("", "test-secret") // setup mode
+	enterSetupMode(t, s)
 
 	for _, tc := range []struct{ method, path string }{
 		{http.MethodGet, "/api/v1/links"},
@@ -137,7 +141,7 @@ func TestSetupModeRefusesAdminAPI(t *testing.T) {
 
 func TestSetupModeAllowsBearerToken(t *testing.T) {
 	s, _ := newTestServer(t)
-	s.admin = newAdminAuth("", "test-secret") // setup mode
+	enterSetupMode(t, s)
 	ctx := context.Background()
 	if _, err := s.store.CreateToken(ctx, "setup-token-1", "ci", s.now()); err != nil {
 		t.Fatal(err)
@@ -177,6 +181,142 @@ func TestLogoutClearsCookie(t *testing.T) {
 	}
 	if !cleared {
 		t.Error("logout did not clear the session cookie")
+	}
+}
+
+func TestSessionTokenTTLAndEpoch(t *testing.T) {
+	s, _ := newTestServer(t)
+	a := s.adminAuth()
+
+	// A token issued with a TTL verifies at the matching epoch.
+	tok, err := a.issueToken(5*time.Minute, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !a.verifyToken(tok, 0) {
+		t.Error("fresh token must verify at epoch 0")
+	}
+
+	// Bumping the epoch revokes it.
+	if a.verifyToken(tok, 1) {
+		t.Error("token must not verify after the epoch bumps")
+	}
+
+	// A 0 TTL never expires (the exp part stays 0).
+	forever, err := a.issueToken(0, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !a.verifyToken(forever, 2) {
+		t.Error("never-expiring token must verify")
+	}
+
+	// An expired token is refused: build one with a past exp by hand.
+	exp := time.Now().Add(-time.Hour).Unix()
+	payload := strconv.FormatInt(exp, 10) + ".0." + base64.RawURLEncoding.EncodeToString([]byte("0123456789abcdef"))
+	mac := base64.RawURLEncoding.EncodeToString(a.mac(payload))
+	if a.verifyToken(payload+"."+mac, 0) {
+		t.Error("expired token must be refused")
+	}
+
+	// Pre-epoch 3-part tokens are refused, so old sessions die on upgrade.
+	oldPayload := strconv.FormatInt(time.Now().Add(time.Hour).Unix(), 10) + "." + base64.RawURLEncoding.EncodeToString([]byte("0123456789abcdef"))
+	oldMac := base64.RawURLEncoding.EncodeToString(a.mac(oldPayload))
+	if a.verifyToken(oldPayload+"."+oldMac, 0) {
+		t.Error("legacy 3-part token must be refused")
+	}
+}
+
+func TestSessionTTLChangeOnlyAffectsNewSessions(t *testing.T) {
+	s, _ := newTestServer(t)
+	cookie := loginAs(t, s, "test-password")
+
+	// Shrinking the TTL does not revoke the already-issued session.
+	upd := s.cfg.Get()
+	upd.SessionTTLMinutes = 5
+	if err := s.cfg.Update(upd); err != nil {
+		t.Fatal(err)
+	}
+	rec := doWith(t, s, http.MethodGet, "/api/v1/links", nil, cookie, "")
+	if rec.Code != http.StatusOK {
+		t.Errorf("session after TTL shrink: status = %d, want 200", rec.Code)
+	}
+
+	// A new login carries the new TTL in its cookie MaxAge.
+	cookie2 := loginAs(t, s, "test-password")
+	if cookie2.MaxAge != int((5 * time.Minute).Seconds()) {
+		t.Errorf("new session MaxAge = %d, want %d", cookie2.MaxAge, int((5*time.Minute).Seconds()))
+	}
+
+	// Bumping the epoch revokes everything, old and new.
+	upd = s.cfg.Get()
+	upd.SessionEpoch = 1
+	if err := s.cfg.Update(upd); err != nil {
+		t.Fatal(err)
+	}
+	for name, ck := range map[string]*http.Cookie{"old": cookie, "new": cookie2} {
+		rec := doWith(t, s, http.MethodGet, "/api/v1/links", nil, ck, "")
+		if rec.Code != http.StatusUnauthorized {
+			t.Errorf("%s session after epoch bump: status = %d, want 401", name, rec.Code)
+		}
+	}
+}
+
+func TestChangePasswordFlow(t *testing.T) {
+	s, _ := newTestServer(t)
+	cookie := loginAs(t, s, "test-password")
+
+	// Wrong current password is refused.
+	rec := doWith(t, s, http.MethodPost, "/api/v1/auth/change-password", map[string]any{
+		"old_password": "wrong", "new_password": "new-password-42",
+	}, cookie, "")
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("wrong current password: status = %d, want 401", rec.Code)
+	}
+
+	// Weak new password is refused.
+	rec = doWith(t, s, http.MethodPost, "/api/v1/auth/change-password", map[string]any{
+		"old_password": "test-password", "new_password": "short",
+	}, cookie, "")
+	if rec.Code != http.StatusBadRequest || decodeError(t, rec) != "weak_password" {
+		t.Fatalf("weak password: status = %d %s", rec.Code, rec.Body.String())
+	}
+
+	// Unauthenticated change is refused.
+	rec = doWith(t, s, http.MethodPost, "/api/v1/auth/change-password", map[string]any{
+		"old_password": "test-password", "new_password": "new-password-42",
+	}, nil, "")
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("anonymous change: status = %d, want 401", rec.Code)
+	}
+
+	// A valid change succeeds, bumps the epoch and revokes the old session.
+	rec = doWith(t, s, http.MethodPost, "/api/v1/auth/change-password", map[string]any{
+		"old_password": "test-password", "new_password": "new-password-42",
+	}, cookie, "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("change: status = %d, body %s", rec.Code, rec.Body.String())
+	}
+	if s.cfg.Get().SessionEpoch != 1 {
+		t.Errorf("SessionEpoch = %d, want 1", s.cfg.Get().SessionEpoch)
+	}
+	if got := s.cfg.Get().PasswordHash; got == "" {
+		t.Error("new hash not persisted")
+	}
+	rec = doWith(t, s, http.MethodGet, "/api/v1/links", nil, cookie, "")
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("old session after change: status = %d, want 401", rec.Code)
+	}
+
+	// The old password no longer works, the new one does.
+	rec = do(t, s, http.MethodPost, "/api/v1/auth/login", map[string]any{"password": "test-password"})
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("login with old password: status = %d, want 401", rec.Code)
+	}
+	cookie2 := loginAs(t, s, "new-password-42")
+	rec = doWith(t, s, http.MethodGet, "/api/v1/links", nil, cookie2, "")
+	if rec.Code != http.StatusOK {
+		t.Errorf("login with new password: status = %d", rec.Code)
 	}
 }
 

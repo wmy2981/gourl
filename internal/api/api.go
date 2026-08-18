@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -43,6 +44,8 @@ type Server struct {
 	counter   *counter.Counter
 	fetcher   TitleFetcher
 	admin      *adminAuth
+	setupCode  string // bootstrap code for the setup flow, printed at startup in setup mode
+	setupCodePath string // where the code is persisted for `gourl setup-code`
 	loginRate  *loginLimiter
 	linkRateMu sync.Mutex
 	linkRate   *rate.Limiter
@@ -57,15 +60,28 @@ type Server struct {
 // from the environment.
 func NewServer(st *store.Store, cfg *config.Manager, ctr *counter.Counter) *Server {
 	s := &Server{
-		store:     st,
-		cfg:       cfg,
-		counter:   ctr,
-		fetcher:   fetcher.New(),
-		admin:     resolveAdminAuth(cfg),
-		loginRate: newLoginLimiter(),
-		assetsDir: envOr("ASSETS_DIR", "./data/assets"),
-		startTime: time.Now(),
-		now:       func() int64 { return timeNow() },
+		store:        st,
+		cfg:          cfg,
+		counter:      ctr,
+		fetcher:      fetcher.New(),
+		admin:        resolveAdminAuth(cfg),
+		setupCodePath: setupCodePath(),
+		loginRate:    newLoginLimiter(),
+		assetsDir:    envOr("ASSETS_DIR", "./data/assets"),
+		startTime:    time.Now(),
+		now:          func() int64 { return timeNow() },
+	}
+	// In setup mode the first visitor needs the bootstrap code: generate it
+	// here (once per process), print it to the terminal and the log file and
+	// persist it next to the database so the container CLI (`gourl
+	// setup-code`) can show it on demand. A restart rolls a fresh code, so a
+	// leaked one dies with the process.
+	if s.cfg.Get().PasswordHash == "" {
+		s.setupCode = newSetupCode()
+		slog.Info("setup mode: enter this code on the setup page to configure the admin password", "setup_code", s.setupCode)
+		if err := os.WriteFile(s.setupCodePath, []byte(s.setupCode), 0o600); err != nil {
+			slog.Warn("persist setup code failed; gourl setup-code will not show it", "path", s.setupCodePath, "error", err)
+		}
 	}
 	// Async meta fetching: workers resolve s.fetcher at job time so tests can
 	// swap in a mock after construction.
@@ -79,6 +95,7 @@ func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/v1/auth/login", s.login)
 	mux.HandleFunc("POST /api/v1/auth/logout", s.logout)
+	mux.HandleFunc("POST /api/v1/auth/change-password", s.requireAuth(s.changePassword))
 	mux.HandleFunc("POST /api/v1/auth/setup", s.setupAdmin)
 	mux.HandleFunc("GET /api/v1/auth/status", s.authStatus)
 	mux.HandleFunc("GET /api/v1/health", s.health)
@@ -110,10 +127,51 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /favicon.svg", s.favicon)
 	mux.Handle("GET /docs/", http.StripPrefix("/docs/", http.FileServer(http.FS(webui.Docs()))))
 	mux.HandleFunc("GET /docs/openapi.yaml", s.openAPISpec)
-	mux.HandleFunc("GET /admin", s.spaIndex)
-	mux.HandleFunc("GET /admin/{path...}", s.spaIndex)
+	mux.HandleFunc("GET /admin", s.adminOnly(s.spaIndex))
+	mux.HandleFunc("GET /admin/{path...}", s.adminOnly(s.spaIndex))
 	mux.HandleFunc("GET /{code...}", s.redirect)
-	return s.logRequests(s.ipBlock(mux))
+	return s.logRequests(s.ipBlock(s.cors(mux)))
+}
+
+// cors opens the API to the Capacitor app, which calls a remote gourl
+// instance cross-origin with a Bearer token (no cookies involved, so a
+// wildcard origin is safe). Preflight OPTIONS requests are answered directly
+// with 204; IP bans still apply to them via the outer ipBlock middleware.
+func (s *Server) cors(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/api/") {
+			h := w.Header()
+			h.Set("Access-Control-Allow-Origin", "*")
+			h.Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
+			h.Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
+			h.Set("Access-Control-Max-Age", "86400")
+			if r.Method == http.MethodOptions {
+				w.WriteHeader(http.StatusNoContent)
+				return
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// setupCodePath is where the bootstrap code is persisted for the container
+// CLI (`gourl setup-code`): next to the database, inside the mounted data
+// directory. The CLI mirrors this exact resolution from DB_PATH.
+func setupCodePath() string {
+	return filepath.Join(filepath.Dir(envOr("DB_PATH", "./data/gourl.db")), "setup.code")
+}
+
+// adminOnly gates the admin console on config.webui_enabled (`gourl webui
+// off`): the SPA returns 404 while disabled, Swagger /docs is unaffected.
+// Re-checked per request so a config change applies without a restart.
+func (s *Server) adminOnly(h http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !s.cfg.Get().WebUIEnabled {
+			http.NotFound(w, r)
+			return
+		}
+		h(w, r)
+	}
 }
 
 // logRequests logs every HTTP request with status and latency. Response

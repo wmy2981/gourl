@@ -44,6 +44,11 @@ type Config struct {
 	// N failures in a row lock the address for the window. 0 disables.
 	LoginRateMaxAttempts int `yaml:"login_rate_max_attempts" json:"login_rate_max_attempts"`
 	LoginRateLockSeconds int `yaml:"login_rate_lock_seconds" json:"login_rate_lock_seconds"`
+	// SessionTTLMinutes is how long an admin session stays valid. 0 means
+	// sessions never expire; the minimum is 5 minutes. Changing it only
+	// affects newly issued sessions — revoking existing ones is a session
+	// epoch bump (gourl reset sessions / password change).
+	SessionTTLMinutes int `yaml:"session_ttl_minutes" json:"session_ttl_minutes"`
 	// LinkRatePerSecond caps short-link redirects across all codes (a shared
 	// token bucket). 0 disables.
 	LinkRatePerSecond int `yaml:"link_rate_per_second" json:"link_rate_per_second"`
@@ -51,6 +56,14 @@ type Config struct {
 	// setup flow (or migrated from the legacy ADMIN_PASSWORD env var). It is
 	// never exposed to the frontend.
 	PasswordHash string `yaml:"password_hash" json:"-"`
+	// SessionEpoch invalidates every issued session at once when bumped
+	// (gourl reset sessions, password change). Kept out of the JSON contract;
+	// updateConfig carries it over so a plain PUT never resets it.
+	SessionEpoch int64 `yaml:"session_epoch" json:"-"`
+	// WebUIEnabled gates the admin console (/admin) via `gourl webui on/off`.
+	// Swagger /docs is unaffected. Kept out of the JSON contract; updateConfig
+	// carries it over so a plain PUT never disables it.
+	WebUIEnabled bool `yaml:"webui_enabled" json:"-"`
 	// LogLevel is the process-wide log verbosity (debug/info/warning/error),
 	// applied at startup and hot-applied on every config save.
 	LogLevel string `yaml:"log_level" json:"log_level"`
@@ -63,7 +76,9 @@ func Default() *Config {
 		ShortCodeLength:      6,
 		LoginRateMaxAttempts: 10,
 		LoginRateLockSeconds: 300,
+		SessionTTLMinutes:    10080, // 7 days, matching the pre-config default
 		LinkRatePerSecond:    100,
+		WebUIEnabled:         true,
 		LogLevel:             "info",
 	}
 }
@@ -115,6 +130,9 @@ func (c *Config) Validate() error {
 	}
 	if c.LoginRateMaxAttempts < 0 || c.LoginRateLockSeconds < 0 {
 		return fmt.Errorf("login rate limits must not be negative (0 disables)")
+	}
+	if c.SessionTTLMinutes != 0 && c.SessionTTLMinutes < 5 {
+		return fmt.Errorf("session_ttl_minutes must be 0 (never expire) or at least 5, got %d", c.SessionTTLMinutes)
 	}
 	if c.LinkRatePerSecond < 0 {
 		return fmt.Errorf("link_rate_per_second must not be negative (0 disables)")

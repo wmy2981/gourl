@@ -62,6 +62,7 @@ paths:
     post:
       tags: [auth]
       summary: Set the admin password while the server is in setup mode (no password_hash configured); logs the caller in
+      description: Requires the 8-character bootstrap code printed to the server terminal/log at startup (setup mode only). The code is generated once per process and dies with the restart.
       security: []
       requestBody:
         required: true
@@ -69,11 +70,14 @@ paths:
           application/json:
             schema:
               type: object
+              required: [code, password]
               properties:
+                code: { type: string, description: 8-char bootstrap code from the server log (mixed case + digits) }
                 password: { type: string, minLength: 8 }
       responses:
         "200": { description: Password set and session cookie issued }
         "400": { description: Weak password or invalid body }
+        "403": { description: invalid_setup_code — wrong bootstrap code }
         "409": { description: already_configured — password already set }
   /auth/status:
     get:
@@ -96,6 +100,28 @@ paths:
       security: []
       responses:
         "200": { description: Signed out }
+  /auth/change-password:
+    post:
+      tags: [auth]
+      summary: Change the admin password
+      description: Verifies the current password, persists a fresh bcrypt hash and bumps the session epoch — every existing session (this one included) is revoked and must sign in again. Bearer tokens are unaffected. Wrong-current-password attempts share the login rate limiter.
+      security: [{ bearerAuth: [] }, { sessionCookie: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [old_password, new_password]
+              properties:
+                old_password: { type: string, description: Current admin password }
+                new_password: { type: string, minLength: 8 }
+      responses:
+        "200": { description: Password changed; all sessions revoked }
+        "400":
+          description: Invalid request or weak new password
+        "401": { description: Current password incorrect }
+        "429": { description: Rate limited after too many failed attempts }
   /links:
     get:
       tags: [links]
@@ -547,6 +573,10 @@ components:
           type: integer
           minimum: 0
           description: How long a locked IP stays locked after too many failed logins, in seconds (0 disables the limiter). Default 300.
+        session_ttl_minutes:
+          type: integer
+          minimum: 0
+          description: How long an admin session stays valid, in minutes. 0 means sessions never expire; the minimum is 5. Only affects newly issued sessions. Default 10080 (7 days).
         link_rate_per_second:
           type: integer
           minimum: 0

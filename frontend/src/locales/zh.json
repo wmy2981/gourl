@@ -4,6 +4,7 @@
     "tagline": "轻量短链接",
     "light": "浅色",
     "dark": "深色",
+    "system": "跟随系统",
     "menu": "菜单"
   },
   "nav": {
@@ -32,16 +33,47 @@
     "password": "密码",
     "signIn": "登录",
     "wrongPassword": "密码错误",
-    "authDisabled": "未配置认证"
+    "authDisabled": "未配置认证",
+    "rateLimited": "失败次数过多，请稍后再试"
+  },
+  "connect": {
+    "heading": "连接到 gourl 服务器",
+    "sub": "输入服务器地址和 API token，之后全部通过 token 通信，无需密码登录。",
+    "url": "服务器地址",
+    "urlHint": "例如 http://192.168.1.10:8081",
+    "token": "API token",
+    "tokenHint": "来自 Web 管理后台：设置 → API tokens",
+    "connect": "连接",
+    "invalidUrl": "请输入有效的 http(s) 服务器地址",
+    "failed": "连接失败——请检查地址和 token",
+    "step1": "在浏览器中打开你的 gourl 管理后台并登录",
+    "step2": "设置 → API tokens → 创建 token",
+    "step3": "将服务器地址和 token 输入到上方",
+    "openServer": "在浏览器中打开服务器页面"
+  },
+  "changePassword": {
+    "heading": "修改管理员密码",
+    "current": "当前密码",
+    "new": "新密码（至少 8 个字符）",
+    "confirm": "确认新密码",
+    "submit": "修改密码",
+    "success": "密码已修改，请重新登录",
+    "wrongCurrent": "当前密码不正确",
+    "mismatch": "两次输入的密码不一致",
+    "tooShort": "密码至少需要 8 个字符",
+    "failed": "修改密码失败"
   },
   "setup": {
     "heading": "设置管理员密码",
-    "sub": "此服务器还没有管理员密码，请设置一个以保护管理后台。",
+    "sub": "此服务器还没有管理员密码。请输入服务器日志中的设置校验码并设置密码。",
+    "code": "设置校验码",
+    "codeHint": "启动时输出在服务器终端/日志中，重启后会更换",
     "password": "新密码",
     "confirm": "确认密码",
     "setup": "设置密码",
     "mismatch": "两次输入的密码不一致",
-    "weak": "密码至少需要 8 个字符"
+    "weak": "密码至少需要 8 个字符",
+    "invalidCode": "校验码无效，请查看服务器日志"
   },
   "dashboard": {
     "heading": "仪表盘",
@@ -55,6 +87,7 @@
   "links": {
     "heading": "链接管理",
     "refresh": "刷新",
+    "refreshed": "已刷新",
     "search": "搜索短码、URL、标题或描述…",
     "create": "新建链接",
     "import": "批量导入",
@@ -63,7 +96,7 @@
     "exportTitle": "选择导出格式",
     "exportCsv": "CSV",
     "exportJson": "JSON",
-    "exportHint": "解析数据库请使用 db-export 脚本（<1>GitHub 下载</1>）",
+    "exportHint": "解析数据库请使用 db-export 脚本（<1>GitHub 链接</1>）",
     "shortUrl": "短链接",
     "destination": "目标地址",
     "description": "说明",
@@ -100,7 +133,8 @@
     "clearExpired": "清空过期",
     "noExpired": "没有过期链接",
     "clearExpiredConfirm": "将删除 {{count}} 条过期链接，此操作不可撤销。",
-    "expiredCleared": "已删除 {{count}} 条过期链接"
+    "expiredCleared": "已删除 {{count}} 条过期链接",
+    "downloadedTo": "已保存到 {{path}}"
   },
   "form": {
     "url": "目标 URL",
@@ -143,6 +177,12 @@
   "settings": {
     "heading": "设置",
     "site": "站点信息",
+    "security": "安全",
+    "securityHint": "修改管理员密码将使所有会话（包括当前会话）下线。",
+    "changePassword": "修改管理员密码",
+    "appConnection": "App 连接",
+    "connectedTo": "已连接到",
+    "disconnectApp": "断开连接",
     "siteName": "服务名称",
     "siteTitle": "站点标题",
     "keywords": "关键词",
@@ -160,6 +200,8 @@
     "loginRateLock": "锁定时长（秒）",
     "loginRateHint": "每个 IP 允许的错误次数，超过后锁定（0 = 禁用）",
     "loginRateLockHint": "超限后 IP 被锁定的时长（0 = 禁用）",
+    "sessionTTL": "会话有效期（分钟）",
+    "sessionTTLHint": "管理员会话的有效时长（0 = 永不过期，最小 5；仅对新登录生效）",
     "linkRate": "短链访问上限（每秒）",
     "linkRateHint": "所有短链每秒最多允许的跳转次数（0 = 不限）",
     "logLevel": "日志等级",
@@ -189,7 +231,13 @@
     "saved": "设置已保存",
     "saveFailed": "保存失败",
     "tokenNeverExpires": "Token 永不过期——不再需要时请手动吊销。",
-    "apiDocs": "API 文档"
+    "apiDocs": "API 文档",
+    "disconnectConfirm": "断开后将清除已保存的服务器连接，并返回连接页面。",
+    "tokenRevokeConfirm": "删除后该 token 将立即失效，所有使用它的请求都会失败，App 将断开连接。此操作不可撤销。",
+    "connConnected": "已连接",
+    "connUnauthorized": "Token 无效",
+    "connUnreachable": "无法连接",
+    "connChecking": "检查中…"
   },
   "common": {
     "loading": "加载中…",
@@ -200,7 +248,8 @@
     "cancel": "取消",
     "clear": "清除",
     "pickDate": "选择日期",
-    "dismiss": "关闭"
+    "dismiss": "关闭",
+    "back": "返回"
   },
   "footer": {
     "openSource": "Github"

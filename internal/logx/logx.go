@@ -53,6 +53,17 @@ var fileSink *lumberjack.Logger
 // endpoint (i.e. LOG_DIR is configured).
 func HistoryEnabled() bool { return fileSink != nil }
 
+// FileName returns the mirrored log file path (gourl.log under LOG_DIR) —
+// the same path Init resolves, computed statically for the `gourl log` CLI
+// command that runs in a separate process.
+func FileName() string {
+	dir := os.Getenv("LOG_DIR")
+	if dir == "" {
+		dir = "./data/log"
+	}
+	return filepath.Join(dir, "gourl.log")
+}
+
 // Close releases the log file handle if LOG_DIR was configured. Safe to call
 // any number of times; the OS reclaims it on exit otherwise.
 func Close() {
@@ -83,7 +94,7 @@ func Init(level slog.Level) {
 		slog.Warn("log dir unavailable, stderr only", "dir", dir, "err", err)
 	} else {
 		fileSink = &lumberjack.Logger{
-			Filename:   filepath.Join(dir, "gourl.log"),
+			Filename:   FileName(),
 			MaxSize:    10, // MB per file
 			MaxBackups: 5,
 			MaxAge:     30, // days

@@ -401,7 +401,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                   animate={{ opacity: 1, y: 0, scale: 1, marginBottom }}
                   exit={{ opacity: 0, y: -14, scale: 0.95 }}
                   transition={{ type: 'spring', stiffness: 380, damping: 32 }}
-                  className={`flex w-fit max-w-80 select-none items-start gap-2.5 rounded-lg border px-3.5 py-3 text-sm font-medium shadow-[0_8px_30px_rgba(0,0,0,0.12)] ${
+                  className={`flex w-fit max-w-80 items-start gap-2.5 rounded-lg border px-3.5 py-3 text-sm font-medium shadow-[0_8px_30px_rgba(0,0,0,0.12)] ${
                     toast.kind === 'error'
                       ? 'border-danger/20 bg-[#fff7f6] text-danger dark:bg-[#2a1a1a] dark:text-red-300'
                       : 'border-accent/20 bg-[#fffaf0] text-accent-deep dark:bg-[#2a2015] dark:text-amber-300'

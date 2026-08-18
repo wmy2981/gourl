@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">gourl</string>
+    <string name="title_activity_main">gourl</string>
+    <string name="package_name">com.wmy2981.gourl</string>
+    <string name="custom_url_scheme">com.wmy2981.gourl</string>
+</resources>

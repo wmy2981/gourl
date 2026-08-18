@@ -43,6 +43,11 @@ ip_blocks: []
 login_rate_max_attempts: 10
 login_rate_lock_seconds: 300
 
+# Admin session expiry in minutes: 0 = sessions never expire (until revoked
+# via `gourl reset sessions` or a password change), minimum 5. Only applies to
+# newly issued sessions. Default 10080 (7 days).
+session_ttl_minutes: 10080
+
 # Shared short-link access budget: at most this many redirects per second
 # across all codes (token bucket, burst = same number). Over-limit requests
 # get a bare 429 and are not counted. 0 disables.

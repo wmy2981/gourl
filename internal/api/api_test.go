@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/redis/go-redis/v9"
@@ -19,14 +20,23 @@ import (
 	"github.com/wmy2981/gourl/internal/store"
 )
 
-// testAdminAuth builds an auth with a cheap bcrypt hash of the password.
-func testAdminAuth(password, secret string) *adminAuth {
-	hash, _ := bcrypt.GenerateFromPassword([]byte(password), bcrypt.MinCost)
-	return newAdminAuth(string(hash), secret)
+// enterSetupMode clears the admin password in the config so the server runs
+// as before the first setup; the per-request adminAuth() resolution picks the
+// change up immediately.
+func enterSetupMode(t *testing.T, s *Server) {
+	t.Helper()
+	upd := s.cfg.Get()
+	upd.PasswordHash = ""
+	if err := s.cfg.Update(upd); err != nil {
+		t.Fatalf("clear admin password: %v", err)
+	}
 }
 
 func newTestServer(t *testing.T) (*Server, *miniredis.Miniredis) {
 	t.Helper()
+	// Point the setup-code file at a temp dir: NewServer persists the code
+	// next to the database path, and tests must never write ./data/setup.code.
+	t.Setenv("DB_PATH", filepath.Join(t.TempDir(), "gourl.db"))
 	st, err := store.Open(":memory:")
 	if err != nil {
 		t.Fatalf("store: %v", err)
@@ -44,10 +54,20 @@ func newTestServer(t *testing.T) (*Server, *miniredis.Miniredis) {
 
 	srv := NewServer(st, cfgMgr, counter.NewFromClient(rdb))
 	srv.now = func() int64 { return 1700000000 }
-	srv.admin = testAdminAuth("test-password", "test-secret")
+	// Seed the config with the test password hash: adminAuth() re-resolves
+	// from the config whenever the hash changes, so the file and srv.admin
+	// must share the exact same hash string (bcrypt salts are random, so two
+	// independent generations never match) for sessions to keep authenticating.
+	hash, _ := bcrypt.GenerateFromPassword([]byte("test-password"), bcrypt.MinCost)
+	upd := cfgMgr.Get()
+	upd.PasswordHash = string(hash)
+	if err := cfgMgr.Update(upd); err != nil {
+		t.Fatalf("seed admin password: %v", err)
+	}
+	srv.admin = newAdminAuth(string(hash), "test-secret")
 	srv.assetsDir = t.TempDir()
 	if testSession == nil {
-		tok, err := srv.admin.issueToken()
+		tok, err := srv.admin.issueToken(10080*time.Minute, 0)
 		if err != nil {
 			t.Fatalf("issue test session: %v", err)
 		}

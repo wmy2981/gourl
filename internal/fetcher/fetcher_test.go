@@ -6,6 +6,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"golang.org/x/net/html"
 )
 
 // The fetcher reaches any host — internal networks included — so the
@@ -35,16 +37,76 @@ func TestFetchExtractsTitleAndDescription(t *testing.T) {
 	}
 }
 
-func TestFetchRejectsNonHTML(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+// Title extraction falls back through og:title/twitter:title and the first
+// <h1>: internal devices often serve pages with no <title> tag at all.
+func TestExtractMetaFallbackChain(t *testing.T) {
+	// <title> wins over og:title.
+	doc, err := html.Parse(strings.NewReader(`<html><head><title>Real Title</title>
+		<meta property="og:title" content="OG Title"></head><body></body></html>`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if title, _ := extractMeta(doc); title != "Real Title" {
+		t.Errorf("title = %q, want the <title> tag to win", title)
+	}
+
+	// No <title>: og:title is used.
+	doc, _ = html.Parse(strings.NewReader(`<html><head>
+		<meta property="og:title" content="OG Title"></head><body></body></html>`))
+	if title, _ := extractMeta(doc); title != "OG Title" {
+		t.Errorf("title = %q, want og:title fallback", title)
+	}
+
+	// No <title> and no og:title: the first <h1> is used.
+	doc, _ = html.Parse(strings.NewReader(`<html><head></head><body>
+		<h1>Device Status</h1><p>body</p></body></html>`))
+	if title, _ := extractMeta(doc); title != "Device Status" {
+		t.Errorf("title = %q, want the h1 fallback", title)
+	}
+
+	// A heading wrapped in a link (device pages do this a lot) still works —
+	// the text walker must recurse into child elements.
+	doc, _ = html.Parse(strings.NewReader(`<html><head></head><body>
+		<h1><a href="/">Router</a><span> Status</span></h1></body></html>`))
+	if title, _ := extractMeta(doc); title != "Router Status" {
+		t.Errorf("title = %q, want the nested h1 text", title)
+	}
+
+	// Nothing at all stays empty.
+	doc, _ = html.Parse(strings.NewReader(`<html><body><p>plain</p></body></html>`))
+	if title, _ := extractMeta(doc); title != "" {
+		t.Errorf("title = %q, want empty", title)
+	}
+}
+
+// Lenient fetching: internal services often reply with odd status codes or
+// content types yet still carry a <title> — both are parsed now, and an
+// unparseable body yields an empty title instead of an error.
+func TestFetchLenientOnStatusAndContentType(t *testing.T) {
+	odd := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		w.Header().Set("Content-Type", "text/html")
+		w.Write([]byte("<title>login page</title>"))
+	}))
+	defer odd.Close()
+
+	f := New()
+	title, _, err := f.Fetch(context.Background(), odd.URL)
+	if err != nil {
+		t.Fatalf("Fetch 401 page: %v", err)
+	}
+	if title != "login page" {
+		t.Errorf("title = %q, want login page", title)
+	}
+
+	jsonSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"x":1}`))
 	}))
-	defer srv.Close()
+	defer jsonSrv.Close()
 
-	f := New()
-	if _, _, err := f.Fetch(context.Background(), srv.URL); err == nil {
-		t.Fatal("expected error for non-html content")
+	if _, _, err := f.Fetch(context.Background(), jsonSrv.URL); err != nil {
+		t.Fatalf("Fetch json body: %v", err)
 	}
 }
 

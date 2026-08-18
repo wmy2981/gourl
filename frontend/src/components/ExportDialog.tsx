@@ -2,11 +2,13 @@ import { useState } from 'react'
 import { Trans, useTranslation } from 'react-i18next'
 import { FileJson, FileSpreadsheet } from 'lucide-react'
 import { api } from '../lib/api'
+import { blobToBase64, saveDownload } from '../lib/download'
 import { Button, Dialog, useToast } from './ui'
 
 // Export dialog: CSV and JSON share one button; the format is picked here.
 // Both exports carry the same 7 fields (code, url, title, description,
-// expires_at, click_count, created_at).
+// expires_at, click_count, created_at). In the app the files land in
+// Downloads/gourl/ and the path is toasted; the web browser downloads normally.
 export default function ExportDialog({
   open,
   onClose,
@@ -18,25 +20,18 @@ export default function ExportDialog({
   const { toast } = useToast()
   const [busy, setBusy] = useState(false)
 
-  const download = (filename: string, blob: Blob) => {
-    const a = document.createElement('a')
-    a.href = URL.createObjectURL(blob)
-    a.download = filename
-    a.click()
-    URL.revokeObjectURL(a.href)
-  }
-
   const exportCsv = async () => {
     if (busy) return
     setBusy(true)
     try {
-      const res = await fetch('/api/v1/export.csv', { credentials: 'same-origin' })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const blob = await api.exportCsv()
       const date = new Date().toISOString().slice(0, 10)
-      download(`gourl-links-${date}.csv`, await res.blob())
+      const path = await saveDownload(`gourl-links-${date}.csv`, await blobToBase64(blob), true, 'text/csv')
+      if (path) toast(t('links.downloadedTo', { path }))
       onClose()
-    } catch {
-      toast(t('common.error'), 'error')
+    } catch (err) {
+      // Surface the plugin/API error so native save failures are diagnosable.
+      toast(err instanceof Error ? err.message : t('common.error'), 'error')
     } finally {
       setBusy(false)
     }
@@ -48,10 +43,17 @@ export default function ExportDialog({
     try {
       const links = await api.exportJson()
       const date = new Date().toISOString().slice(0, 10)
-      download(`gourl-links-${date}.json`, new Blob([JSON.stringify(links, null, 2)]))
+      const path = await saveDownload(
+        `gourl-links-${date}.json`,
+        JSON.stringify(links, null, 2),
+        false,
+        'application/json',
+      )
+      if (path) toast(t('links.downloadedTo', { path }))
       onClose()
-    } catch {
-      toast(t('common.error'), 'error')
+    } catch (err) {
+      // Surface the plugin/API error so native save failures are diagnosable.
+      toast(err instanceof Error ? err.message : t('common.error'), 'error')
     } finally {
       setBusy(false)
     }

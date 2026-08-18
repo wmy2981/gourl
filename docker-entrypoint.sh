@@ -4,10 +4,12 @@
 #
 # The entrypoint runs as root on purpose: freshly created bind mounts (a first
 # deployment with no ./data directory yet) inherit the host's root ownership,
-# which the gourl user could never write to. chown the mount points first,
+# which the gourl user could never write to. mkdir + chown the mount points
+# first (mkdir covers `gourl reset --all`, which deletes both directories),
 # then drop privileges with su-exec for both Redis and gourl.
 set -e
 
+mkdir -p /app/data /app/config
 chown -R gourl:gourl /app/data /app/config
 
 if [ -z "$REDIS_ADDR" ]; then

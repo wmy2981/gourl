@@ -1,7 +1,9 @@
 package api
 
 import (
+	"errors"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -19,21 +21,27 @@ import (
 // logins while further setups are refused.
 func TestSetupFlow(t *testing.T) {
 	s, _ := newTestServer(t)
-	s.admin = newAdminAuth("", "test-secret") // setup mode
+	enterSetupMode(t, s)
 
 	rec := do(t, s, http.MethodGet, "/api/v1/auth/status", nil)
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"configured":false`) {
 		t.Fatalf("status before setup: %d %s", rec.Code, rec.Body.String())
 	}
 
-	// Weak passwords are refused.
-	rec = do(t, s, http.MethodPost, "/api/v1/auth/setup", map[string]any{"password": "short"})
+	// An invalid setup code is refused before any password work.
+	rec = do(t, s, http.MethodPost, "/api/v1/auth/setup", map[string]any{"code": "wrongcode", "password": "correct-horse-42"})
+	if rec.Code != http.StatusForbidden || decodeError(t, rec) != "invalid_setup_code" {
+		t.Fatalf("invalid setup code: %d %s", rec.Code, rec.Body.String())
+	}
+
+	// Weak passwords are refused (with the valid bootstrap code).
+	rec = do(t, s, http.MethodPost, "/api/v1/auth/setup", map[string]any{"code": s.setupCode, "password": "short"})
 	if rec.Code != http.StatusBadRequest || decodeError(t, rec) != "weak_password" {
 		t.Fatalf("weak password: %d %s", rec.Code, rec.Body.String())
 	}
 
 	// A valid setup logs the caller in (session cookie) and persists the hash.
-	rec = do(t, s, http.MethodPost, "/api/v1/auth/setup", map[string]any{"password": "correct-horse-42"})
+	rec = do(t, s, http.MethodPost, "/api/v1/auth/setup", map[string]any{"code": s.setupCode, "password": "correct-horse-42"})
 	if rec.Code != http.StatusOK {
 		t.Fatalf("setup: %d %s", rec.Code, rec.Body.String())
 	}
@@ -91,5 +99,52 @@ func TestEnvPasswordMigratedIntoConfig(t *testing.T) {
 	// The plaintext must never survive anywhere.
 	if strings.Contains(cfgMgr.Get().PasswordHash, "legacy-env-pass") {
 		t.Error("config stores the plaintext password")
+	}
+}
+
+// TestSetupCodePersistedForCLI: in setup mode NewServer persists the
+// bootstrap code next to the database for `gourl setup-code`; completing the
+// setup removes it.
+func TestSetupCodePersistedForCLI(t *testing.T) {
+	s, _ := newTestServer(t)
+	enterSetupMode(t, s)
+
+	data, err := os.ReadFile(s.setupCodePath)
+	if err != nil {
+		t.Fatalf("read persisted setup code: %v", err)
+	}
+	if string(data) != s.setupCode {
+		t.Errorf("persisted code = %q, want %q", data, s.setupCode)
+	}
+
+	rec := do(t, s, http.MethodPost, "/api/v1/auth/setup", map[string]any{
+		"code": s.setupCode, "password": "correct-horse-42",
+	})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("setup: %d %s", rec.Code, rec.Body.String())
+	}
+	if _, err := os.Stat(s.setupCodePath); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("setup code file should be removed after setup, stat err = %v", err)
+	}
+}
+
+// TestNewSetupCode: the bootstrap code is 8 chars, mixed alphanumeric and
+// varies between draws.
+func TestNewSetupCode(t *testing.T) {
+	seen := map[string]bool{}
+	for i := 0; i < 200; i++ {
+		c := newSetupCode()
+		if len(c) != 8 {
+			t.Fatalf("setup code length = %d, want 8", len(c))
+		}
+		for _, ch := range c {
+			if !strings.ContainsRune(setupCodeAlphabet, ch) {
+				t.Fatalf("setup code contains %q, outside the mixed alphanumeric alphabet", ch)
+			}
+		}
+		seen[c] = true
+	}
+	if len(seen) < 190 {
+		t.Errorf("setup codes barely vary: %d unique in 200 draws", len(seen))
 	}
 }

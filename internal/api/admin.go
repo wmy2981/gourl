@@ -9,6 +9,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	"os"
@@ -21,16 +22,39 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-const (
-	sessionCookie = "gourl_session"
-	sessionTTL    = 7 * 24 * time.Hour
-)
+const sessionCookie = "gourl_session"
+
+// setupCodeAlphabet mixes upper/lowercase letters and digits for the 8-char
+// bootstrap code printed at startup in setup mode.
+const setupCodeAlphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+
+// newSetupCode returns a random 8-character code from setupCodeAlphabet.
+// Issued once per process; a restart rolls a fresh code.
+func newSetupCode() string {
+	const max = 256 - (256 % len(setupCodeAlphabet)) // 248: unbiased draw
+	b := make([]byte, 8)
+	rb := make([]byte, 1)
+	for i := range b {
+		for {
+			if _, err := rand.Read(rb); err != nil {
+				panic("crypto/rand unavailable") // unrecoverable at startup
+			}
+			if int(rb[0]) < max {
+				b[i] = setupCodeAlphabet[int(rb[0])%len(setupCodeAlphabet)]
+				break
+			}
+		}
+	}
+	return string(b)
+}
 
 // adminAuth handles the single-admin-password session flow. The password is
 // stored as a bcrypt hash in config.yaml (never as plaintext and never in the
 // environment); until it is set the API runs in setup mode. Session tokens
-// are stateless: exp.nonce.hmac(SESSION_SECRET, exp.nonce), carried in an
-// HttpOnly SameSite=Lax cookie.
+// are stateless: exp.epoch.nonce.hmac(SESSION_SECRET, exp.epoch.nonce),
+// carried in an HttpOnly SameSite=Lax cookie. exp 0 means the session never
+// expires; epoch must match the config's session_epoch (bumping it revokes
+// every outstanding session at once).
 type adminAuth struct {
 	passwordHash string
 	secret       []byte
@@ -104,38 +128,46 @@ func (a *adminAuth) mac(payload string) []byte {
 	return m.Sum(nil)
 }
 
-func (a *adminAuth) issueToken() (string, error) {
+func (a *adminAuth) issueToken(ttl time.Duration, epoch int64) (string, error) {
 	nonce := make([]byte, 16)
 	if _, err := rand.Read(nonce); err != nil {
 		return "", err
 	}
-	exp := time.Now().Add(sessionTTL).Unix()
-	payload := strconv.FormatInt(exp, 10) + "." + base64.RawURLEncoding.EncodeToString(nonce)
+	exp := int64(0) // 0 means the session never expires
+	if ttl > 0 {
+		exp = time.Now().Add(ttl).Unix()
+	}
+	payload := strconv.FormatInt(exp, 10) + "." + strconv.FormatInt(epoch, 10) + "." + base64.RawURLEncoding.EncodeToString(nonce)
 	mac := base64.RawURLEncoding.EncodeToString(a.mac(payload))
 	return payload + "." + mac, nil
 }
 
-func (a *adminAuth) verifyToken(token string) bool {
+func (a *adminAuth) verifyToken(token string, epoch int64) bool {
 	parts := strings.Split(token, ".")
-	if len(parts) != 3 {
+	if len(parts) != 4 {
 		return false
 	}
 	exp, err := strconv.ParseInt(parts[0], 10, 64)
-	if err != nil || exp < time.Now().Unix() {
+	if err != nil || (exp != 0 && exp < time.Now().Unix()) {
 		return false
 	}
-	got := a.mac(parts[0] + "." + parts[1])
-	want, err := base64.RawURLEncoding.DecodeString(parts[2])
+	tokEpoch, err := strconv.ParseInt(parts[1], 10, 64)
+	if err != nil || tokEpoch != epoch {
+		return false
+	}
+	got := a.mac(parts[0] + "." + parts[1] + "." + parts[2])
+	want, err := base64.RawURLEncoding.DecodeString(parts[3])
 	if err != nil {
 		return false
 	}
 	return subtle.ConstantTimeCompare(got, want) == 1
 }
 
-// validSession accepts requests with a valid session cookie. Setup mode
-// grants nothing here: with no admin password there is nothing to sign in to,
-// and management endpoints stay closed until the setup flow configures one.
-func (a *adminAuth) validSession(r *http.Request) bool {
+// validSession accepts requests with a valid session cookie for the given
+// session epoch. Setup mode grants nothing here: with no admin password there
+// is nothing to sign in to, and management endpoints stay closed until the
+// setup flow configures one.
+func (a *adminAuth) validSession(r *http.Request, epoch int64) bool {
 	if !a.sessionEnabled() {
 		return false
 	}
@@ -143,12 +175,34 @@ func (a *adminAuth) validSession(r *http.Request) bool {
 	if err != nil {
 		return false
 	}
-	return a.verifyToken(c.Value)
+	return a.verifyToken(c.Value, epoch)
+}
+
+// adminAuth returns the current admin auth, re-resolved whenever the config's
+// password hash changed so password changes (setup, change-password, gourl
+// reset password) take effect without a restart. The legacy ADMIN_PASSWORD
+// migration is idempotent, so re-resolving is safe. Session epochs are read
+// from the config by the callers, not cached here.
+func (s *Server) adminAuth() *adminAuth {
+	cur := s.cfg.Get()
+	if s.admin == nil || s.admin.passwordHash != cur.PasswordHash {
+		s.admin = resolveAdminAuth(s.cfg)
+	}
+	return s.admin
+}
+
+// sessionMaxAge returns the cookie MaxAge for a session TTL; a 0 TTL means
+// sessions never expire, so the cookie outlives any practical browser life.
+func sessionMaxAge(ttl time.Duration) int {
+	if ttl <= 0 {
+		return 10 * 365 * 24 * 3600
+	}
+	return int(ttl.Seconds())
 }
 
 // login handles POST /api/v1/auth/login.
 func (s *Server) login(w http.ResponseWriter, r *http.Request) {
-	if !s.admin.sessionEnabled() {
+	if !s.adminAuth().sessionEnabled() {
 		writeError(w, http.StatusForbidden, "auth_disabled", "admin authentication is not configured")
 		return
 	}
@@ -169,7 +223,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_request", "invalid JSON body")
 		return
 	}
-	if !s.admin.verifyPassword(body.Password) {
+	if !s.adminAuth().verifyPassword(body.Password) {
 		s.loginRate.recordFailure(ip, cfg.LoginRateMaxAttempts, cfg.LoginRateLockSeconds, now)
 		slog.Warn("admin login failed", "remote", r.RemoteAddr, "ip", ip)
 		writeError(w, http.StatusUnauthorized, "unauthorized", "invalid password")
@@ -177,7 +231,8 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	}
 	s.loginRate.clear(ip)
 	slog.Info("admin logged in", "remote", r.RemoteAddr, "ip", ip)
-	token, err := s.admin.issueToken()
+	ttl := time.Duration(cfg.SessionTTLMinutes) * time.Minute
+	token, err := s.adminAuth().issueToken(ttl, cfg.SessionEpoch)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "internal_error", "failed to issue session")
 		return
@@ -188,7 +243,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		Path:     "/",
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
-		MaxAge:   int(sessionTTL.Seconds()),
+		MaxAge:   sessionMaxAge(ttl),
 	})
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
@@ -196,23 +251,31 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 // authStatus handles GET /api/v1/auth/status: tells the SPA whether an admin
 // password exists, so it can route to the setup page before login.
 func (s *Server) authStatus(w http.ResponseWriter, r *http.Request) {
-	slog.Debug("auth status", "configured", s.admin.sessionEnabled(), "remote", r.RemoteAddr)
-	writeJSON(w, http.StatusOK, map[string]bool{"configured": s.admin.sessionEnabled()})
+	slog.Debug("auth status", "configured", s.adminAuth().sessionEnabled(), "remote", r.RemoteAddr)
+	writeJSON(w, http.StatusOK, map[string]bool{"configured": s.adminAuth().sessionEnabled()})
 }
 
 // setupAdmin handles POST /api/v1/auth/setup: the first visitor sets the
-// admin password while the server is in setup mode. The bcrypt hash is
+// admin password while the server is in setup mode. The request must carry
+// the bootstrap code printed to the terminal/log at startup — it is issued
+// once per process, so it never survives a restart. The bcrypt hash is
 // persisted to config.yaml and the caller is logged in immediately.
 func (s *Server) setupAdmin(w http.ResponseWriter, r *http.Request) {
-	if s.admin.sessionEnabled() {
+	if s.adminAuth().sessionEnabled() {
 		writeError(w, http.StatusConflict, "already_configured", "admin password is already set")
 		return
 	}
 	var body struct {
+		Code     string `json:"code"`
 		Password string `json:"password"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_request", "invalid JSON body")
+		return
+	}
+	if subtle.ConstantTimeCompare([]byte(s.setupCode), []byte(body.Code)) != 1 {
+		slog.Warn("setup: invalid setup code", "remote", r.RemoteAddr)
+		writeError(w, http.StatusForbidden, "invalid_setup_code", "invalid setup code, check the server log")
 		return
 	}
 	if len(body.Password) < 8 {
@@ -233,8 +296,14 @@ func (s *Server) setupAdmin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.admin.setPasswordHash(string(hash))
+	// The bootstrap code dies with the setup: remove the persisted copy so
+	// `gourl setup-code` stops reporting one.
+	if err := os.Remove(s.setupCodePath); err != nil && !errors.Is(err, os.ErrNotExist) {
+		slog.Warn("remove setup code file failed", "path", s.setupCodePath, "error", err)
+	}
 	slog.Info("admin password configured", "remote", r.RemoteAddr)
-	token, err := s.admin.issueToken()
+	ttl := time.Duration(s.cfg.Get().SessionTTLMinutes) * time.Minute
+	token, err := s.admin.issueToken(ttl, s.cfg.Get().SessionEpoch)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "internal_error", "failed to issue session")
 		return
@@ -245,8 +314,59 @@ func (s *Server) setupAdmin(w http.ResponseWriter, r *http.Request) {
 		Path:     "/",
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
-		MaxAge:   int(sessionTTL.Seconds()),
+		MaxAge:   sessionMaxAge(ttl),
 	})
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+// changePassword handles POST /api/v1/auth/change-password: verifies the
+// current password, persists a fresh hash and bumps the session epoch so
+// every existing session — this one included — is revoked at once. Bearer
+// tokens are unaffected (they do not ride on the session epoch).
+func (s *Server) changePassword(w http.ResponseWriter, r *http.Request) {
+	ip := clientIP(r)
+	cfg := s.cfg.Get()
+	now := time.Unix(s.now(), 0)
+	// Wrong-current-password attempts share the login limiter, so the current
+	// password cannot be brute-forced through this endpoint.
+	if cfg.LoginRateMaxAttempts > 0 && cfg.LoginRateLockSeconds > 0 && s.loginRate.locked(ip, now) {
+		writeError(w, http.StatusTooManyRequests, "rate_limited", "too many failed attempts, try again later")
+		return
+	}
+	var body struct {
+		OldPassword string `json:"old_password"`
+		NewPassword string `json:"new_password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_request", "invalid JSON body")
+		return
+	}
+	if !s.adminAuth().verifyPassword(body.OldPassword) {
+		s.loginRate.recordFailure(ip, cfg.LoginRateMaxAttempts, cfg.LoginRateLockSeconds, now)
+		slog.Warn("admin password change failed", "actor", actorFrom(r), "remote", r.RemoteAddr, "ip", ip)
+		writeError(w, http.StatusUnauthorized, "unauthorized", "current password is incorrect")
+		return
+	}
+	if len(body.NewPassword) < 8 {
+		writeError(w, http.StatusBadRequest, "weak_password", "password must be at least 8 characters")
+		return
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(body.NewPassword), bcrypt.DefaultCost)
+	if err != nil {
+		slog.Error("change password: hash", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal_error", "failed to hash password")
+		return
+	}
+	upd := s.cfg.Get()
+	upd.PasswordHash = string(hash)
+	upd.SessionEpoch++
+	if err := s.cfg.Update(upd); err != nil {
+		slog.Error("change password: persist", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal_error", "failed to persist password")
+		return
+	}
+	s.admin.setPasswordHash(string(hash))
+	slog.Info("admin password changed", "actor", actorFrom(r), "remote", r.RemoteAddr)
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
@@ -276,11 +396,11 @@ func (s *Server) requireAuth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var actor string
 		switch {
-		case s.admin.validSession(r):
+		case s.adminAuth().validSession(r, s.cfg.Get().SessionEpoch):
 			actor = "session"
 		case s.validBearer(r):
 			actor = "token"
-		case !s.admin.sessionEnabled():
+		case !s.adminAuth().sessionEnabled():
 			// No admin password yet: the management API is locked until the
 			// setup flow configures one (bearer tokens keep working, so
 			// scripted access is unaffected).

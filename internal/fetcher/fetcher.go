@@ -23,7 +23,12 @@ const (
 	defaultMaxRedirects   = 5
 	defaultTitleLimit     = 200
 	defaultDescriptionMax = 500
-	browserUA             = "Mozilla/5.0 (compatible; gourl/0.1 +https://github.com/wmy2981/gourl)"
+	// A mainstream browser UA on purpose: internal device management pages
+	// (routers, cameras, NAS) often serve a reduced or empty page to unknown
+	// crawler UAs — the branded gourl UA was a frequent reason for a missing
+	// <title>. The identifiable "gourl/x.y" UA requirement applies to the app's
+	// inbound requests, not to outbound title fetching.
+	browserUA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
 )
 
 // Fetcher downloads and parses the title and description of a page.
@@ -56,9 +61,12 @@ func New() *Fetcher {
 	return f
 }
 
-// Fetch returns the page title and meta description of rawURL. Any failure
-// (network, SSRF policy, non-HTML content, oversize body) returns an error;
-// callers should treat errors as "no title available" and continue.
+// Fetch returns the page title and meta description of rawURL. Fetching is
+// lenient on purpose: internal services often answer with odd status codes
+// or content types yet still carry a <title>, so any response body is
+// parsed (bounded by the size cap) and "no title" is the result, not an
+// error. Failures that do return an error are network/URL problems the
+// caller cannot fix here.
 func (f *Fetcher) Fetch(ctx context.Context, rawURL string) (title, description string, err error) {
 	slog.Debug("fetching title", "url", rawURL)
 	if err := validateFetchURL(rawURL); err != nil {
@@ -78,14 +86,6 @@ func (f *Fetcher) Fetch(ctx context.Context, rawURL string) (title, description 
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return "", "", fmt.Errorf("status %d", resp.StatusCode)
-	}
-	ct := resp.Header.Get("Content-Type")
-	if ct != "" && !strings.Contains(ct, "html") {
-		return "", "", fmt.Errorf("content-type %q is not html", ct)
-	}
-
 	body, err := io.ReadAll(io.LimitReader(resp.Body, defaultMaxBody+1))
 	if err != nil {
 		return "", "", fmt.Errorf("read body: %w", err)
@@ -101,13 +101,17 @@ func (f *Fetcher) Fetch(ctx context.Context, rawURL string) (title, description 
 	t, d := extractMeta(doc)
 	t = truncate(clean(t), f.titleLimit)
 	d = truncate(clean(d), f.descriptionMax)
-	slog.Debug("title fetched", "url", rawURL, "title_len", len(t), "description_len", len(d))
+	slog.Debug("title fetched", "url", rawURL, "status", resp.StatusCode, "title_len", len(t), "description_len", len(d))
 	return t, d, nil
 }
 
-// extractMeta walks the tree for the first <title> and the first
+// extractMeta walks the tree for a title and a description. The title falls
+// back in order: <title>, then og:title/twitter:title, then the first <h1> —
+// many internal devices serve pages without a <title> tag yet still show a
+// heading worth keeping. The description comes from the first
 // <meta name="description">.
 func extractMeta(root *html.Node) (title, description string) {
+	var firstH1 string
 	var walk func(*html.Node)
 	walk = func(n *html.Node) {
 		if n.Type == html.ElementNode {
@@ -115,6 +119,10 @@ func extractMeta(root *html.Node) (title, description string) {
 			case "title":
 				if title == "" {
 					title = textContent(n)
+				}
+			case "h1":
+				if firstH1 == "" {
+					firstH1 = textContent(n)
 				}
 			case "meta":
 				var name, content string
@@ -126,8 +134,11 @@ func extractMeta(root *html.Node) (title, description string) {
 						content = a.Val
 					}
 				}
-				if description == "" && strings.EqualFold(name, "description") {
+				switch {
+				case description == "" && strings.EqualFold(name, "description"):
 					description = content
+				case title == "" && (strings.EqualFold(name, "og:title") || strings.EqualFold(name, "twitter:title")):
+					title = content
 				}
 			}
 		}
@@ -136,17 +147,29 @@ func extractMeta(root *html.Node) (title, description string) {
 		}
 	}
 	walk(root)
+	if title == "" && firstH1 != "" {
+		title = firstH1
+	}
 	return title, description
 }
 
-// textContent joins the direct text nodes of an element.
+// textContent joins every text node under an element. Recursive on purpose:
+// device pages often wrap their heading text in links or spans
+// (<h1><a>Device</a></h1>), and the direct-children version returned "" for
+// those — silently killing the h1 fallback.
 func textContent(n *html.Node) string {
 	var b strings.Builder
-	for c := n.FirstChild; c != nil; c = c.NextSibling {
-		if c.Type == html.TextNode {
-			b.WriteString(c.Data)
+	var walk func(*html.Node)
+	walk = func(n *html.Node) {
+		for c := n.FirstChild; c != nil; c = c.NextSibling {
+			if c.Type == html.TextNode {
+				b.WriteString(c.Data)
+			} else if c.Type == html.ElementNode && c.Data != "script" && c.Data != "style" {
+				walk(c)
+			}
 		}
 	}
+	walk(n)
 	return b.String()
 }
 

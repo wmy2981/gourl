@@ -64,7 +64,15 @@ func (q *metaQueue) loop() {
 	for job := range q.ch {
 		title, desc, err := q.fetcher().Fetch(context.Background(), job.url)
 		if err != nil {
-			slog.Debug("fetch meta failed, leaving empty", "url", job.url, "error", err)
+			// Failures were silent before, which made "why is there no title"
+			// impossible to diagnose; surface the reason at warning level.
+			slog.Warn("meta fetch failed, leaving empty", "code", job.code, "url", job.url, "error", err)
+			continue
+		}
+		if title == "" && desc == "" {
+			// Lenient fetching parsed the body but found nothing usable;
+			// keep whatever meta the link already has.
+			slog.Debug("meta fetch found no title or description", "code", job.code, "url", job.url)
 			continue
 		}
 		slog.Debug("fetch meta ok", "code", job.code, "url", job.url, "title_len", len(title))

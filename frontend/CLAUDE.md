@@ -1,47 +1,57 @@
 # gourl frontend — Project Conventions
 
-Subdirectory instructions for the React SPA admin console. Root-level conventions (commits, branch model, versioning) live in the repository-root `CLAUDE.md` and apply here too.
+Subdirectory conventions for the React SPA admin. Root-level conventions (commits, branch model, versioning) live in the repository-root `CLAUDE.md` and apply here too.
 
 ## Commands
 
-- Install: `npm ci` (use the lockfile, never `npm install` for CI parity)
-- Type check: `npm run typecheck` (`tsc -b`, strict mode, noUnusedLocals)
-- Unit tests: `npm run test` (vitest, jsdom) — only `src/**/*.{test,spec}.{ts,tsx}` is collected; `e2e/` specs are Playwright's, never vitest's
-- Build: `npm run build` (tsc + vite; recharts is chunked via `manualChunks` as a **function** — rolldown/vite 8 rejects the object form)
-- E2E: `npm run e2e` (Playwright). The webServer auto-starts `go run ../cmd/e2e` (in-memory SQLite + miniredis, admin password `e2e-password`) — no external services needed. `npm run e2e:headed` for a visible browser
-- E2E gotchas learned the hard way:
-  - The e2e server serves the **embedded build** — after any `src/` change, run `powershell -File scripts/build-frontend.ps1` (repo root) first or tests run stale UI
-  - `request` fixtures **follow redirects by default** — for 302 assertions pass `{ maxRedirects: 0 }` or you get the external target's status
-  - Visibility assertions after list mutations need a generous timeout (15s) — the SPA refetch lags on slow runners; avoid asserting transient toasts
-  - Codes like `expired`/`docs` are reserved — never use them as test fixtures
-  - All specs share one server (in-memory DB) and run with `workers: 1`; per-run ports isolate parallel CI runs
+- Install: `npm ci` (lockfile only — never `npm install`)
+- Check/test/build scripts are in package.json; vitest collects only `src/**/*.{test,spec}.{ts,tsx}` (e2e/ is Playwright's)
+- E2E: `npm run e2e` — Playwright, `workers: 1`, all specs share one webServer process (in-memory DB, admin password `e2e-password`); port `8099` locally, per-run from `GITHUB_RUN_ID` in CI
+
+## E2E gotchas
+
+- The e2e server serves the **embedded build** — after any `src/` change run `powershell -File scripts/build-frontend.ps1` (repo root) first or tests run stale UI
+- `request` fixtures **follow redirects by default** — pass `{ maxRedirects: 0 }` for 302 assertions
+- Visibility assertions after list mutations need ~15s timeouts (the SPA refetch lags on slow runners); don't assert transient toasts
+- Codes like `expired`/`docs` are reserved — never use them as test fixtures
+- `getByText` collides when a code cell and the full short-URL line share text — use `{ exact: true }`; scope dialog buttons via `getByRole('dialog')`
 
 ## Gotchas
 
-- **Icon single source**: the brand icon lives at the repo root `assets/favicon.svg`. `src/assets/icon.svg` is a **gitignored generated copy** (imported by `Layout.tsx`); never edit it — change the root source and re-copy (`cp ../../assets/favicon.svg src/assets/icon.svg`). CI and `scripts/build-frontend.ps1` regenerate it
-- **Version injection**: `vite.config.ts` reads the repo-root `VERSION` file (`../VERSION`) into `__APP_VERSION__` — used in the footer and login page. The Docker build copies VERSION to `/VERSION` (filesystem root) because `../VERSION` resolves there from `/app`, and dev builds overwrite it with `VERSION (sha7)` (build arg `VERSION_STR`)
-- **E2E data is shared**: all specs hit the same webServer process (single in-memory DB) and run serially (`workers: 1`). Tests must not depend on list ordering beyond the newest-first default
-- **Playwright assertions**: `getByText` collides when both the code cell and the full short-URL line contain the same text — use `{ exact: true }` for short-code assertions, and scope dialog buttons via `getByRole('dialog')`
-- **Row URL button collision**: each link row's base-URL picker button carries `aria-label={t('links.pickBaseUrl')}` — without it the accessible name is the URL itself and fuzzy role matchers like `getByRole('button', { name: /edit/i })` click it instead of the row's Edit action
-- **Admin routes**: `/admin/*` is served by the Go binary's SPA fallback (not vite dev in CI builds). New system path prefixes must be added to `internal/shortcode` reserved codes (e.g. `docs`, `api`) so short codes can never shadow them
-- **`/assets/` prefix is shared**: uploaded custom icons (`custom-icon.*`, served first) and vite build artifacts both live under `/assets/` server-side
+- **Icon single source**: `src/assets/icon.svg` is a gitignored copy of root `assets/favicon.svg` — never edit it (`cp ../../assets/favicon.svg src/assets/icon.svg`; CI and build scripts regenerate). Android launcher bitmaps render from the same file via `scripts/sync-android-icon.mjs`. **No adaptive-icon resources** — the platform scales/masks legacy mipmaps itself; hand-written VectorDrawable transforms landed the glyph off-center or invisible
+- **Version injection**: vite.config.ts reads the root `VERSION` into `__APP_VERSION__` (footer/login). In Docker, `../VERSION` resolves to `/VERSION` at the filesystem root (the build copies it there); dev builds get `VERSION (sha7)`
+- Each row's base-URL picker button needs `aria-label={t('links.pickBaseUrl')}` — without it the accessible name is the URL itself and fuzzy role matchers like `getByRole('button', { name: /edit/i })` hit it instead of the row's Edit action
+- New system path prefixes must join `internal/shortcode` reserved codes (e.g. `docs`, `api`) or short codes can shadow them
+- `/assets/` is shared: uploaded custom icons (`custom-icon.*`, served first) and vite build artifacts live under the same prefix
 
-## Design
+## Design conventions
 
-- UI accent is **amber** on graphite neutrals (Apple-style glassmorphism); never default blue-purple gradients. The **brand icon is amber `#f59e0b`** too (user-specified, shares the accent color)
-- Motion runs on **CSS tokens** (`--animate-*` in `index.css`) for pages/dialogs and on **`motion` (framer-motion)** for toasts: a stacked pile (newest in front, rear cards peek 12px, hover expands, spring 380/32), content-sized cards with measured heights. Do not reintroduce a global `prefers-reduced-motion` kill-switch — it was removed on purpose (the owner's OS has it enabled and wants the animations)
-- The **mobile drawer slides via inline transform + transition** (gesture-aware, see Layout.tsx): open/close/gesture all share one `translateX` state machine, no class-animation path. Edge-swipe opens it from the right 24px of the viewport, fingers drag with clamping, release settles past the halfway point
-- Every user-facing warning/error goes through the toast system — no inline error paragraphs, and no native browser validation bubbles: required-field checks are custom + toast (e.g. `form.urlRequired`)
-- Form controls come from `ui.tsx`: `Select` (custom dropdown — never raw `<select>`; its options panel renders through a portal with **fixed positioning** — glass cards create stacking contexts via backdrop-blur, so an absolutely positioned panel inside a card gets covered by the next card — and plays the same `animate-pop-in`/`animate-pop-out` pair as the Links page's inline base-URL menu, every close path animating out before unmounting; keep `popOutMs` in sync with `--animate-pop-out`), `Checkbox` (drawn, never raw `<input type="checkbox">` — the OS palette clashes with both themes), `DateInput` (fixed yyyy/MM/dd + native picker via showPicker). All aria-labels must be i18n keys
-- Dates render as `yyyy/MM/dd` (DateInput) and `yyyy/MM/dd HH:mm` (list columns, see `formatDate` in Links.tsx) — never `toLocaleString()`/native date-input display, whose format follows the browser locale. **Exception**: the dashboard trend-chart x-axis ticks are `MM/dd` (the tooltip keeps the full date)
-- Dialogs: `Dialog` accepts `headerActions` (buttons rendered next to the close button — the QR dialog's JPEG download uses it). Dialogs lock page scroll while open (built into `Dialog`) — don't add per-dialog scroll locks. **`Dialog` snapshots its content during the close animation**: parents null their data in the same render that closes (the QR link, the row being deleted), so the panel must keep its last open-state content until pop-out finishes — keep that snapshot mechanism intact
-- Batch create (`BatchCreateDialog` + `lib/batch.ts`) parses strict lines `[code](date)url`, flags format errors before submit, and keeps failed lines editable for the retry button (server-side `code_taken` etc.)
-- The log page (`pages/Logs.tsx`) streams via `EventSource` (`api.logStream`), auto-reconnects, and renders history oldest-first; attrs are hidden below `sm` so messages never collapse on phones
-- Scrollbars are themed globally in `index.css` (webkit pseudo-elements + Firefox `scrollbar-color`); don't restyle per-container
-- **Short URLs are assembled client-side**: `linkUrls(code, cfg)` in `lib/api.ts` mirrors the old backend fullURLs — base_url (fallback `location.protocol//location.host`) plus extra_base_urls, trailing slashes trimmed, deduplicated. The backend link payload carries only `code` + `id`; QRDialog receives the assembled urls as a prop from Links. The link form's http/https buttons use `applyScheme` (fill / swap / leave alone)
-- Follow the frontend-design skill's two-pass process (token system first, then implementation) for UI work
-- All copy is bilingual via `react-i18next`; `src/locales/en.json` and `zh.json` must keep identical key sets (enforced by a vitest test)
+- Accent is **amber** on graphite (Apple-style glassmorphism); the brand icon is amber `#f59e0b` (user-specified, shares the accent); never default blue-purple gradients
+- Theme cycles light → dark → **system** (`gourl-theme` in localStorage, default system, `Monitor` icon marks it): only an explicit `'light'` forces light; `'system'` and unset are identical (pre-paint scripts in index.html + App.tsx)
+- Every user-facing warning/error goes through **toasts only** — no inline error paragraphs, no native browser validation bubbles (required-field checks are custom, e.g. `form.urlRequired`)
+- Controls from `ui.tsx`, never native: `Select` (custom dropdown — the options panel renders through a portal with **fixed positioning**: glass-card `backdrop-blur` creates a containing block that traps absolute panels behind the next card; every close path animates out via `animate-pop-out` — keep `popOutMs` in sync with `--animate-pop-out`), `Checkbox` (drawn — the OS palette clashes with both themes), `DateInput` (fixed yyyy/MM/dd + native picker via `showPicker`). All aria-labels must be i18n keys
+- Dates render `yyyy/MM/dd` (DateInput) and `yyyy/MM/dd HH:mm` (`formatDate` in Links.tsx) — never `toLocaleString()`/native date display (browser locale). Exception: dashboard trend x-ticks are `MM/dd`, the tooltip keeps the full date
+- **Dialogs must render at page level, never inside a glass card**: `backdrop-blur` traps `fixed inset-0` descendants in the card's box — the panel overflows the card and its header gets clipped (the disconnect-confirm dialog hit this; two comments in Settings.tsx enforce it). `Dialog` locks page scroll, accepts `headerActions` (the QR JPEG download uses it), and **snapshots its content during the close animation** — parents null their data in the closing render, so keep that snapshot mechanism intact
+- The QR download paints a **fixed-light branded card** (readable on any paper/theme); `roundRect` requires modern browsers. The header JPEG download button is `hidden` (2026-08) — the `download` handler and its test stay intact, so re-enabling is a one-word diff
+- Motion: CSS tokens (`--animate-*` in index.css) for pages/dialogs, `motion` (framer-motion) for toasts (stacked pile, newest in front, rear cards peek 12px). **No global `prefers-reduced-motion` kill-switch — removed on purpose** (the owner's OS has it enabled and wants the animations)
+- Mobile drawer: one `translateX` state machine for open/close/gesture (no class-animation path); edge-swipe opens from anywhere in the **right 30%** of the viewport (phones only); touches starting inside a `table` never trigger it (wide tables keep horizontal scrolling)
+- Scrollbars are themed globally in `index.css` — don't restyle per-container
+- Copy is bilingual via `react-i18next`: `en.json`/`zh.json` must keep identical key sets (enforced by a vitest test)
 - Forms must associate `<Label htmlFor>` with input `id` — accessibility and Playwright's `getByLabel` depend on it
 - Settings lists (reserved codes, UA blocks, IP blocks) are **comma-separated** textareas applied by the save button; extra base URLs stay newline-separated; the log level is a `Select` with the four levels
-- Auth pages: `/admin/login` and `/admin/setup` both fetch the service name from the **public health endpoint** (`health.name`, fallback `__APP_NAME__`) — the config API refuses requests while no admin password exists. The browser tab shows the service name there, the site title in the console (`App.tsx`, keyed on `location.pathname`). `App` routes unconfigured servers (`authStatus.configured === false`) to the setup page and back once configured; `/admin` itself redirects to `/admin/setup` while unconfigured
+- Auth pages fetch the service name from the **public health endpoint** (`health.name`, fallback `__APP_NAME__`) — the config API refuses requests while no admin password exists; the browser tab shows it there, the console title is keyed on `location.pathname`. `App` routes unconfigured servers (`authStatus.configured === false`) to `/admin/setup` and back once configured
+- Short URLs are assembled **client-side**: `linkUrls(code, cfg)` in lib/api.ts mirrors the old backend fullURLs (base_url with `location` fallback + extra_base_urls, trailing slashes trimmed, deduped) — the backend link payload carries only `code` + `id`; the form's http/https buttons use `applyScheme` (fill / swap / leave alone)
+- Batch create (`BatchCreateDialog` + `lib/batch.ts`): strict lines `[code](date)url`, flags format errors before submit, keeps failed lines editable for the retry button
+- Log page: SSE via `api.logStream`, auto-reconnects, history oldest-first; attrs are hidden below `sm` so messages never collapse on phones
 - List layout: the title renders **under the destination URL** (destination cell), not in the short-code cell; table headers are `whitespace-nowrap`
+- Follow the frontend-design skill's two-pass process (token system first, then implementation)
+
+## Mobile app (Capacitor, `android/`)
+
+- **Token mode**: stored `{url, token}` in `localStorage.gourl-server` (`getServerConfig`/`setServerConfig` in lib/api.ts), absolute-URL requests with a `Bearer` header + `credentials: 'omit'`; a 401 **never** redirects to login/setup; an unconnected app lands on `/admin/connect` (probe-before-persist). The sidebar logout button is hidden — the settings disconnect card owns that flow
+- Downloads via `lib/download.ts` (`saveDownload`, used by QRDialog + ExportDialog): `<a download>` on web; in the app, system **Downloads/gourl/** via `@capgo/capacitor-file-sharer` with the path toasted — never `@capacitor/filesystem` (its v8 enum lost the Downloads directory)
+- Log stream: fetch-parsed SSE with the Bearer header in app mode (EventSource cannot send one); plain `EventSource` on web
+- Back button (App.tsx): Escape to an open `[role="dialog"]` first, then `exitApp()`; `gourl://dashboard|links|log|settings` deep links navigate the SPA
+- System bars: the WebView never reports the inset — `html.capacitor` only zeroes body padding (the native side stopped padding the WebView; `--safe-area-inset-*` has no consumers); top offsets come from `<main>`'s `pt-16` and `.mobile-topbar`'s own padding (`pt-6` since 2026-08, doubled from `pt-3` — keep the top white-space at least that large so the bar clears the status bar)
+- **Connection card** (`ConnectionCard`, Settings.tsx) always renders, independent of the config loading state; probes `api.getConfig()` (`GET /api/v1/config`, behind `requireAuth`) every 10s + on app foreground: success → connected, 401 → unauthorized, network error → unreachable
+- API-docs link resolves against the server URL and opens with `_system`; grab `window.Capacitor.Plugins.App` for `appStateChange` like App.tsx — never import `@capacitor/app` directly in web-consumed code

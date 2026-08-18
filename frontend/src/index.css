@@ -74,17 +74,48 @@
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
   }
+  /* Buttons are click targets, not text: tapping them must never start a
+     text selection. (Toasts had this rule too but it was removed — their
+     content may carry paths worth selecting.) */
+  button {
+    -webkit-user-select: none;
+    user-select: none;
+  }
   body {
     @apply bg-canvas text-ink dark:bg-canvas-dark dark:text-ink-dark;
     transition:
       background-color 0.3s ease,
       color 0.3s ease;
+    /* Immersive system bars (Capacitor app, viewport-fit=cover): pad the
+       content past the transparent status/navigation bars. Zero everywhere
+       else, so the web console is unaffected. */
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    padding-left: env(safe-area-inset-left, 0px);
+  }
+
+  /* In the app the status-bar offset is applied natively (MainActivity pads
+     the WebView by the platform status-bar height) — the WebView does not
+     propagate the inset to env()/CSS variables reliably. Reset the body
+     padding here so the native offset is the single authority and the two
+     never stack; the web console never sees this rule. */
+  html.capacitor body {
+    padding-top: 0;
+    padding-bottom: 0;
   }
 
   /* Custom scrollbars: thin rounded thumbs that follow the theme. Firefox
      gets scrollbar-width/color; WebKit/Blink get the pseudo-element styling.
      The border + background-clip trick insets the thumb so it never touches
-     the container edge. */
+     the container edge. In the Capacitor app the native overlay bars are
+     already disabled (MainActivity) — hide the webkit ones entirely. */
+  html.capacitor ::-webkit-scrollbar {
+    display: none;
+  }
+  html.capacitor * {
+    scrollbar-width: none;
+  }
   * {
     scrollbar-width: thin;
     scrollbar-color: rgba(134, 134, 139, 0.45) transparent;

@@ -4,6 +4,7 @@
     "tagline": "Lightweight short links",
     "light": "Light",
     "dark": "Dark",
+    "system": "System",
     "menu": "Menu"
   },
   "nav": {
@@ -32,16 +33,47 @@
     "password": "Password",
     "signIn": "Sign in",
     "wrongPassword": "Invalid password",
-    "authDisabled": "Authentication is not configured"
+    "authDisabled": "Authentication is not configured",
+    "rateLimited": "Too many failed attempts, try again later"
+  },
+  "connect": {
+    "heading": "Connect to a gourl server",
+    "sub": "Enter the server address and an API token. Everything runs through the token — no password login.",
+    "url": "Server address",
+    "urlHint": "e.g. http://192.168.1.10:8081",
+    "token": "API token",
+    "tokenHint": "A token from the web console: Settings → API tokens",
+    "connect": "Connect",
+    "invalidUrl": "Enter a valid http(s) server address",
+    "failed": "Connection failed — check the address and token",
+    "step1": "Open your gourl web console in a browser and sign in",
+    "step2": "Settings → API tokens → create a token",
+    "step3": "Input the server address and token above",
+    "openServer": "Open the server page in the browser"
+  },
+  "changePassword": {
+    "heading": "Change admin password",
+    "current": "Current password",
+    "new": "New password (min 8 characters)",
+    "confirm": "Confirm new password",
+    "submit": "Change password",
+    "success": "Password changed, please sign in again",
+    "wrongCurrent": "Current password is incorrect",
+    "mismatch": "The two passwords do not match",
+    "tooShort": "Password must be at least 8 characters",
+    "failed": "Failed to change password"
   },
   "setup": {
     "heading": "Set admin password",
-    "sub": "This server has no admin password yet. Choose one to secure the admin console.",
+    "sub": "This server has no admin password yet. Enter the setup code from the server log and choose a password.",
+    "code": "Setup code",
+    "codeHint": "Printed in the server terminal/log at startup; a restart rolls a new one",
     "password": "New password",
     "confirm": "Confirm password",
     "setup": "Set password",
     "mismatch": "Passwords do not match",
-    "weak": "Password must be at least 8 characters"
+    "weak": "Password must be at least 8 characters",
+    "invalidCode": "Invalid setup code, check the server log"
   },
   "dashboard": {
     "heading": "Dashboard",
@@ -55,6 +87,7 @@
   "links": {
     "heading": "Links",
     "refresh": "Refresh",
+    "refreshed": "Refreshed",
     "search": "Search code, URL, title or description…",
     "create": "New link",
     "import": "Import",
@@ -63,7 +96,7 @@
     "exportTitle": "Pick an export format",
     "exportCsv": "CSV",
     "exportJson": "JSON",
-    "exportHint": "For database parsing, use the db-export script (<1>GitHub download</1>)",
+    "exportHint": "For database parsing, use the db-export script (<1>GitHub link</1>)",
     "shortUrl": "Short URL",
     "destination": "Destination",
     "description": "Description",
@@ -100,7 +133,8 @@
     "clearExpired": "Clear expired",
     "noExpired": "No expired links",
     "clearExpiredConfirm": "This will delete {{count}} expired links. This cannot be undone.",
-    "expiredCleared": "Deleted {{count}} expired links"
+    "expiredCleared": "Deleted {{count}} expired links",
+    "downloadedTo": "Saved to {{path}}"
   },
   "form": {
     "url": "Destination URL",
@@ -143,6 +177,12 @@
   "settings": {
     "heading": "Settings",
     "site": "Site information",
+    "security": "Security",
+    "securityHint": "Changing the admin password signs out every session, including this one.",
+    "changePassword": "Change admin password",
+    "appConnection": "App connection",
+    "connectedTo": "Connected to",
+    "disconnectApp": "Disconnect",
     "siteName": "Service name",
     "siteTitle": "Site title",
     "keywords": "Keywords",
@@ -160,6 +200,8 @@
     "loginRateLock": "Lock duration (seconds)",
     "loginRateHint": "Failed attempts allowed per IP before locking (0 = disabled)",
     "loginRateLockHint": "How long the IP stays locked after too many failures (0 = disabled)",
+    "sessionTTL": "Session expiry (minutes)",
+    "sessionTTLHint": "How long an admin session stays valid (0 = never expires, minimum 5; changes affect new logins only)",
     "linkRate": "Link access limit (per second)",
     "linkRateHint": "Max short-link redirects per second across all codes (0 = unlimited)",
     "logLevel": "Log level",
@@ -189,7 +231,13 @@
     "saved": "Settings saved",
     "saveFailed": "Could not save settings",
     "tokenNeverExpires": "Tokens never expire — revoke them manually when no longer needed.",
-    "apiDocs": "API documentation"
+    "apiDocs": "API documentation",
+    "disconnectConfirm": "This will drop the stored server connection and return to the connect screen.",
+    "tokenRevokeConfirm": "Deleting this token revokes it immediately. Every request using it will fail and the app will disconnect. This cannot be undone.",
+    "connConnected": "Connected",
+    "connUnauthorized": "Token rejected",
+    "connUnreachable": "Cannot reach the server",
+    "connChecking": "Checking…"
   },
   "common": {
     "loading": "Loading…",
@@ -200,7 +248,8 @@
     "cancel": "Cancel",
     "clear": "Clear",
     "pickDate": "Pick a date",
-    "dismiss": "Dismiss"
+    "dismiss": "Dismiss",
+    "back": "Back"
   },
   "footer": {
     "openSource": "Github"

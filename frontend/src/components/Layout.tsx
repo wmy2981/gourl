@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { LayoutDashboard, Link2, LogOut, Menu, Moon, ScrollText, Settings, Sun, X } from 'lucide-react'
-import { api } from '../lib/api'
+import { LayoutDashboard, Link2, LogOut, Menu, Monitor, Moon, ScrollText, Settings, Sun, X } from 'lucide-react'
+import { api, isApp } from '../lib/api'
 import { setLanguage } from '../lib/i18n'
 // Single source of truth for the brand icon (also embedded server-side and
 // referenced by the READMEs).
@@ -17,23 +17,42 @@ function AppIcon({ size = 28 }: { size?: number }) {
   return <img src={src} width={size} height={size} alt="" aria-hidden />
 }
 
-// Theme persisted on <html class="dark">.
+type Theme = 'light' | 'dark' | 'system'
+
+// Theme cycles light → dark → system → light, persisted as `gourl-theme` in
+// localStorage; the default is "system", following the OS. The "system"
+// state watches prefers-color-scheme live, so the page flips with the OS.
 function useTheme() {
-  const [dark, setDark] = useState(() => document.documentElement.classList.contains('dark'))
-  const toggle = () => {
-    const next = !dark
-    setDark(next)
-    document.documentElement.classList.toggle('dark', next)
-    localStorage.setItem('gourl-theme', next ? 'dark' : 'light')
+  const [theme, setTheme] = useState<Theme>(() => {
+    const saved = localStorage.getItem('gourl-theme')
+    return saved === 'light' || saved === 'dark' || saved === 'system' ? saved : 'system'
+  })
+  useEffect(() => {
+    const root = document.documentElement
+    const apply = () => {
+      const dark =
+        theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+      root.classList.toggle('dark', dark)
+    }
+    apply()
+    if (theme !== 'system') return
+    const mq = window.matchMedia('(prefers-color-scheme: dark)')
+    mq.addEventListener('change', apply)
+    return () => mq.removeEventListener('change', apply)
+  }, [theme])
+  const cycle = () => {
+    const next: Theme = theme === 'light' ? 'dark' : theme === 'dark' ? 'system' : 'light'
+    localStorage.setItem('gourl-theme', next)
+    setTheme(next)
   }
-  return { dark, toggle }
+  return { theme, cycle }
 }
 
 export default function Layout() {
   const { t, i18n } = useTranslation()
   const navigate = useNavigate()
   const location = useLocation()
-  const { dark, toggle } = useTheme()
+  const { theme, cycle } = useTheme()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [mobileClosing, setMobileClosing] = useState(false)
   // The configured service name drives the sidebar, top bar and footer text;
@@ -62,9 +81,21 @@ export default function Layout() {
 
   const onDrawerTouchStart = (e: React.TouchEvent) => {
     const touch = e.touches[0]
-    // Trigger zone: the right 24px of the viewport, phones only (the drawer
-    // exists only below md).
-    if (!touch || window.innerWidth >= 768 || touch.clientX < window.innerWidth - 24) return
+    // Trigger zone: the right 30% of the viewport, phones only (the drawer
+    // exists only below md). Touches starting inside a table never open the
+    // drawer — swiping a wide table horizontally must keep working — and an
+    // open dialog (any role=dialog, portal or inline) suppresses the gesture
+    // entirely: its backdrop owns the screen while it is up.
+    const target = e.target as Element
+    const inTable = target.closest('table') !== null
+    if (
+      !touch ||
+      window.innerWidth >= 768 ||
+      inTable ||
+      document.querySelector('[role="dialog"]') ||
+      touch.clientX < window.innerWidth * 0.7
+    )
+      return
     // Abort any running close animation so the gesture starts settled (also
     // stops its timer from flashing the backdrop back open/closed later).
     if (settleTimerRef.current) {
@@ -200,11 +231,11 @@ export default function Layout() {
       <div className="mt-auto flex flex-col gap-1 pb-12">
         {/* Buttons show the CURRENT mode/language, not the toggle target. */}
         <button
-          onClick={toggle}
+          onClick={cycle}
           className="flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm text-muted transition-colors hover:bg-black/5 dark:hover:bg-white/10"
         >
-          {dark ? <Moon size={18} /> : <Sun size={18} />}
-          {dark ? t('app.dark') : t('app.light')}
+          {theme === 'dark' ? <Moon size={18} /> : theme === 'light' ? <Sun size={18} /> : <Monitor size={18} />}
+          {theme === 'dark' ? t('app.dark') : theme === 'light' ? t('app.light') : t('app.system')}
         </button>
         <button
           onClick={switchLang}
@@ -213,13 +244,17 @@ export default function Layout() {
           <span className="w-[18px] text-center text-xs font-semibold">{lang === 'zh' ? '中' : 'EN'}</span>
           {lang === 'zh' ? '中文' : 'English'}
         </button>
-        <button
-          onClick={logout}
-          className="flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm text-muted transition-colors hover:bg-danger/10 hover:text-danger"
-        >
-          <LogOut size={18} />
-          {t('nav.logout')}
-        </button>
+        {/* Token mode (app) has no session to end — the disconnect card on
+            the settings page owns that flow, so the logout button is web-only. */}
+        {!isApp() && (
+          <button
+            onClick={logout}
+            className="flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm text-muted transition-colors hover:bg-danger/10 hover:text-danger"
+          >
+            <LogOut size={18} />
+            {t('nav.logout')}
+          </button>
+        )}
       </div>
     </>
   )
@@ -240,8 +275,9 @@ export default function Layout() {
         {sidebarContent}
       </aside>
 
-      {/* Mobile top bar + drawer */}
-      <div className="fixed inset-x-0 top-0 z-40 flex items-center justify-between border-b border-hairline bg-canvas/80 px-4 py-3 backdrop-blur-xl dark:bg-canvas-dark/80 md:hidden">
+      {/* Mobile top bar + drawer. The mobile-topbar class offsets the fixed
+          bar below the status bar in the Capacitor app (index.css). */}
+      <div className="mobile-topbar fixed inset-x-0 top-0 z-40 flex items-center justify-between border-b border-hairline bg-canvas/80 px-4 pt-6 pb-3 backdrop-blur-xl dark:bg-canvas-dark/80 md:hidden">
         <div className="flex items-center gap-2">
           <AppIcon size={22} />
           <span className="font-semibold">{siteName}</span>
@@ -271,7 +307,9 @@ export default function Layout() {
         </div>
       )}
 
-      <main className="min-w-0 flex-1 px-4 pb-16 pt-16 md:px-8 md:pt-8">
+      {/* pt-20 clears the taller mobile top bar (pt-6 + content + pb-3); the
+          old pt-16 matched the pre-2026-08 bar and the title got clipped. */}
+      <main className="min-w-0 flex-1 px-4 pb-16 pt-20 md:px-8 md:pt-8">
         {/* key remounts the page on navigation, replaying the fade-up */}
         <div key={location.pathname} className="mx-auto max-w-5xl animate-fade-up">
           <Outlet />
