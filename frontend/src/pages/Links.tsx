@@ -485,6 +485,7 @@ export default function Links() {
         open={qrLink !== null}
         onClose={() => setQrLink(null)}
         initialIndex={qrLink ? (urlIdx[qrLink.code] ?? 0) : 0}
+        siteName={cfg?.site.name}
       />
       <ImportDialog open={importOpen} onClose={() => setImportOpen(false)} onImported={invalidate} />
       <ExportDialog open={exportOpen} onClose={() => setExportOpen(false)} />
