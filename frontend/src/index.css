@@ -74,6 +74,13 @@
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
   }
+  /* Buttons are click targets, not text: tapping them must never start a
+     text selection. (Toasts had this rule too but it was removed — their
+     content may carry paths worth selecting.) */
+  button {
+    -webkit-user-select: none;
+    user-select: none;
+  }
   body {
     @apply bg-canvas text-ink dark:bg-canvas-dark dark:text-ink-dark;
     transition:
