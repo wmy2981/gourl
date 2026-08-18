@@ -36,15 +36,22 @@ export default function App() {
   const appMode = isApp()
   const server = getServerConfig()
 
-  // Deep links (gourl://links …), Capacitor app only. The back button is
-  // left to the system: disableBackButtonHandler in capacitor.config.ts keeps
-  // the predictive back gesture working, and back simply finishes the
-  // activity (dialogs close via their X button).
+  // Capacitor app only. Deep links (gourl://links …) navigate the SPA; the
+  // Android back button closes the top dialog first (dispatching Escape, which
+  // the Dialog component listens for on window), then exits the app.
   useEffect(() => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const cap = (window as any).Capacitor
     if (!cap?.Plugins?.App) return
     const { App } = cap.Plugins
+    const backHandler = App.addListener('backButton', () => {
+      const dialog = document.querySelector<HTMLElement>('[role="dialog"]')
+      if (dialog) {
+        dialog.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+      } else {
+        App.exitApp()
+      }
+    })
     const openHandler = App.addListener('appUrlOpen', (event: { url: string }) => {
       // gourl://links → /admin/links; unknown pages fall back to the dashboard.
       const page = new URL(event.url).host || 'dashboard'
@@ -57,6 +64,7 @@ export default function App() {
       navigate(targets[page] ?? '/admin')
     })
     return () => {
+      backHandler.remove()
       openHandler.remove()
     }
   }, [navigate])
