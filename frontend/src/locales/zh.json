@@ -32,7 +32,20 @@
     "password": "密码",
     "signIn": "登录",
     "wrongPassword": "密码错误",
-    "authDisabled": "未配置认证"
+    "authDisabled": "未配置认证",
+    "rateLimited": "失败次数过多，请稍后再试"
+  },
+  "changePassword": {
+    "heading": "修改管理员密码",
+    "current": "当前密码",
+    "new": "新密码（至少 8 个字符）",
+    "confirm": "确认新密码",
+    "submit": "修改密码",
+    "success": "密码已修改，请重新登录",
+    "wrongCurrent": "当前密码不正确",
+    "mismatch": "两次输入的密码不一致",
+    "tooShort": "密码至少需要 8 个字符",
+    "failed": "修改密码失败"
   },
   "setup": {
     "heading": "设置管理员密码",
@@ -143,6 +156,9 @@
   "settings": {
     "heading": "设置",
     "site": "站点信息",
+    "security": "安全",
+    "securityHint": "修改管理员密码将使所有会话（包括当前会话）下线。",
+    "changePassword": "修改管理员密码",
     "siteName": "服务名称",
     "siteTitle": "站点标题",
     "keywords": "关键词",

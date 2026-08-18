@@ -79,6 +79,7 @@ func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/v1/auth/login", s.login)
 	mux.HandleFunc("POST /api/v1/auth/logout", s.logout)
+	mux.HandleFunc("POST /api/v1/auth/change-password", s.requireAuth(s.changePassword))
 	mux.HandleFunc("POST /api/v1/auth/setup", s.setupAdmin)
 	mux.HandleFunc("GET /api/v1/auth/status", s.authStatus)
 	mux.HandleFunc("GET /api/v1/health", s.health)

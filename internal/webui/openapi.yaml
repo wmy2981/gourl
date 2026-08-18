@@ -96,6 +96,28 @@ paths:
       security: []
       responses:
         "200": { description: Signed out }
+  /auth/change-password:
+    post:
+      tags: [auth]
+      summary: Change the admin password
+      description: Verifies the current password, persists a fresh bcrypt hash and bumps the session epoch — every existing session (this one included) is revoked and must sign in again. Bearer tokens are unaffected. Wrong-current-password attempts share the login rate limiter.
+      security: [{ bearerAuth: [] }, { sessionCookie: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [old_password, new_password]
+              properties:
+                old_password: { type: string, description: Current admin password }
+                new_password: { type: string, minLength: 8 }
+      responses:
+        "200": { description: Password changed; all sessions revoked }
+        "400":
+          description: Invalid request or weak new password
+        "401": { description: Current password incorrect }
+        "429": { description: Rate limited after too many failed attempts }
   /links:
     get:
       tags: [links]

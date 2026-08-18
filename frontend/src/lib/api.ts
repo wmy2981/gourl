@@ -182,6 +182,11 @@ export const api = {
     }),
   logout: () =>
     request<{ ok: boolean }>('/api/v1/auth/logout', { method: 'POST' }),
+  changePassword: (oldPassword: string, newPassword: string) =>
+    request<{ ok: boolean }>('/api/v1/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify({ old_password: oldPassword, new_password: newPassword }),
+    }),
   setupAdmin: (password: string) =>
     request<{ ok: boolean }>('/api/v1/auth/setup', {
       method: 'POST',

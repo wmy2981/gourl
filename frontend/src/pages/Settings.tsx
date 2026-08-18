@@ -120,6 +120,18 @@ export default function Settings() {
           </div>
         </Card>
 
+        {/* Security */}
+        <Card className="p-6">
+          <h2 className="mb-2 text-sm font-medium text-muted">{t('settings.security')}</h2>
+          <p className="mb-3 text-sm text-muted">{t('settings.securityHint')}</p>
+          <a href="/admin/change-password" target="_blank" rel="noreferrer">
+            <Button variant="outline">
+              <KeyRound size={15} />
+              {t('settings.changePassword')}
+            </Button>
+          </a>
+        </Card>
+
         {/* Behavior */}
         <Card className="p-6">
           <h2 className="mb-4 text-sm font-medium text-muted">{t('settings.behavior')}</h2>

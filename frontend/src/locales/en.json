@@ -32,7 +32,20 @@
     "password": "Password",
     "signIn": "Sign in",
     "wrongPassword": "Invalid password",
-    "authDisabled": "Authentication is not configured"
+    "authDisabled": "Authentication is not configured",
+    "rateLimited": "Too many failed attempts, try again later"
+  },
+  "changePassword": {
+    "heading": "Change admin password",
+    "current": "Current password",
+    "new": "New password (min 8 characters)",
+    "confirm": "Confirm new password",
+    "submit": "Change password",
+    "success": "Password changed, please sign in again",
+    "wrongCurrent": "Current password is incorrect",
+    "mismatch": "The two passwords do not match",
+    "tooShort": "Password must be at least 8 characters",
+    "failed": "Failed to change password"
   },
   "setup": {
     "heading": "Set admin password",
@@ -143,6 +156,9 @@
   "settings": {
     "heading": "Settings",
     "site": "Site information",
+    "security": "Security",
+    "securityHint": "Changing the admin password signs out every session, including this one.",
+    "changePassword": "Change admin password",
     "siteName": "Service name",
     "siteTitle": "Site title",
     "keywords": "Keywords",

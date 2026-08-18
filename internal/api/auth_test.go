@@ -262,6 +262,64 @@ func TestSessionTTLChangeOnlyAffectsNewSessions(t *testing.T) {
 	}
 }
 
+func TestChangePasswordFlow(t *testing.T) {
+	s, _ := newTestServer(t)
+	cookie := loginAs(t, s, "test-password")
+
+	// Wrong current password is refused.
+	rec := doWith(t, s, http.MethodPost, "/api/v1/auth/change-password", map[string]any{
+		"old_password": "wrong", "new_password": "new-password-42",
+	}, cookie, "")
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("wrong current password: status = %d, want 401", rec.Code)
+	}
+
+	// Weak new password is refused.
+	rec = doWith(t, s, http.MethodPost, "/api/v1/auth/change-password", map[string]any{
+		"old_password": "test-password", "new_password": "short",
+	}, cookie, "")
+	if rec.Code != http.StatusBadRequest || decodeError(t, rec) != "weak_password" {
+		t.Fatalf("weak password: status = %d %s", rec.Code, rec.Body.String())
+	}
+
+	// Unauthenticated change is refused.
+	rec = doWith(t, s, http.MethodPost, "/api/v1/auth/change-password", map[string]any{
+		"old_password": "test-password", "new_password": "new-password-42",
+	}, nil, "")
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("anonymous change: status = %d, want 401", rec.Code)
+	}
+
+	// A valid change succeeds, bumps the epoch and revokes the old session.
+	rec = doWith(t, s, http.MethodPost, "/api/v1/auth/change-password", map[string]any{
+		"old_password": "test-password", "new_password": "new-password-42",
+	}, cookie, "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("change: status = %d, body %s", rec.Code, rec.Body.String())
+	}
+	if s.cfg.Get().SessionEpoch != 1 {
+		t.Errorf("SessionEpoch = %d, want 1", s.cfg.Get().SessionEpoch)
+	}
+	if got := s.cfg.Get().PasswordHash; got == "" {
+		t.Error("new hash not persisted")
+	}
+	rec = doWith(t, s, http.MethodGet, "/api/v1/links", nil, cookie, "")
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("old session after change: status = %d, want 401", rec.Code)
+	}
+
+	// The old password no longer works, the new one does.
+	rec = do(t, s, http.MethodPost, "/api/v1/auth/login", map[string]any{"password": "test-password"})
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("login with old password: status = %d, want 401", rec.Code)
+	}
+	cookie2 := loginAs(t, s, "new-password-42")
+	rec = doWith(t, s, http.MethodGet, "/api/v1/links", nil, cookie2, "")
+	if rec.Code != http.StatusOK {
+		t.Errorf("login with new password: status = %d", rec.Code)
+	}
+}
+
 func TestHealthPublicAndReportsIdentity(t *testing.T) {
 	s, _ := newTestServer(t)
 	rec := do(t, s, http.MethodGet, "/api/v1/health", nil)

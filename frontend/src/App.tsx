@@ -4,6 +4,7 @@ import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { api } from './lib/api'
 import Layout from './components/Layout'
 import { ToastProvider } from './components/ui'
+import ChangePassword from './pages/ChangePassword'
 import Dashboard from './pages/Dashboard'
 import Links from './pages/Links'
 import Login from './pages/Login'
@@ -49,6 +50,10 @@ export default function App() {
         <Route
           path="/admin/setup"
           element={authStatus && authStatus.configured ? <Navigate to="/admin/login" replace /> : <Setup />}
+        />
+        <Route
+          path="/admin/change-password"
+          element={authStatus && !authStatus.configured ? <Navigate to="/admin/setup" replace /> : <ChangePassword />}
         />
         <Route
           path="/admin"

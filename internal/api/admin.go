@@ -281,6 +281,57 @@ func (s *Server) setupAdmin(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
+// changePassword handles POST /api/v1/auth/change-password: verifies the
+// current password, persists a fresh hash and bumps the session epoch so
+// every existing session — this one included — is revoked at once. Bearer
+// tokens are unaffected (they do not ride on the session epoch).
+func (s *Server) changePassword(w http.ResponseWriter, r *http.Request) {
+	ip := clientIP(r)
+	cfg := s.cfg.Get()
+	now := time.Unix(s.now(), 0)
+	// Wrong-current-password attempts share the login limiter, so the current
+	// password cannot be brute-forced through this endpoint.
+	if cfg.LoginRateMaxAttempts > 0 && cfg.LoginRateLockSeconds > 0 && s.loginRate.locked(ip, now) {
+		writeError(w, http.StatusTooManyRequests, "rate_limited", "too many failed attempts, try again later")
+		return
+	}
+	var body struct {
+		OldPassword string `json:"old_password"`
+		NewPassword string `json:"new_password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_request", "invalid JSON body")
+		return
+	}
+	if !s.adminAuth().verifyPassword(body.OldPassword) {
+		s.loginRate.recordFailure(ip, cfg.LoginRateMaxAttempts, cfg.LoginRateLockSeconds, now)
+		slog.Warn("admin password change failed", "actor", actorFrom(r), "remote", r.RemoteAddr, "ip", ip)
+		writeError(w, http.StatusUnauthorized, "unauthorized", "current password is incorrect")
+		return
+	}
+	if len(body.NewPassword) < 8 {
+		writeError(w, http.StatusBadRequest, "weak_password", "password must be at least 8 characters")
+		return
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(body.NewPassword), bcrypt.DefaultCost)
+	if err != nil {
+		slog.Error("change password: hash", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal_error", "failed to hash password")
+		return
+	}
+	upd := s.cfg.Get()
+	upd.PasswordHash = string(hash)
+	upd.SessionEpoch++
+	if err := s.cfg.Update(upd); err != nil {
+		slog.Error("change password: persist", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal_error", "failed to persist password")
+		return
+	}
+	s.admin.setPasswordHash(string(hash))
+	slog.Info("admin password changed", "actor", actorFrom(r), "remote", r.RemoteAddr)
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
 // logout handles POST /api/v1/auth/logout.
 func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 	slog.Info("admin logged out", "remote", r.RemoteAddr, "ip", clientIP(r))
