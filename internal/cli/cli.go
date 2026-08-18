@@ -56,6 +56,8 @@ func Main(args []string) int {
 		return cmdHealth()
 	case "config":
 		return cmdConfig(args[1:])
+	case "setup-code":
+		return cmdSetupCode()
 	case "log":
 		return cmdLog(args[1:])
 	case "db":
@@ -211,6 +213,23 @@ func cmdHealth() int {
 		fmt.Println("redis: ok")
 	}
 	return code
+}
+
+/* ---------- setup-code ---------- */
+
+// cmdSetupCode prints the bootstrap code the running server persisted when
+// it started in setup mode (no admin password yet). The file lives next to
+// the database and is removed once the setup completes, so an exit code 1
+// means the server is not in setup mode.
+func cmdSetupCode() int {
+	p := filepath.Join(filepath.Dir(dbPath()), "setup.code")
+	data, err := os.ReadFile(p)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "no setup code available: the server is not in setup mode (or the code file is missing)")
+		return 1
+	}
+	fmt.Print(string(data))
+	return 0
 }
 
 /* ---------- config show / log ---------- */

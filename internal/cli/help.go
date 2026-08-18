@@ -16,6 +16,8 @@ COMMANDS
   status                     show server state (config, database, redis)
   health                     check database and redis reachability
   config show                print the effective configuration (password hash hidden)
+  setup-code                 print the bootstrap code of the running setup flow
+                             (fails when the server is not in setup mode)
   log [lines]                print the last log lines from the mirrored file (default 100)
   db export [out-dir]        dump the SQLite database into links.json, tokens.json,
                              daily-clicks.json and backups.json (default out-dir: .)

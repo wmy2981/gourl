@@ -1,7 +1,9 @@
 package api
 
 import (
+	"errors"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -97,6 +99,32 @@ func TestEnvPasswordMigratedIntoConfig(t *testing.T) {
 	// The plaintext must never survive anywhere.
 	if strings.Contains(cfgMgr.Get().PasswordHash, "legacy-env-pass") {
 		t.Error("config stores the plaintext password")
+	}
+}
+
+// TestSetupCodePersistedForCLI: in setup mode NewServer persists the
+// bootstrap code next to the database for `gourl setup-code`; completing the
+// setup removes it.
+func TestSetupCodePersistedForCLI(t *testing.T) {
+	s, _ := newTestServer(t)
+	enterSetupMode(t, s)
+
+	data, err := os.ReadFile(s.setupCodePath)
+	if err != nil {
+		t.Fatalf("read persisted setup code: %v", err)
+	}
+	if string(data) != s.setupCode {
+		t.Errorf("persisted code = %q, want %q", data, s.setupCode)
+	}
+
+	rec := do(t, s, http.MethodPost, "/api/v1/auth/setup", map[string]any{
+		"code": s.setupCode, "password": "correct-horse-42",
+	})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("setup: %d %s", rec.Code, rec.Body.String())
+	}
+	if _, err := os.Stat(s.setupCodePath); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("setup code file should be removed after setup, stat err = %v", err)
 	}
 }
 

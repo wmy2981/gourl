@@ -34,6 +34,9 @@ func enterSetupMode(t *testing.T, s *Server) {
 
 func newTestServer(t *testing.T) (*Server, *miniredis.Miniredis) {
 	t.Helper()
+	// Point the setup-code file at a temp dir: NewServer persists the code
+	// next to the database path, and tests must never write ./data/setup.code.
+	t.Setenv("DB_PATH", filepath.Join(t.TempDir(), "gourl.db"))
 	st, err := store.Open(":memory:")
 	if err != nil {
 		t.Fatalf("store: %v", err)

@@ -246,6 +246,23 @@ func TestStatusAndHealth(t *testing.T) {
 	}
 }
 
+// TestSetupCodeCommand: `gourl setup-code` prints the persisted bootstrap
+// code and fails (exit 1) when the server is not in setup mode.
+func TestSetupCodeCommand(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("DB_PATH", filepath.Join(dir, "gourl.db"))
+	if code := cmdSetupCode(); code != 1 {
+		t.Errorf("setup-code without a code file exit = %d, want 1", code)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "setup.code"), []byte("Ab3xYz9k"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	out, code := captureStdout(t, func() int { return cmdSetupCode() })
+	if code != 0 || out != "Ab3xYz9k" {
+		t.Errorf("setup-code exit = %d, out %q, want 0 and the code", code, out)
+	}
+}
+
 func TestVersionPrintsVersion(t *testing.T) {
 	out, code := captureStdout(t, func() int { return Main([]string{"version"}) })
 	if code != 0 || strings.TrimSpace(out) == "" {

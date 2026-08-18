@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -44,6 +45,7 @@ type Server struct {
 	fetcher   TitleFetcher
 	admin      *adminAuth
 	setupCode  string // bootstrap code for the setup flow, printed at startup in setup mode
+	setupCodePath string // where the code is persisted for `gourl setup-code`
 	loginRate  *loginLimiter
 	linkRateMu sync.Mutex
 	linkRate   *rate.Limiter
@@ -58,22 +60,28 @@ type Server struct {
 // from the environment.
 func NewServer(st *store.Store, cfg *config.Manager, ctr *counter.Counter) *Server {
 	s := &Server{
-		store:     st,
-		cfg:       cfg,
-		counter:   ctr,
-		fetcher:   fetcher.New(),
-		admin:     resolveAdminAuth(cfg),
-		loginRate: newLoginLimiter(),
-		assetsDir: envOr("ASSETS_DIR", "./data/assets"),
-		startTime: time.Now(),
-		now:       func() int64 { return timeNow() },
+		store:        st,
+		cfg:          cfg,
+		counter:      ctr,
+		fetcher:      fetcher.New(),
+		admin:        resolveAdminAuth(cfg),
+		setupCodePath: setupCodePath(),
+		loginRate:    newLoginLimiter(),
+		assetsDir:    envOr("ASSETS_DIR", "./data/assets"),
+		startTime:    time.Now(),
+		now:          func() int64 { return timeNow() },
 	}
 	// In setup mode the first visitor needs the bootstrap code: generate it
-	// here (once per process) and print it to the terminal and the log file.
-	// A restart rolls a fresh code, so a leaked one dies with the process.
+	// here (once per process), print it to the terminal and the log file and
+	// persist it next to the database so the container CLI (`gourl
+	// setup-code`) can show it on demand. A restart rolls a fresh code, so a
+	// leaked one dies with the process.
 	if s.cfg.Get().PasswordHash == "" {
 		s.setupCode = newSetupCode()
 		slog.Info("setup mode: enter this code on the setup page to configure the admin password", "setup_code", s.setupCode)
+		if err := os.WriteFile(s.setupCodePath, []byte(s.setupCode), 0o600); err != nil {
+			slog.Warn("persist setup code failed; gourl setup-code will not show it", "path", s.setupCodePath, "error", err)
+		}
 	}
 	// Async meta fetching: workers resolve s.fetcher at job time so tests can
 	// swap in a mock after construction.
@@ -123,6 +131,13 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /admin/{path...}", s.adminOnly(s.spaIndex))
 	mux.HandleFunc("GET /{code...}", s.redirect)
 	return s.logRequests(s.ipBlock(mux))
+}
+
+// setupCodePath is where the bootstrap code is persisted for the container
+// CLI (`gourl setup-code`): next to the database, inside the mounted data
+// directory. The CLI mirrors this exact resolution from DB_PATH.
+func setupCodePath() string {
+	return filepath.Join(filepath.Dir(envOr("DB_PATH", "./data/gourl.db")), "setup.code")
 }
 
 // adminOnly gates the admin console on config.webui_enabled (`gourl webui

@@ -9,6 +9,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	"os"
@@ -295,6 +296,11 @@ func (s *Server) setupAdmin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.admin.setPasswordHash(string(hash))
+	// The bootstrap code dies with the setup: remove the persisted copy so
+	// `gourl setup-code` stops reporting one.
+	if err := os.Remove(s.setupCodePath); err != nil && !errors.Is(err, os.ErrNotExist) {
+		slog.Warn("remove setup code file failed", "path", s.setupCodePath, "error", err)
+	}
 	slog.Info("admin password configured", "remote", r.RemoteAddr)
 	ttl := time.Duration(s.cfg.Get().SessionTTLMinutes) * time.Minute
 	token, err := s.admin.issueToken(ttl, s.cfg.Get().SessionEpoch)
