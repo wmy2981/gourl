@@ -7,8 +7,9 @@ import { api, ApiError } from '../lib/api'
 import { Button, Input, Label, useToast } from '../components/ui'
 
 // Setup runs once, while the server has no admin password yet: the first
-// visitor picks one and is logged in immediately. It reuses the login page
-// shell, differing only in copy, a confirm field, and the endpoint.
+// visitor enters the bootstrap code from the server log and picks a password,
+// then is logged in immediately. It reuses the login page shell, differing
+// only in copy, the code field, a confirm field, and the endpoint.
 export default function Setup() {
   const { t } = useTranslation()
   const { toast } = useToast()
@@ -18,20 +19,21 @@ export default function Setup() {
   // it comes from the public health endpoint so it works before any admin
   // password exists (the config API refuses requests in setup mode).
   const { data: health } = useQuery({ queryKey: ['health'], queryFn: api.health })
+  const [code, setCode] = useState('')
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [busy, setBusy] = useState(false)
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!password || busy) return
+    if (!code || !password || busy) return
     if (password !== confirm) {
       toast(t('setup.mismatch'), 'error')
       return
     }
     setBusy(true)
     try {
-      await api.setupAdmin(password)
+      await api.setupAdmin(code, password)
       // The /admin route gates on authStatus.configured: refresh the cache
       // before navigating, or the stale "unconfigured" value bounces the SPA
       // straight back to the setup page (and later to login).
@@ -41,9 +43,11 @@ export default function Setup() {
       toast(
         err instanceof ApiError && err.code === 'weak_password'
           ? t('setup.weak')
-          : err instanceof ApiError
-            ? err.message
-            : t('common.error'),
+          : err instanceof ApiError && err.code === 'invalid_setup_code'
+            ? t('setup.invalidCode')
+            : err instanceof ApiError
+              ? err.message
+              : t('common.error'),
         'error',
       )
     } finally {
@@ -64,6 +68,17 @@ export default function Setup() {
           </p>
           <p className="mt-3 text-xs leading-relaxed text-muted">{t('setup.sub')}</p>
         </div>
+
+        <Label htmlFor="setup-code">{t('setup.code')}</Label>
+        <Input
+          id="setup-code"
+          value={code}
+          onChange={(e) => setCode(e.target.value)}
+          autoFocus
+          autoCapitalize="characters"
+          autoComplete="off"
+        />
+        <p className="mb-1 mt-1 text-xs text-muted">{t('setup.codeHint')}</p>
 
         <Label htmlFor="new-password">{t('setup.password')}</Label>
         <Input
@@ -86,7 +101,7 @@ export default function Setup() {
           />
         </div>
 
-        <Button type="submit" disabled={busy || !password || !confirm} className="mt-5 w-full">
+        <Button type="submit" disabled={busy || !code || !password || !confirm} className="mt-5 w-full">
           {t('setup.setup')}
           <ArrowRight size={16} />
         </Button>

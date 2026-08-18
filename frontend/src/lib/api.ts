@@ -187,10 +187,10 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ old_password: oldPassword, new_password: newPassword }),
     }),
-  setupAdmin: (password: string) =>
+  setupAdmin: (code: string, password: string) =>
     request<{ ok: boolean }>('/api/v1/auth/setup', {
       method: 'POST',
-      body: JSON.stringify({ password }),
+      body: JSON.stringify({ code, password }),
     }),
   authStatus: () => request<{ configured: boolean }>('/api/v1/auth/status'),
   health: () => request<{ name: string }>('/api/v1/health'),

@@ -23,6 +23,30 @@ import (
 
 const sessionCookie = "gourl_session"
 
+// setupCodeAlphabet mixes upper/lowercase letters and digits for the 8-char
+// bootstrap code printed at startup in setup mode.
+const setupCodeAlphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+
+// newSetupCode returns a random 8-character code from setupCodeAlphabet.
+// Issued once per process; a restart rolls a fresh code.
+func newSetupCode() string {
+	const max = 256 - (256 % len(setupCodeAlphabet)) // 248: unbiased draw
+	b := make([]byte, 8)
+	rb := make([]byte, 1)
+	for i := range b {
+		for {
+			if _, err := rand.Read(rb); err != nil {
+				panic("crypto/rand unavailable") // unrecoverable at startup
+			}
+			if int(rb[0]) < max {
+				b[i] = setupCodeAlphabet[int(rb[0])%len(setupCodeAlphabet)]
+				break
+			}
+		}
+	}
+	return string(b)
+}
+
 // adminAuth handles the single-admin-password session flow. The password is
 // stored as a bcrypt hash in config.yaml (never as plaintext and never in the
 // environment); until it is set the API runs in setup mode. Session tokens
@@ -231,7 +255,9 @@ func (s *Server) authStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 // setupAdmin handles POST /api/v1/auth/setup: the first visitor sets the
-// admin password while the server is in setup mode. The bcrypt hash is
+// admin password while the server is in setup mode. The request must carry
+// the bootstrap code printed to the terminal/log at startup — it is issued
+// once per process, so it never survives a restart. The bcrypt hash is
 // persisted to config.yaml and the caller is logged in immediately.
 func (s *Server) setupAdmin(w http.ResponseWriter, r *http.Request) {
 	if s.adminAuth().sessionEnabled() {
@@ -239,10 +265,16 @@ func (s *Server) setupAdmin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
+		Code     string `json:"code"`
 		Password string `json:"password"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_request", "invalid JSON body")
+		return
+	}
+	if subtle.ConstantTimeCompare([]byte(s.setupCode), []byte(body.Code)) != 1 {
+		slog.Warn("setup: invalid setup code", "remote", r.RemoteAddr)
+		writeError(w, http.StatusForbidden, "invalid_setup_code", "invalid setup code, check the server log")
 		return
 	}
 	if len(body.Password) < 8 {

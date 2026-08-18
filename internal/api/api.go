@@ -43,6 +43,7 @@ type Server struct {
 	counter   *counter.Counter
 	fetcher   TitleFetcher
 	admin      *adminAuth
+	setupCode  string // bootstrap code for the setup flow, printed at startup in setup mode
 	loginRate  *loginLimiter
 	linkRateMu sync.Mutex
 	linkRate   *rate.Limiter
@@ -66,6 +67,13 @@ func NewServer(st *store.Store, cfg *config.Manager, ctr *counter.Counter) *Serv
 		assetsDir: envOr("ASSETS_DIR", "./data/assets"),
 		startTime: time.Now(),
 		now:       func() int64 { return timeNow() },
+	}
+	// In setup mode the first visitor needs the bootstrap code: generate it
+	// here (once per process) and print it to the terminal and the log file.
+	// A restart rolls a fresh code, so a leaked one dies with the process.
+	if s.cfg.Get().PasswordHash == "" {
+		s.setupCode = newSetupCode()
+		slog.Info("setup mode: enter this code on the setup page to configure the admin password", "setup_code", s.setupCode)
 	}
 	// Async meta fetching: workers resolve s.fetcher at job time so tests can
 	// swap in a mock after construction.

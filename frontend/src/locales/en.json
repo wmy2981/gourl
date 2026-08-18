@@ -49,12 +49,15 @@
   },
   "setup": {
     "heading": "Set admin password",
-    "sub": "This server has no admin password yet. Choose one to secure the admin console.",
+    "sub": "This server has no admin password yet. Enter the setup code from the server log and choose a password.",
+    "code": "Setup code",
+    "codeHint": "Printed in the server terminal/log at startup; a restart rolls a new one",
     "password": "New password",
     "confirm": "Confirm password",
     "setup": "Set password",
     "mismatch": "Passwords do not match",
-    "weak": "Password must be at least 8 characters"
+    "weak": "Password must be at least 8 characters",
+    "invalidCode": "Invalid setup code, check the server log"
   },
   "dashboard": {
     "heading": "Dashboard",

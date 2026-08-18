@@ -62,6 +62,7 @@ paths:
     post:
       tags: [auth]
       summary: Set the admin password while the server is in setup mode (no password_hash configured); logs the caller in
+      description: Requires the 8-character bootstrap code printed to the server terminal/log at startup (setup mode only). The code is generated once per process and dies with the restart.
       security: []
       requestBody:
         required: true
@@ -69,11 +70,14 @@ paths:
           application/json:
             schema:
               type: object
+              required: [code, password]
               properties:
+                code: { type: string, description: 8-char bootstrap code from the server log (mixed case + digits) }
                 password: { type: string, minLength: 8 }
       responses:
         "200": { description: Password set and session cookie issued }
         "400": { description: Weak password or invalid body }
+        "403": { description: invalid_setup_code — wrong bootstrap code }
         "409": { description: already_configured — password already set }
   /auth/status:
     get:
