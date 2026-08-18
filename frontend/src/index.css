@@ -91,7 +91,14 @@
   /* Custom scrollbars: thin rounded thumbs that follow the theme. Firefox
      gets scrollbar-width/color; WebKit/Blink get the pseudo-element styling.
      The border + background-clip trick insets the thumb so it never touches
-     the container edge. */
+     the container edge. In the Capacitor app the native overlay bars are
+     already disabled (MainActivity) — hide the webkit ones entirely. */
+  html.capacitor ::-webkit-scrollbar {
+    display: none;
+  }
+  html.capacitor * {
+    scrollbar-width: none;
+  }
   * {
     scrollbar-width: thin;
     scrollbar-color: rgba(134, 134, 139, 0.45) transparent;

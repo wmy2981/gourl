@@ -21,6 +21,11 @@ const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
 if (savedTheme === 'dark' || (savedTheme !== 'light' && prefersDark)) {
   document.documentElement.classList.add('dark')
 }
+// Capacitor app mode: gates the app-only CSS (hidden scrollbars, safe-area
+// insets) that must never leak into the web console.
+if (isApp()) {
+  document.documentElement.classList.add('capacitor')
+}
 
 export default function App() {
   const location = useLocation()
@@ -31,7 +36,10 @@ export default function App() {
   const appMode = isApp()
   const server = getServerConfig()
 
-  // Deep links (gourl://links …) and the back button, Capacitor app only.
+  // Deep links (gourl://links …), Capacitor app only. The back button is
+  // left to the system: disableBackButtonHandler in capacitor.config.ts keeps
+  // the predictive back gesture working, and back simply finishes the
+  // activity (dialogs close via their X button).
   useEffect(() => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const cap = (window as any).Capacitor
@@ -48,18 +56,8 @@ export default function App() {
       }
       navigate(targets[page] ?? '/admin')
     })
-    const backHandler = App.addListener('backButton', () => {
-      // Back closes the topmost dialog first; with none open it exits the
-      // app to the launcher instead of walking the browser history.
-      if (document.querySelector('[role="dialog"]')) {
-        window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
-        return
-      }
-      App.exitApp()
-    })
     return () => {
       openHandler.remove()
-      backHandler.remove()
     }
   }, [navigate])
 

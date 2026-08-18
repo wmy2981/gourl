@@ -14,6 +14,15 @@ const config: CapacitorConfig = {
   server: {
     cleartext: true,
   },
+  plugins: {
+    App: {
+      // The plugin's back-button interception suppresses the Android 13+
+      // predictive back gesture (the two are mutually exclusive per the
+      // Capacitor docs). With the handler disabled, the system gesture works
+      // and back simply finishes the activity; dialogs close via their X.
+      disableBackButtonHandler: true,
+    },
+  },
 }
 
 export default config

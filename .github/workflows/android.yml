@@ -62,6 +62,9 @@ jobs:
           distribution: temurin
           java-version: '21'
 
+      - name: Compute a monotonic version code
+        run: echo "VERSION_CODE=$(date -u +%y%j%H%M)" >> "$GITHUB_ENV"
+
       - name: Assemble debug APK
         working-directory: frontend/android
         run: |
