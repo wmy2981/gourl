@@ -1,11 +1,13 @@
 name: android
 
 # Debug APK builds for the Android app — kept separate from the server CI.
-# Runs on every version tag (v0.2.0, prereleases included), attaches the APK
-# to the matching GitHub release, and uploads it as a workflow artifact.
+# Runs on every dev/main push. The version string follows the Docker
+# convention (plain VERSION on main, "VERSION (sha7)" on dev); when this
+# push advances the version and the release workflow creates v{VERSION},
+# the APK is attached to it as a release asset.
 on:
   push:
-    tags: ['v*']
+    branches: [dev, main]
 
 permissions:
   contents: write
@@ -32,6 +34,24 @@ jobs:
         working-directory: frontend
         run: npx cap sync android
 
+      - name: Resolve version string
+        run: |
+          VERSION=$(cat VERSION)
+          if [ "${{ github.ref_name }}" = "main" ]; then
+            echo "VERSION_STR=$VERSION" >> "$GITHUB_ENV"
+            echo "APK_NAME=gourl-${VERSION}-debug.apk" >> "$GITHUB_ENV"
+          else
+            SHA=$(git rev-parse --short=7 HEAD)
+            echo "VERSION_STR=${VERSION} (${SHA})" >> "$GITHUB_ENV"
+            echo "APK_NAME=gourl-${VERSION}-${SHA}-debug.apk" >> "$GITHUB_ENV"
+          fi
+
+      - name: Stamp the Android version
+        working-directory: frontend/android
+        run: |
+          sed -i "s/versionName \"[^\"]*\"/versionName \"$VERSION_STR\"/" app/build.gradle
+          grep versionName app/build.gradle
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -47,7 +67,7 @@ jobs:
         run: |
           mkdir -p dist-apk
           cp frontend/android/app/build/outputs/apk/debug/app-debug.apk \
-            "dist-apk/gourl-${{ github.ref_name }}-debug.apk"
+            "dist-apk/${APK_NAME}"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
@@ -56,19 +76,19 @@ jobs:
           path: dist-apk/
           if-no-files-found: error
 
-      - name: Attach the APK to the release
+      - name: Attach the APK to the release (when this push released one)
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # The release workflow may still be creating the release when this
-          # job starts; poll up to 10 minutes for it to appear.
-          for i in $(seq 1 60); do
-            if gh api "repos/${{ github.repository }}/releases/tags/${{ github.ref_name }}" >/dev/null 2>&1; then
-              gh release upload "${{ github.ref_name }}" \
-                "dist-apk/gourl-${{ github.ref_name }}-debug.apk" --clobber
+          VERSION=$(cat VERSION)
+          # The release workflow only creates v{VERSION} when this push
+          # advances the version; poll briefly, then skip (the APK stays a
+          # workflow artifact).
+          for i in $(seq 1 30); do
+            if gh api "repos/${{ github.repository }}/releases/tags/v${VERSION}" >/dev/null 2>&1; then
+              gh release upload "v${VERSION}" "dist-apk/${APK_NAME}" --clobber
               exit 0
             fi
             sleep 10
           done
-          echo "release ${{ github.ref_name }} not found after 10 minutes" >&2
-          exit 1
+          echo "no release for v${VERSION} on this push; APK stays as artifact"
