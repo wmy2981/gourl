@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { KeyRound, PlugZap, Plus, Trash2, Upload } from 'lucide-react'
-import { api, ApiError, getServerConfig, isApp, setServerConfig, type AppConfig } from '../lib/api'
+import { api, ApiError, getServerConfig, isApp, setServerConfig, type AppConfig, type TokenInfo } from '../lib/api'
 import { copyText } from '../lib/clipboard'
 import { Button, Card, Dialog, Input, Label, Select, Textarea, useToast } from '../components/ui'
 
@@ -379,6 +379,16 @@ function TokenSection({
   const { toast } = useToast()
   const queryClient = useQueryClient()
   const { data } = useQuery({ queryKey: ['tokens'], queryFn: api.tokens })
+  const [revoking, setRevoking] = useState<TokenInfo | null>(null)
+  const revokeMutation = useMutation({
+    mutationFn: (id: number) => api.deleteToken(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tokens'] })
+      setRevoking(null)
+    },
+    onError: (err: unknown) =>
+      toast(err instanceof ApiError ? err.message : t('common.error'), 'error'),
+  })
   // In the app, /docs/ lives on the remote server (not the WebView origin) —
   // link straight to it and hand it to the system browser via _system.
   const appMode = isApp()
@@ -386,6 +396,7 @@ function TokenSection({
   const docsUrl = appMode && server ? `${server.url.replace(/\/+$/, '')}/docs/` : '/docs/'
 
   return (
+    <>
     <Card className="p-6">
       <h2 className="mb-1 text-sm font-medium text-muted">{t('settings.tokens')}</h2>
       <p className="mb-4 text-xs text-muted">{t('settings.tokensHint')}</p>
@@ -420,10 +431,7 @@ function TokenSection({
               <span className="short-code text-sm">{tok.token}</span>
               {tok.note && <span className="ml-2 text-xs text-muted">{tok.note}</span>}
             </div>
-            <Button variant="ghost" className="!p-1.5" onClick={async () => {
-              await api.deleteToken(tok.id)
-              queryClient.invalidateQueries({ queryKey: ['tokens'] })
-            }} aria-label={t('settings.revoke')}>
+            <Button variant="ghost" className="!p-1.5" onClick={() => setRevoking(tok)} aria-label={t('settings.revoke')}>
               <Trash2 size={15} />
             </Button>
           </div>
@@ -442,5 +450,29 @@ function TokenSection({
         </div>
       </div>
     </Card>
+    {/* The dialog is a sibling of the glass card, never inside it — the card's
+        backdrop-blur creates a containing block that traps fixed-positioned
+        dialogs inside the card area (see the disconnect dialog note). */}
+    <Dialog
+      open={revoking !== null}
+      onClose={() => setRevoking(null)}
+      title={t('settings.revoke')}
+    >
+      <p className="text-sm text-muted">{t('settings.tokenRevokeConfirm')}</p>
+      {revoking && <p className="short-code mt-2 text-sm font-medium">{revoking.token}</p>}
+      <div className="mt-5 flex justify-end gap-2">
+        <Button variant="ghost" onClick={() => setRevoking(null)}>
+          {t('common.cancel')}
+        </Button>
+        <Button
+          variant="danger"
+          disabled={revokeMutation.isPending}
+          onClick={() => revoking && revokeMutation.mutate(revoking.id)}
+        >
+          {t('common.delete')}
+        </Button>
+      </div>
+    </Dialog>
+    </>
   )
 }

@@ -232,7 +232,8 @@
     "saveFailed": "Could not save settings",
     "tokenNeverExpires": "Tokens never expire — revoke them manually when no longer needed.",
     "apiDocs": "API documentation",
-    "disconnectConfirm": "This will drop the stored server connection and return to the connect screen."
+    "disconnectConfirm": "This will drop the stored server connection and return to the connect screen.",
+    "tokenRevokeConfirm": "Deleting this token revokes it immediately. Every request using it will fail and the app will disconnect. This cannot be undone."
   },
   "common": {
     "loading": "Loading…",
