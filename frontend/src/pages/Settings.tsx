@@ -1,15 +1,18 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { KeyRound, Plus, Trash2, Upload } from 'lucide-react'
-import { api, ApiError, type AppConfig } from '../lib/api'
+import { KeyRound, PlugZap, Plus, Trash2, Upload } from 'lucide-react'
+import { api, ApiError, getServerConfig, isApp, setServerConfig, type AppConfig } from '../lib/api'
 import { copyText } from '../lib/clipboard'
 import { Button, Card, Input, Label, Select, Textarea, useToast } from '../components/ui'
 
 export default function Settings() {
   const { t } = useTranslation()
   const { toast } = useToast()
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const server = getServerConfig()
 
   const { data: cfg } = useQuery({ queryKey: ['config'], queryFn: api.getConfig })
   const [form, setForm] = useState<AppConfig | null>(null)
@@ -97,6 +100,26 @@ export default function Settings() {
       <h1 className="mb-6 text-2xl font-semibold tracking-tight">{t('settings.heading')}</h1>
 
       <div className="flex flex-col gap-6">
+        {/* App connection (Capacitor token mode only) */}
+        {isApp() && (
+          <Card className="p-6">
+            <h2 className="mb-2 text-sm font-medium text-muted">{t('settings.appConnection')}</h2>
+            <p className="mb-3 text-sm text-muted">
+              {t('settings.connectedTo')} <span className="short-code">{server?.url ?? '—'}</span>
+            </p>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setServerConfig(null)
+                navigate('/admin/connect', { replace: true })
+              }}
+            >
+              <PlugZap size={15} />
+              {t('settings.disconnectApp')}
+            </Button>
+          </Card>
+        )}
+
         {/* Site information */}
         <Card className="p-6">
           <h2 className="mb-4 text-sm font-medium text-muted">{t('settings.site')}</h2>

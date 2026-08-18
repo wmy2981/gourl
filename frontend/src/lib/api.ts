@@ -1,5 +1,39 @@
 // Minimal fetch wrapper for the gourl REST API. A 401 redirects to login;
 // other failures throw ApiError with the server's error code/message.
+//
+// Mobile-app mode: the Capacitor app stores a server URL + API token here
+// and talks to a remote instance with a Bearer header instead of a session
+// cookie. Web console mode is unaffected — no stored config means relative
+// URLs + cookies, exactly as before.
+
+/** Remote server connection for the mobile app (localStorage `gourl-server`). */
+export interface ServerConfig {
+  url: string
+  token: string
+}
+
+const SERVER_KEY = 'gourl-server'
+
+export function getServerConfig(): ServerConfig | null {
+  try {
+    const raw = localStorage.getItem(SERVER_KEY)
+    if (!raw) return null
+    const cfg = JSON.parse(raw) as ServerConfig
+    return cfg.url && cfg.token ? cfg : null
+  } catch {
+    return null
+  }
+}
+
+export function setServerConfig(cfg: ServerConfig | null) {
+  if (cfg) localStorage.setItem(SERVER_KEY, JSON.stringify(cfg))
+  else localStorage.removeItem(SERVER_KEY)
+}
+
+/** Reports whether the SPA runs inside the Capacitor app (token mode). */
+export function isApp(): boolean {
+  return typeof window !== 'undefined' && 'Capacitor' in window
+}
 
 export interface ApiErrorBody {
   error: { code: string; message: string }
@@ -141,15 +175,25 @@ export interface ImportItem {
 const JSON_HEADERS = { 'Content-Type': 'application/json' }
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const server = getServerConfig()
   // FormData bodies must keep the browser-set multipart boundary; forcing the
   // JSON content type would make the server reject the file field.
   const isForm = typeof FormData !== 'undefined' && init.body instanceof FormData
-  const res = await fetch(path, {
-    credentials: 'same-origin',
+  const headers: Record<string, string> = isForm
+    ? { ...(init.headers as Record<string, string> | undefined) }
+    : { ...JSON_HEADERS, ...(init.headers as Record<string, string> | undefined) }
+  if (server) headers.Authorization = `Bearer ${server.token}`
+  const res = await fetch(server ? server.url.replace(/\/+$/, '') + path : path, {
+    credentials: server ? 'omit' : 'same-origin',
     ...init,
-    headers: isForm ? { ...(init.headers ?? {}) } : { ...JSON_HEADERS, ...(init.headers ?? {}) },
+    headers,
   })
   if (res.status === 401) {
+    if (server) {
+      // Token mode: never bounce to the login/setup pages — the connect
+      // screen owns re-authentication (bad token, revoked token, …).
+      throw new ApiError(401, 'unauthorized', 'token invalid or expired')
+    }
     // Not authenticated (or session expired): back to login.
     if (window.location.pathname !== '/admin/login') {
       window.location.href = '/admin/login'

@@ -79,6 +79,13 @@
     transition:
       background-color 0.3s ease,
       color 0.3s ease;
+    /* Immersive system bars (Capacitor app, viewport-fit=cover): pad the
+       content past the transparent status/navigation bars. Zero everywhere
+       else, so the web console is unaffected. */
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    padding-left: env(safe-area-inset-left, 0px);
   }
 
   /* Custom scrollbars: thin rounded thumbs that follow the theme. Firefox

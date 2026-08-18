@@ -36,6 +36,21 @@
     "authDisabled": "未配置认证",
     "rateLimited": "失败次数过多，请稍后再试"
   },
+  "connect": {
+    "heading": "连接到 gourl 服务器",
+    "sub": "输入服务器地址和 API token，之后全部通过 token 通信，无需密码登录。",
+    "url": "服务器地址",
+    "urlHint": "例如 http://192.168.1.10:8081",
+    "token": "API token",
+    "tokenHint": "来自 Web 管理后台：设置 → API tokens",
+    "connect": "连接",
+    "invalidUrl": "请输入有效的 http(s) 服务器地址",
+    "failed": "连接失败——请检查地址和 token",
+    "step1": "在浏览器中打开你的 gourl 管理后台并登录",
+    "step2": "设置 → API tokens → 创建 token",
+    "step3": "将服务器地址和 token 粘贴到上方",
+    "openServer": "在浏览器中打开服务器"
+  },
   "changePassword": {
     "heading": "修改管理员密码",
     "current": "当前密码",
@@ -164,6 +179,9 @@
     "security": "安全",
     "securityHint": "修改管理员密码将使所有会话（包括当前会话）下线。",
     "changePassword": "修改管理员密码",
+    "appConnection": "App 连接",
+    "connectedTo": "已连接到",
+    "disconnectApp": "断开连接",
     "siteName": "服务名称",
     "siteTitle": "站点标题",
     "keywords": "关键词",

@@ -1,10 +1,11 @@
 import { useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
-import { api } from './lib/api'
+import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
+import { api, getServerConfig, isApp } from './lib/api'
 import Layout from './components/Layout'
 import { ToastProvider } from './components/ui'
 import ChangePassword from './pages/ChangePassword'
+import Connect from './pages/Connect'
 import Dashboard from './pages/Dashboard'
 import Links from './pages/Links'
 import Login from './pages/Login'
@@ -23,6 +24,45 @@ if (savedTheme === 'dark' || (savedTheme !== 'light' && prefersDark)) {
 
 export default function App() {
   const location = useLocation()
+  const navigate = useNavigate()
+  // Token mode (Capacitor app): a stored server connection replaces the
+  // session flow — login/setup pages never appear, an unconnected app lands
+  // on the connect screen instead.
+  const appMode = isApp()
+  const server = getServerConfig()
+
+  // Deep links (gourl://links …) and the back button, Capacitor app only.
+  useEffect(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const cap = (window as any).Capacitor
+    if (!cap?.Plugins?.App) return
+    const { App } = cap.Plugins
+    const openHandler = App.addListener('appUrlOpen', (event: { url: string }) => {
+      // gourl://links → /admin/links; unknown pages fall back to the dashboard.
+      const page = new URL(event.url).host || 'dashboard'
+      const targets: Record<string, string> = {
+        dashboard: '/admin',
+        links: '/admin/links',
+        log: '/admin/logs',
+        settings: '/admin/settings',
+      }
+      navigate(targets[page] ?? '/admin')
+    })
+    const backHandler = App.addListener('backButton', () => {
+      // Back closes the topmost dialog first; with none open it exits the
+      // app to the launcher instead of walking the browser history.
+      if (document.querySelector('[role="dialog"]')) {
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+        return
+      }
+      App.exitApp()
+    })
+    return () => {
+      openHandler.remove()
+      backHandler.remove()
+    }
+  }, [navigate])
+
   const { data: cfg } = useQuery({ queryKey: ['config'], queryFn: api.getConfig })
   // Unconfigured servers route the SPA to the one-time setup page; once a
   // password exists the setup page is unreachable again.
@@ -47,20 +87,39 @@ export default function App() {
       <Routes>
         <Route
           path="/admin/login"
-          element={authStatus && !authStatus.configured ? <Navigate to="/admin/setup" replace /> : <Login />}
+          element={
+            appMode ? (
+              <Navigate to="/admin/connect" replace />
+            ) : authStatus && !authStatus.configured ? (
+              <Navigate to="/admin/setup" replace />
+            ) : (
+              <Login />
+            )
+          }
         />
         <Route
           path="/admin/setup"
-          element={authStatus && authStatus.configured ? <Navigate to="/admin/login" replace /> : <Setup />}
+          element={
+            appMode ? (
+              <Navigate to="/admin/connect" replace />
+            ) : authStatus && authStatus.configured ? (
+              <Navigate to="/admin/login" replace />
+            ) : (
+              <Setup />
+            )
+          }
         />
         <Route
           path="/admin/change-password"
           element={authStatus && !authStatus.configured ? <Navigate to="/admin/setup" replace /> : <ChangePassword />}
         />
+        <Route path="/admin/connect" element={<Connect />} />
         <Route
           path="/admin"
           element={
-            authStatus && !authStatus.configured ? (
+            appMode && !server ? (
+              <Navigate to="/admin/connect" replace />
+            ) : authStatus && !authStatus.configured && !appMode ? (
               <Navigate to="/admin/setup" replace />
             ) : (
               <Layout />
