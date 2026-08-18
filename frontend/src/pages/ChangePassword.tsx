@@ -6,9 +6,9 @@ import { ArrowLeft, KeyRound } from 'lucide-react'
 import { api, ApiError } from '../lib/api'
 import { Button, Input, Label, useToast } from '../components/ui'
 
-// Standalone page opened from the settings page in a new tab: changing the
-// password bumps the session epoch, revoking every session — including this
-// one — so the flow ends on the login page.
+// Standalone page navigated to from the settings page: changing the password
+// bumps the session epoch, revoking every session — including this one — so
+// the flow ends on the login page. The back button returns to settings.
 export default function ChangePassword() {
   const { t } = useTranslation()
   const { toast } = useToast()
