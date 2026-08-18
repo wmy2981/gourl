@@ -130,7 +130,28 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /admin", s.adminOnly(s.spaIndex))
 	mux.HandleFunc("GET /admin/{path...}", s.adminOnly(s.spaIndex))
 	mux.HandleFunc("GET /{code...}", s.redirect)
-	return s.logRequests(s.ipBlock(mux))
+	return s.logRequests(s.ipBlock(s.cors(mux)))
+}
+
+// cors opens the API to the Capacitor app, which calls a remote gourl
+// instance cross-origin with a Bearer token (no cookies involved, so a
+// wildcard origin is safe). Preflight OPTIONS requests are answered directly
+// with 204; IP bans still apply to them via the outer ipBlock middleware.
+func (s *Server) cors(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/api/") {
+			h := w.Header()
+			h.Set("Access-Control-Allow-Origin", "*")
+			h.Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
+			h.Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
+			h.Set("Access-Control-Max-Age", "86400")
+			if r.Method == http.MethodOptions {
+				w.WriteHeader(http.StatusNoContent)
+				return
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 // setupCodePath is where the bootstrap code is persisted for the container
