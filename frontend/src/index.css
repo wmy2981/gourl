@@ -90,16 +90,18 @@
 
   /* In the app the WebView often reports env(safe-area-inset-top) as 0
      (the inset is not propagated), leaving text and buttons under the
-     transparent status bar. Force a minimum top offset that clears it;
-     the web console never sees this rule. */
+     transparent status bar. The core SystemBars plugin (insetsHandling
+     "css", capacitor.config.ts) injects --safe-area-inset-* variables —
+     prefer them, but always keep at least a 28px offset. The web console
+     never sees these rules. */
   html.capacitor body {
-    padding-top: max(env(safe-area-inset-top, 0px), 28px);
+    padding-top: max(var(--safe-area-inset-top, 0px), 28px);
   }
 
   /* The mobile top bar is fixed to the viewport, so body padding cannot
      push it down — offset it by the same minimum. */
   html.capacitor .mobile-topbar {
-    top: max(env(safe-area-inset-top, 0px), 28px);
+    top: max(var(--safe-area-inset-top, 0px), 28px);
   }
 
   /* Custom scrollbars: thin rounded thumbs that follow the theme. Firefox

@@ -18,6 +18,14 @@ const config: CapacitorConfig = {
   // App.tsx can intercept it — back first closes the top dialog (Escape),
   // then exits the app. (Enabling the handler trades the Android 13+
   // predictive-back animation for that control, which the user prefers.)
+  plugins: {
+    // The WebView does not propagate status-bar insets to env() on many
+    // devices; insetsHandling "css" makes the core SystemBars plugin inject
+    // --safe-area-inset-* variables the CSS below falls back to.
+    SystemBars: {
+      insetsHandling: 'css',
+    },
+  },
 }
 
 export default config
