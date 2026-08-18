@@ -405,7 +405,7 @@ function ConnectionCard() {
         <p className="mb-3 text-sm text-muted">
           {t('settings.connectedTo')} <span className="short-code">{server?.url ?? '—'}</span>
         </p>
-        <div className="mb-3">
+        <div className="mb-3 pl-2">
           <span className={`inline-flex items-center gap-1.5 text-sm ${text}`}>
             <span className={`size-1.5 rounded-full ${dot}`} />
             {label}
