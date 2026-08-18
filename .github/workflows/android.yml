@@ -28,7 +28,7 @@ jobs:
         run: |
           mkdir -p frontend/src/assets
           cp assets/favicon.svg frontend/src/assets/icon.svg
-          python3 .github/scripts/sync-android-icon.py
+          python3 .github/scripts/sync_android_icon.py
 
       - name: Build the SPA
         working-directory: frontend
