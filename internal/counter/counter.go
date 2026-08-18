@@ -39,6 +39,12 @@ func (c *Counter) Ping(ctx context.Context) error {
 	return c.rdb.Ping(ctx).Err()
 }
 
+// FlushAll wipes every key in Redis (gourl reset redis). Unbuffered clicks in
+// the current flush interval are lost with it — that is the point of a reset.
+func (c *Counter) FlushAll(ctx context.Context) error {
+	return c.rdb.FlushAll(ctx).Err()
+}
+
 // Incr records one click for a code on the given date (YYYY-MM-DD, in the
 // process local timezone, i.e. the container TZ). Both the total and the
 // daily counters are incremented in a single round trip.

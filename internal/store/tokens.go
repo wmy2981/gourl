@@ -67,6 +67,22 @@ func (s *Store) ListTokens(ctx context.Context) ([]Token, error) {
 	return tokens, rows.Err()
 }
 
+// RevokeAllTokens soft-deletes every active token (gourl reset api),
+// returning how many were revoked. Same semantics as DeleteToken.
+func (s *Store) RevokeAllTokens(ctx context.Context) (int64, error) {
+	res, err := s.db.ExecContext(ctx,
+		`UPDATE api_tokens SET deleted = 1 WHERE deleted = 0`)
+	if err != nil {
+		return 0, fmt.Errorf("revoke all tokens: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return 0, err
+	}
+	slog.Debug("store: all tokens revoked", "count", n)
+	return n, nil
+}
+
 // DeleteToken soft-deletes a token (deleted = 1), keeping the row for
 // exports. The key stays permanently taken: the UNIQUE constraint still
 // applies, so a new token cannot reuse it. Returns ErrNotFound if absent.

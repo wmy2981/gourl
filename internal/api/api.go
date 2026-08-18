@@ -119,10 +119,23 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /favicon.svg", s.favicon)
 	mux.Handle("GET /docs/", http.StripPrefix("/docs/", http.FileServer(http.FS(webui.Docs()))))
 	mux.HandleFunc("GET /docs/openapi.yaml", s.openAPISpec)
-	mux.HandleFunc("GET /admin", s.spaIndex)
-	mux.HandleFunc("GET /admin/{path...}", s.spaIndex)
+	mux.HandleFunc("GET /admin", s.adminOnly(s.spaIndex))
+	mux.HandleFunc("GET /admin/{path...}", s.adminOnly(s.spaIndex))
 	mux.HandleFunc("GET /{code...}", s.redirect)
 	return s.logRequests(s.ipBlock(mux))
+}
+
+// adminOnly gates the admin console on config.webui_enabled (`gourl webui
+// off`): the SPA returns 404 while disabled, Swagger /docs is unaffected.
+// Re-checked per request so a config change applies without a restart.
+func (s *Server) adminOnly(h http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !s.cfg.Get().WebUIEnabled {
+			http.NotFound(w, r)
+			return
+		}
+		h(w, r)
+	}
 }
 
 // logRequests logs every HTTP request with status and latency. Response

@@ -60,6 +60,10 @@ type Config struct {
 	// (gourl reset sessions, password change). Kept out of the JSON contract;
 	// updateConfig carries it over so a plain PUT never resets it.
 	SessionEpoch int64 `yaml:"session_epoch" json:"-"`
+	// WebUIEnabled gates the admin console (/admin) via `gourl webui on/off`.
+	// Swagger /docs is unaffected. Kept out of the JSON contract; updateConfig
+	// carries it over so a plain PUT never disables it.
+	WebUIEnabled bool `yaml:"webui_enabled" json:"-"`
 	// LogLevel is the process-wide log verbosity (debug/info/warning/error),
 	// applied at startup and hot-applied on every config save.
 	LogLevel string `yaml:"log_level" json:"log_level"`
@@ -74,6 +78,7 @@ func Default() *Config {
 		LoginRateLockSeconds: 300,
 		SessionTTLMinutes:    10080, // 7 days, matching the pre-config default
 		LinkRatePerSecond:    100,
+		WebUIEnabled:         true,
 		LogLevel:             "info",
 	}
 }

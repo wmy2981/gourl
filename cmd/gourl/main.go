@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/wmy2981/gourl/internal/api"
+	"github.com/wmy2981/gourl/internal/cli"
 	"github.com/wmy2981/gourl/internal/config"
 	"github.com/wmy2981/gourl/internal/counter"
 	"github.com/wmy2981/gourl/internal/logx"
@@ -24,6 +25,15 @@ func envOr(key, def string) string {
 }
 
 func main() {
+	// Any first argument is an administrative subcommand (gourl reset db,
+	// gourl status, …); no arguments start the HTTP server.
+	if len(os.Args) > 1 {
+		os.Exit(cli.Main(os.Args[1:]))
+	}
+	runServer()
+}
+
+func runServer() {
 	// Default level until the config loads; the configured log_level is
 	// applied right after (and hot-applied on settings saves).
 	logx.Init(slog.LevelInfo)

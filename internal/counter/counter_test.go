@@ -101,3 +101,18 @@ func TestPing(t *testing.T) {
 		t.Errorf("Ping: %v", err)
 	}
 }
+
+// FlushAll backs `gourl reset redis`: everything in the buffer is wiped.
+func TestFlushAll(t *testing.T) {
+	c, mr := newTestCounter(t)
+	ctx := context.Background()
+	if err := c.Incr(ctx, "abc", "2026-08-15"); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.FlushAll(ctx); err != nil {
+		t.Fatalf("FlushAll: %v", err)
+	}
+	if n := mr.Keys(); len(n) != 0 {
+		t.Errorf("keys after FlushAll = %v, want none", n)
+	}
+}
