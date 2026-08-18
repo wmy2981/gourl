@@ -51,10 +51,16 @@ describe('QRDialog', () => {
     expect(activeHost()).toBe('b.example')
   })
 
-  it('renders a download button next to the close button', () => {
+  it('keeps the download button in the DOM but hidden', () => {
     const link = makeLink('abc', ['a.example'])
-    render(<QRDialog link={link} urls={makeUrls(link.code, ['a.example'])} open={true} onClose={() => {}} />)
-    expect(screen.getByRole('button', { name: /download qr code/i })).toBeInTheDocument()
+    const { container } = render(<QRDialog link={link} urls={makeUrls(link.code, ['a.example'])} open={true} onClose={() => {}} />)
+    // The JPEG download stays implemented but is hidden for now — a `hidden`
+    // button drops out of the accessibility tree (its name is uncomputable),
+    // so assert on the DOM node directly.
+    const button = container.querySelector<HTMLButtonElement>('button[hidden]')
+    expect(button).not.toBeNull()
+    expect(button!.getAttribute('aria-label')).toMatch(/download qr code/i)
+    expect(button).not.toBeVisible()
   })
 
   it('re-clamps the index against the new link when reopened', () => {

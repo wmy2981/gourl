@@ -164,6 +164,8 @@ export default function QRDialog({
         <button
           onClick={download}
           disabled={!active}
+          // JPEG download hidden for now — the handler stays for a later re-enable.
+          hidden
           aria-label={t('links.qrDownload')}
           className="rounded-lg p-1 transition-colors hover:bg-black/5 disabled:opacity-40 dark:hover:bg-white/10"
         >
