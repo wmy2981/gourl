@@ -88,6 +88,20 @@
     padding-left: env(safe-area-inset-left, 0px);
   }
 
+  /* In the app the WebView often reports env(safe-area-inset-top) as 0
+     (the inset is not propagated), leaving text and buttons under the
+     transparent status bar. Force a minimum top offset that clears it;
+     the web console never sees this rule. */
+  html.capacitor body {
+    padding-top: max(env(safe-area-inset-top, 0px), 28px);
+  }
+
+  /* The mobile top bar is fixed to the viewport, so body padding cannot
+     push it down — offset it by the same minimum. */
+  html.capacitor .mobile-topbar {
+    top: max(env(safe-area-inset-top, 0px), 28px);
+  }
+
   /* Custom scrollbars: thin rounded thumbs that follow the theme. Firefox
      gets scrollbar-width/color; WebKit/Blink get the pseudo-element styling.
      The border + background-clip trick insets the thumb so it never touches

@@ -275,8 +275,9 @@ export default function Layout() {
         {sidebarContent}
       </aside>
 
-      {/* Mobile top bar + drawer */}
-      <div className="fixed inset-x-0 top-0 z-40 flex items-center justify-between border-b border-hairline bg-canvas/80 px-4 py-3 backdrop-blur-xl dark:bg-canvas-dark/80 md:hidden">
+      {/* Mobile top bar + drawer. The mobile-topbar class offsets the fixed
+          bar below the status bar in the Capacitor app (index.css). */}
+      <div className="mobile-topbar fixed inset-x-0 top-0 z-40 flex items-center justify-between border-b border-hairline bg-canvas/80 px-4 py-3 backdrop-blur-xl dark:bg-canvas-dark/80 md:hidden">
         <div className="flex items-center gap-2">
           <AppIcon size={22} />
           <span className="font-semibold">{siteName}</span>
