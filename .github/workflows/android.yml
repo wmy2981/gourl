@@ -62,8 +62,10 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      - name: Compute a monotonic version code
-        run: echo "VERSION_CODE=$(date -u +%y%j%H%M)" >> "$GITHUB_ENV"
+      - name: Stamp a monotonic version code
+        working-directory: frontend/android
+        run: |
+          echo "VERSION_CODE=$(date -u +%y%j%H%M)" >> gradle.properties
 
       - name: Assemble debug APK
         working-directory: frontend/android
@@ -97,13 +99,14 @@ jobs:
             echo "v${VERSION} was not released on this push; APK stays as artifact"
             exit 0
           fi
-          # The release workflow may still be creating it; poll briefly.
-          for i in $(seq 1 30); do
+          # The release workflow may still be creating it; poll for up to 10
+          # minutes (it normally finishes in seconds).
+          for i in $(seq 1 60); do
             if gh api "repos/${{ github.repository }}/releases/tags/v${VERSION}" >/dev/null 2>&1; then
               gh release upload "v${VERSION}" "dist-apk/${APK_NAME}" --clobber
               exit 0
             fi
             sleep 10
           done
-          echo "release v${VERSION} not found after 5 minutes" >&2
+          echo "release v${VERSION} not found after 10 minutes" >&2
           exit 1
