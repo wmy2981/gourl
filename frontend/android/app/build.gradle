@@ -15,6 +15,11 @@ android {
             keyPassword 'android'
         }
     }
+    buildFeatures {
+        // AGP 8+ disables BuildConfig by default; MainActivity reads
+        // BuildConfig.VERSION_NAME for the user-agent version.
+        buildConfig true
+    }
     defaultConfig {
         applicationId "com.wmy2981.gourl"
         minSdkVersion rootProject.ext.minSdkVersion
