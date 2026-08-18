@@ -23,7 +23,12 @@ const (
 	defaultMaxRedirects   = 5
 	defaultTitleLimit     = 200
 	defaultDescriptionMax = 500
-	browserUA             = "Mozilla/5.0 (compatible; gourl/0.1 +https://github.com/wmy2981/gourl)"
+	// A mainstream browser UA on purpose: internal device management pages
+	// (routers, cameras, NAS) often serve a reduced or empty page to unknown
+	// crawler UAs — the branded gourl UA was a frequent reason for a missing
+	// <title>. The identifiable "gourl/x.y" UA requirement applies to the app's
+	// inbound requests, not to outbound title fetching.
+	browserUA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
 )
 
 // Fetcher downloads and parses the title and description of a page.
