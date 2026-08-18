@@ -32,7 +32,13 @@ export function setServerConfig(cfg: ServerConfig | null) {
 
 /** Reports whether the SPA runs inside the Capacitor app (token mode). */
 export function isApp(): boolean {
-  return typeof window !== 'undefined' && 'Capacitor' in window
+  // @capacitor/core registers a window.Capacitor stub on the web too, so the
+  // mere presence of the global is not enough — only the native platform
+  // counts (routing, downloads, back handling all depend on it).
+  if (typeof window === 'undefined') return false
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const cap = (window as any).Capacitor
+  return cap?.isNativePlatform?.() === true
 }
 
 export interface ApiErrorBody {
