@@ -307,7 +307,9 @@ export default function Layout() {
         </div>
       )}
 
-      <main className="min-w-0 flex-1 px-4 pb-16 pt-16 md:px-8 md:pt-8">
+      {/* pt-20 clears the taller mobile top bar (pt-6 + content + pb-3); the
+          old pt-16 matched the pre-2026-08 bar and the title got clipped. */}
+      <main className="min-w-0 flex-1 px-4 pb-16 pt-20 md:px-8 md:pt-8">
         {/* key remounts the page on navigation, replaying the fade-up */}
         <div key={location.pathname} className="mx-auto max-w-5xl animate-fade-up">
           <Outlet />
