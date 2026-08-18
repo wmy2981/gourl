@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { QRCodeCanvas, QRCodeSVG } from 'qrcode.react'
 import { useTranslation } from 'react-i18next'
 import { Download } from 'lucide-react'
-import { Dialog } from './ui'
+import { Dialog, useToast } from './ui'
+import { saveDownload } from '../lib/download'
 import type { Link } from '../lib/api'
 import iconUrl from '../assets/icon.svg'
 
@@ -38,6 +39,7 @@ export default function QRDialog({
   siteName?: string
 }) {
   const { t } = useTranslation()
+  const { toast } = useToast()
   // Hidden canvas twin of the visible SVG, used only for the JPEG export
   // (an SVG cannot be rasterized without a library).
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -104,11 +106,20 @@ export default function QRDialog({
     img.src = iconUrl
   }
 
-  const triggerDownload = (out: HTMLCanvasElement, name: string) => {
-    const a = document.createElement('a')
-    a.href = out.toDataURL('image/jpeg', 0.92)
-    a.download = `${name}.jpg`
-    a.click()
+  const triggerDownload = async (out: HTMLCanvasElement, name: string) => {
+    // In the app the JPEG is written to Downloads/gourl/ (path toasted);
+    // on the web the browser downloads it as before.
+    try {
+      const path = await saveDownload(
+        `${name}.jpg`,
+        out.toDataURL('image/jpeg', 0.92).split(',')[1] ?? '',
+        true,
+        'image/jpeg',
+      )
+      if (path) toast(t('links.downloadedTo', { path }))
+    } catch {
+      toast(t('common.error'), 'error')
+    }
   }
   // The parent nulls the link on close; keep the last content so the QR does
   // not vanish while the dialog is still animating out.

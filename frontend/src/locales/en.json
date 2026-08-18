@@ -133,7 +133,8 @@
     "clearExpired": "Clear expired",
     "noExpired": "No expired links",
     "clearExpiredConfirm": "This will delete {{count}} expired links. This cannot be undone.",
-    "expiredCleared": "Deleted {{count}} expired links"
+    "expiredCleared": "Deleted {{count}} expired links",
+    "downloadedTo": "Saved to {{path}}"
   },
   "form": {
     "url": "Destination URL",

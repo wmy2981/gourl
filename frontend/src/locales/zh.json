@@ -133,7 +133,8 @@
     "clearExpired": "清空过期",
     "noExpired": "没有过期链接",
     "clearExpiredConfirm": "将删除 {{count}} 条过期链接，此操作不可撤销。",
-    "expiredCleared": "已删除 {{count}} 条过期链接"
+    "expiredCleared": "已删除 {{count}} 条过期链接",
+    "downloadedTo": "已保存到 {{path}}"
   },
   "form": {
     "url": "目标 URL",
