@@ -86,9 +86,15 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           VERSION=$(cat VERSION)
-          # The release workflow only creates v{VERSION} when this push
-          # advances the version; poll briefly, then skip (the APK stays a
-          # workflow artifact).
+          # Only attach when THIS push created the release: the version tag
+          # must point at this push's HEAD (a pre-existing release for the
+          # same version, e.g. a dev build after main, is left alone).
+          TAG_SHA=$(gh api "repos/${{ github.repository }}/git/ref/tags/v${VERSION}" -q .object.sha 2>/dev/null || true)
+          if [ -z "$TAG_SHA" ] || [ "$TAG_SHA" != "$GITHUB_SHA" ]; then
+            echo "v${VERSION} was not released on this push; APK stays as artifact"
+            exit 0
+          fi
+          # The release workflow may still be creating it; poll briefly.
           for i in $(seq 1 30); do
             if gh api "repos/${{ github.repository }}/releases/tags/v${VERSION}" >/dev/null 2>&1; then
               gh release upload "v${VERSION}" "dist-apk/${APK_NAME}" --clobber
@@ -96,4 +102,5 @@ jobs:
             fi
             sleep 10
           done
-          echo "no release for v${VERSION} on this push; APK stays as artifact"
+          echo "release v${VERSION} not found after 5 minutes" >&2
+          exit 1
