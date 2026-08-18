@@ -233,7 +233,11 @@
     "tokenNeverExpires": "Tokens never expire — revoke them manually when no longer needed.",
     "apiDocs": "API documentation",
     "disconnectConfirm": "This will drop the stored server connection and return to the connect screen.",
-    "tokenRevokeConfirm": "Deleting this token revokes it immediately. Every request using it will fail and the app will disconnect. This cannot be undone."
+    "tokenRevokeConfirm": "Deleting this token revokes it immediately. Every request using it will fail and the app will disconnect. This cannot be undone.",
+    "connConnected": "Connected",
+    "connUnauthorized": "Connection invalid (token rejected)",
+    "connUnreachable": "Cannot reach the server",
+    "connChecking": "Checking…"
   },
   "common": {
     "loading": "Loading…",

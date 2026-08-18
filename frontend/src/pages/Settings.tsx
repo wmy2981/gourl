@@ -12,7 +12,6 @@ export default function Settings() {
   const { toast } = useToast()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const server = getServerConfig()
 
   const { data: cfg } = useQuery({ queryKey: ['config'], queryFn: api.getConfig })
   const [form, setForm] = useState<AppConfig | null>(null)
@@ -22,7 +21,6 @@ export default function Settings() {
   const [ipText, setIpText] = useState('')
   const [tokenNote, setTokenNote] = useState('')
   const [newToken, setNewToken] = useState('')
-  const [confirmDisconnect, setConfirmDisconnect] = useState(false)
 
   useEffect(() => {
     if (cfg && !form) {
@@ -45,7 +43,18 @@ export default function Settings() {
   })
 
   if (!form) {
-    return <p className="py-16 text-center text-muted">{t('common.loading')}</p>
+    // The connection card renders before the config-dependent form: it must
+    // stay visible even when the config request is slow or fails (the form
+    // below falls back to a loading state).
+    return (
+      <div>
+        <h1 className="mb-6 text-2xl font-semibold tracking-tight">{t('settings.heading')}</h1>
+        <div className="flex flex-col gap-6">
+          <ConnectionCard />
+          <p className="py-16 text-center text-muted">{t('common.loading')}</p>
+        </div>
+      </div>
+    )
   }
 
   const set = <K extends keyof AppConfig>(key: K, value: AppConfig[K]) =>
@@ -102,47 +111,7 @@ export default function Settings() {
 
       <div className="flex flex-col gap-6">
         {/* App connection (Capacitor token mode only) */}
-        {isApp() && (
-          <>
-            <Card className="p-6">
-              <h2 className="mb-2 text-sm font-medium text-muted">{t('settings.appConnection')}</h2>
-              <p className="mb-3 text-sm text-muted">
-                {t('settings.connectedTo')} <span className="short-code">{server?.url ?? '—'}</span>
-              </p>
-              <Button variant="outline" onClick={() => setConfirmDisconnect(true)}>
-                <PlugZap size={15} />
-                {t('settings.disconnectApp')}
-              </Button>
-            </Card>
-            {/* The dialog is a sibling of the card, never inside it: the card's
-                backdrop-blur creates a containing block that traps the dialog's
-                fixed-positioned overlay inside the card area (the header got
-                clipped). Page-level rendering keeps it like every other dialog. */}
-            {/* Disconnecting drops the stored {url, token} — confirm first. */}
-            <Dialog
-              open={confirmDisconnect}
-              onClose={() => setConfirmDisconnect(false)}
-              title={t('settings.disconnectApp')}
-            >
-              <p className="text-sm text-muted">{t('settings.disconnectConfirm')}</p>
-              <div className="mt-5 flex justify-end gap-2">
-                <Button variant="ghost" onClick={() => setConfirmDisconnect(false)}>
-                  {t('form.cancel')}
-                </Button>
-                <Button
-                  variant="danger"
-                  onClick={() => {
-                    setConfirmDisconnect(false)
-                    setServerConfig(null)
-                    navigate('/admin/connect', { replace: true })
-                  }}
-                >
-                  {t('settings.disconnectApp')}
-                </Button>
-              </div>
-            </Dialog>
-          </>
-        )}
+        {isApp() && <ConnectionCard />}
 
         {/* Site information */}
         <Card className="p-6">
@@ -361,6 +330,120 @@ export default function Settings() {
         </div>
       </div>
     </div>
+  )
+}
+
+type ConnStatus = 'checking' | 'connected' | 'unauthorized' | 'unreachable'
+
+/** App-only card: the stored server, its live connection status and the
+ *  disconnect action. Rendered above the config-dependent form so it always
+ *  shows — even when the config request is slow or fails entirely. */
+function ConnectionCard() {
+  const { t } = useTranslation()
+  const navigate = useNavigate()
+  const server = getServerConfig()
+  const [confirmDisconnect, setConfirmDisconnect] = useState(false)
+  const [status, setStatus] = useState<ConnStatus>('checking')
+
+  // Probe the remote server through the authenticated config endpoint: only
+  // a valid bearer token passes requireAuth, so a 401 means the stored token
+  // is dead and a network error means the server is unreachable. Re-check on
+  // mount, on app foreground and every 10s while the page stays open.
+  useEffect(() => {
+    let alive = true
+    const check = async () => {
+      try {
+        await api.getConfig()
+        if (alive) setStatus('connected')
+      } catch (err) {
+        if (!alive) return
+        setStatus(err instanceof ApiError && err.status === 401 ? 'unauthorized' : 'unreachable')
+      }
+    }
+    check()
+    const timer = setInterval(check, 10_000)
+    // Same pattern as App.tsx: grab the plugin off the runtime stub — the web
+    // build must not depend on the @capacitor/app package.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const cap = (window as any).Capacitor
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const appPlugin = cap?.Plugins?.App as any
+    const handler = appPlugin?.addListener?.(
+      'appStateChange',
+      (s: { isActive: boolean }) => {
+        if (s.isActive) check()
+      },
+    )
+    return () => {
+      alive = false
+      clearInterval(timer)
+      handler?.remove()
+    }
+  }, [])
+
+  let dot = 'bg-current'
+  let text = 'text-muted'
+  let label = t('settings.connChecking')
+  if (status === 'connected') {
+    dot = 'bg-emerald-500'
+    text = 'text-emerald-600 dark:text-emerald-400'
+    label = t('settings.connConnected')
+  } else if (status === 'unauthorized') {
+    dot = 'bg-red-500'
+    text = 'text-red-600 dark:text-red-400'
+    label = t('settings.connUnauthorized')
+  } else if (status === 'unreachable') {
+    dot = 'bg-red-500'
+    text = 'text-red-600 dark:text-red-400'
+    label = t('settings.connUnreachable')
+  }
+
+  return (
+    <>
+      <Card className="p-6">
+        <h2 className="mb-2 text-sm font-medium text-muted">{t('settings.appConnection')}</h2>
+        <p className="mb-3 text-sm text-muted">
+          {t('settings.connectedTo')} <span className="short-code">{server?.url ?? '—'}</span>
+        </p>
+        <div className="mb-3">
+          <span className={`inline-flex items-center gap-1.5 text-sm ${text}`}>
+            <span className={`size-1.5 rounded-full ${dot}`} />
+            {label}
+          </span>
+        </div>
+        <Button variant="outline" onClick={() => setConfirmDisconnect(true)}>
+          <PlugZap size={15} />
+          {t('settings.disconnectApp')}
+        </Button>
+      </Card>
+      {/* The dialog is a sibling of the card, never inside it: the card's
+          backdrop-blur creates a containing block that traps the dialog's
+          fixed-positioned overlay inside the card area (the header got
+          clipped). Page-level rendering keeps it like every other dialog. */}
+      {/* Disconnecting drops the stored {url, token} — confirm first. */}
+      <Dialog
+        open={confirmDisconnect}
+        onClose={() => setConfirmDisconnect(false)}
+        title={t('settings.disconnectApp')}
+      >
+        <p className="text-sm text-muted">{t('settings.disconnectConfirm')}</p>
+        <div className="mt-5 flex justify-end gap-2">
+          <Button variant="ghost" onClick={() => setConfirmDisconnect(false)}>
+            {t('form.cancel')}
+          </Button>
+          <Button
+            variant="danger"
+            onClick={() => {
+              setConfirmDisconnect(false)
+              setServerConfig(null)
+              navigate('/admin/connect', { replace: true })
+            }}
+          >
+            {t('settings.disconnectApp')}
+          </Button>
+        </div>
+      </Dialog>
+    </>
   )
 }
 

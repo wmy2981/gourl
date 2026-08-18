@@ -233,7 +233,11 @@
     "tokenNeverExpires": "Token 永不过期——不再需要时请手动吊销。",
     "apiDocs": "API 文档",
     "disconnectConfirm": "断开后将清除已保存的服务器连接，并返回连接页面。",
-    "tokenRevokeConfirm": "删除后该 token 将立即失效，所有使用它的请求都会失败，App 将断开连接。此操作不可撤销。"
+    "tokenRevokeConfirm": "删除后该 token 将立即失效，所有使用它的请求都会失败，App 将断开连接。此操作不可撤销。",
+    "connConnected": "已连接",
+    "connUnauthorized": "连接已失效（token 无效）",
+    "connUnreachable": "无法连接服务器",
+    "connChecking": "检查中…"
   },
   "common": {
     "loading": "加载中…",
