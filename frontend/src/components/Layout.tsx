@@ -83,10 +83,19 @@ export default function Layout() {
     const touch = e.touches[0]
     // Trigger zone: the right 30% of the viewport, phones only (the drawer
     // exists only below md). Touches starting inside a table never open the
-    // drawer — swiping a wide table horizontally must keep working.
+    // drawer — swiping a wide table horizontally must keep working — and an
+    // open dialog (any role=dialog, portal or inline) suppresses the gesture
+    // entirely: its backdrop owns the screen while it is up.
     const target = e.target as Element
     const inTable = target.closest('table') !== null
-    if (!touch || window.innerWidth >= 768 || inTable || touch.clientX < window.innerWidth * 0.7) return
+    if (
+      !touch ||
+      window.innerWidth >= 768 ||
+      inTable ||
+      document.querySelector('[role="dialog"]') ||
+      touch.clientX < window.innerWidth * 0.7
+    )
+      return
     // Abort any running close animation so the gesture starts settled (also
     // stops its timer from flashing the backdrop back open/closed later).
     if (settleTimerRef.current) {
