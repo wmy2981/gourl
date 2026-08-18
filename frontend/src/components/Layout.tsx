@@ -62,9 +62,12 @@ export default function Layout() {
 
   const onDrawerTouchStart = (e: React.TouchEvent) => {
     const touch = e.touches[0]
-    // Trigger zone: the right 24px of the viewport, phones only (the drawer
-    // exists only below md).
-    if (!touch || window.innerWidth >= 768 || touch.clientX < window.innerWidth - 24) return
+    // Trigger zone: the right 30% of the viewport, phones only (the drawer
+    // exists only below md). Touches starting inside a table never open the
+    // drawer — swiping a wide table horizontally must keep working.
+    const target = e.target as Element
+    const inTable = target.closest('table') !== null
+    if (!touch || window.innerWidth >= 768 || inTable || touch.clientX < window.innerWidth * 0.7) return
     // Abort any running close animation so the gesture starts settled (also
     // stops its timer from flashing the backdrop back open/closed later).
     if (settleTimerRef.current) {
