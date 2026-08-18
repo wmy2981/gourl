@@ -1,4 +1,4 @@
-name: android
+name: Build Android App
 
 # Debug APK builds for the Android app — kept separate from the server CI.
 # Runs on every dev/main push. The version string follows the Docker
