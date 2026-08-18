@@ -21,5 +21,16 @@ public class MainActivity extends BridgeActivity {
         // dev) injected as the APK versionName by the workflow.
         wv.getSettings().setUserAgentString(
             "gourl/" + BuildConfig.VERSION_NAME + " " + WebSettings.getDefaultUserAgent(this));
+        // The transparent status bar overlays the WebView content, and the
+        // WebView does not propagate the inset to CSS env()/safe-area
+        // variables reliably on many devices. Pad the view natively by the
+        // platform status-bar height — the single authoritative top offset
+        // (the capacitor-mode CSS resets its own padding so nothing stacks).
+        int statusBarHeight = 0;
+        int resId = getResources().getIdentifier("status_bar_height", "dimen", "android");
+        if (resId > 0) {
+            statusBarHeight = getResources().getDimensionPixelSize(resId);
+        }
+        wv.setPadding(0, statusBarHeight, 0, 0);
     }
 }

@@ -3,7 +3,7 @@ import { QRCodeCanvas, QRCodeSVG } from 'qrcode.react'
 import { useTranslation } from 'react-i18next'
 import { Download } from 'lucide-react'
 import { Dialog, useToast } from './ui'
-import { saveDownload } from '../lib/download'
+import { blobToBase64, saveDownload } from '../lib/download'
 import type { Link } from '../lib/api'
 import iconUrl from '../assets/icon.svg'
 
@@ -72,7 +72,7 @@ export default function QRDialog({
     ctx.fillText(shown?.code ?? '', DL_W / 2, DL_HEAD + DL_QR + DL_FOOT - 10)
   }
 
-  const download = () => {
+  const download = async () => {
     const src = canvasRef.current
     if (!src) return
     const out = document.createElement('canvas')
@@ -91,31 +91,42 @@ export default function QRDialog({
     ctx.strokeStyle = '#e5e5ea'
     ctx.lineWidth = 1
     ctx.stroke()
-    // The brand icon is an SVG asset; rasterize it asynchronously, then paint
-    // the QR (the code survives even if the icon fails to load).
-    const img = new Image()
-    img.onload = () => {
-      drawBrand(ctx, img, out.width)
-      drawBody(ctx, src)
-      triggerDownload(out, shown?.code ?? 'qr')
+    // The brand icon is an SVG asset; load it through a blob: URL so the
+    // canvas is never tainted (a tainted canvas makes toBlob/toDataURL fail
+    // or return empty in the WebView — the ERR_PARAM_DATA_INVALID downloads).
+    // Rasterize it, then paint the QR (the code survives icon failures).
+    let img: HTMLImageElement | null = null
+    try {
+      const res = await fetch(iconUrl)
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      img = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const i = new Image()
+        i.onload = () => resolve(i)
+        i.onerror = () => reject(new Error('brand icon failed to load'))
+        i.src = url
+      })
+    } catch {
+      // Fall through to the icon-less card.
     }
-    img.onerror = () => {
-      drawBody(ctx, src)
-      triggerDownload(out, shown?.code ?? 'qr')
+    if (img) drawBrand(ctx, img, out.width)
+    drawBody(ctx, src)
+    // toBlob → base64 instead of toDataURL string slicing: the WebView can
+    // answer toDataURL with an empty "data:," that decodes to nothing.
+    const blob = await new Promise<Blob | null>((resolve) => out.toBlob(resolve, 'image/jpeg', 0.92))
+    if (!blob) {
+      toast(t('common.error'), 'error')
+      return
     }
-    img.src = iconUrl
-  }
-
-  const triggerDownload = async (out: HTMLCanvasElement, name: string) => {
+    const base64 = await blobToBase64(blob)
+    if (!base64) {
+      toast(t('common.error'), 'error')
+      return
+    }
     // In the app the JPEG is written to Downloads/gourl/ (path toasted);
     // on the web the browser downloads it as before.
     try {
-      const path = await saveDownload(
-        `${name}.jpg`,
-        out.toDataURL('image/jpeg', 0.92).split(',')[1] ?? '',
-        true,
-        'image/jpeg',
-      )
+      const path = await saveDownload(`${shown?.code ?? 'qr'}.jpg`, base64, true, 'image/jpeg')
       if (path) toast(t('links.downloadedTo', { path }))
     } catch (err) {
       // Surface the plugin error (e.g. ERR_FILE_SAVE_FAILED) so native
