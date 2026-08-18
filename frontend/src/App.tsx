@@ -12,10 +12,12 @@ import Logs from './pages/Logs'
 import Settings from './pages/Settings'
 import Setup from './pages/Setup'
 
-// Apply the persisted theme before first paint.
+// Apply the persisted theme before first paint. 'system' (or no saved value
+// at all) follows the OS; only an explicit 'light' forces light. The SPA
+// keeps watching for OS changes while on the "system" mode.
 const savedTheme = localStorage.getItem('gourl-theme')
 const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
-if (savedTheme === 'dark' || (!savedTheme && prefersDark)) {
+if (savedTheme === 'dark' || (savedTheme !== 'light' && prefersDark)) {
   document.documentElement.classList.add('dark')
 }
 

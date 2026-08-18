@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { LayoutDashboard, Link2, LogOut, Menu, Moon, ScrollText, Settings, Sun, X } from 'lucide-react'
+import { LayoutDashboard, Link2, LogOut, Menu, Monitor, Moon, ScrollText, Settings, Sun, X } from 'lucide-react'
 import { api } from '../lib/api'
 import { setLanguage } from '../lib/i18n'
 // Single source of truth for the brand icon (also embedded server-side and
@@ -17,23 +17,42 @@ function AppIcon({ size = 28 }: { size?: number }) {
   return <img src={src} width={size} height={size} alt="" aria-hidden />
 }
 
-// Theme persisted on <html class="dark">.
+type Theme = 'light' | 'dark' | 'system'
+
+// Theme cycles light → dark → system → light, persisted as `gourl-theme` in
+// localStorage; the default is "system", following the OS. The "system"
+// state watches prefers-color-scheme live, so the page flips with the OS.
 function useTheme() {
-  const [dark, setDark] = useState(() => document.documentElement.classList.contains('dark'))
-  const toggle = () => {
-    const next = !dark
-    setDark(next)
-    document.documentElement.classList.toggle('dark', next)
-    localStorage.setItem('gourl-theme', next ? 'dark' : 'light')
+  const [theme, setTheme] = useState<Theme>(() => {
+    const saved = localStorage.getItem('gourl-theme')
+    return saved === 'light' || saved === 'dark' || saved === 'system' ? saved : 'system'
+  })
+  useEffect(() => {
+    const root = document.documentElement
+    const apply = () => {
+      const dark =
+        theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+      root.classList.toggle('dark', dark)
+    }
+    apply()
+    if (theme !== 'system') return
+    const mq = window.matchMedia('(prefers-color-scheme: dark)')
+    mq.addEventListener('change', apply)
+    return () => mq.removeEventListener('change', apply)
+  }, [theme])
+  const cycle = () => {
+    const next: Theme = theme === 'light' ? 'dark' : theme === 'dark' ? 'system' : 'light'
+    localStorage.setItem('gourl-theme', next)
+    setTheme(next)
   }
-  return { dark, toggle }
+  return { theme, cycle }
 }
 
 export default function Layout() {
   const { t, i18n } = useTranslation()
   const navigate = useNavigate()
   const location = useLocation()
-  const { dark, toggle } = useTheme()
+  const { theme, cycle } = useTheme()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [mobileClosing, setMobileClosing] = useState(false)
   // The configured service name drives the sidebar, top bar and footer text;
@@ -203,11 +222,11 @@ export default function Layout() {
       <div className="mt-auto flex flex-col gap-1 pb-12">
         {/* Buttons show the CURRENT mode/language, not the toggle target. */}
         <button
-          onClick={toggle}
+          onClick={cycle}
           className="flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm text-muted transition-colors hover:bg-black/5 dark:hover:bg-white/10"
         >
-          {dark ? <Moon size={18} /> : <Sun size={18} />}
-          {dark ? t('app.dark') : t('app.light')}
+          {theme === 'dark' ? <Moon size={18} /> : theme === 'light' ? <Sun size={18} /> : <Monitor size={18} />}
+          {theme === 'dark' ? t('app.dark') : theme === 'light' ? t('app.light') : t('app.system')}
         </button>
         <button
           onClick={switchLang}
