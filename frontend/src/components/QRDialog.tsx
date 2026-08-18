@@ -117,8 +117,10 @@ export default function QRDialog({
         'image/jpeg',
       )
       if (path) toast(t('links.downloadedTo', { path }))
-    } catch {
-      toast(t('common.error'), 'error')
+    } catch (err) {
+      // Surface the plugin error (e.g. ERR_FILE_SAVE_FAILED) so native
+      // download failures are diagnosable from the UI.
+      toast(err instanceof Error ? err.message : t('common.error'), 'error')
     }
   }
   // The parent nulls the link on close; keep the last content so the QR does

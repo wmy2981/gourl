@@ -148,14 +148,23 @@ func extractMeta(root *html.Node) (title, description string) {
 	return title, description
 }
 
-// textContent joins the direct text nodes of an element.
+// textContent joins every text node under an element. Recursive on purpose:
+// device pages often wrap their heading text in links or spans
+// (<h1><a>Device</a></h1>), and the direct-children version returned "" for
+// those — silently killing the h1 fallback.
 func textContent(n *html.Node) string {
 	var b strings.Builder
-	for c := n.FirstChild; c != nil; c = c.NextSibling {
-		if c.Type == html.TextNode {
-			b.WriteString(c.Data)
+	var walk func(*html.Node)
+	walk = func(n *html.Node) {
+		for c := n.FirstChild; c != nil; c = c.NextSibling {
+			if c.Type == html.TextNode {
+				b.WriteString(c.Data)
+			} else if c.Type == html.ElementNode && c.Data != "script" && c.Data != "style" {
+				walk(c)
+			}
 		}
 	}
+	walk(n)
 	return b.String()
 }
 

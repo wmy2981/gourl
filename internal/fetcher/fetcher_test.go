@@ -64,6 +64,14 @@ func TestExtractMetaFallbackChain(t *testing.T) {
 		t.Errorf("title = %q, want the h1 fallback", title)
 	}
 
+	// A heading wrapped in a link (device pages do this a lot) still works —
+	// the text walker must recurse into child elements.
+	doc, _ = html.Parse(strings.NewReader(`<html><head></head><body>
+		<h1><a href="/">Router</a><span> Status</span></h1></body></html>`))
+	if title, _ := extractMeta(doc); title != "Router Status" {
+		t.Errorf("title = %q, want the nested h1 text", title)
+	}
+
 	// Nothing at all stays empty.
 	doc, _ = html.Parse(strings.NewReader(`<html><body><p>plain</p></body></html>`))
 	if title, _ := extractMeta(doc); title != "" {

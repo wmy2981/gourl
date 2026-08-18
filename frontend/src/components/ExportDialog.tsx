@@ -29,8 +29,9 @@ export default function ExportDialog({
       const path = await saveDownload(`gourl-links-${date}.csv`, await blobToBase64(blob), true, 'text/csv')
       if (path) toast(t('links.downloadedTo', { path }))
       onClose()
-    } catch {
-      toast(t('common.error'), 'error')
+    } catch (err) {
+      // Surface the plugin/API error so native save failures are diagnosable.
+      toast(err instanceof Error ? err.message : t('common.error'), 'error')
     } finally {
       setBusy(false)
     }
@@ -50,8 +51,9 @@ export default function ExportDialog({
       )
       if (path) toast(t('links.downloadedTo', { path }))
       onClose()
-    } catch {
-      toast(t('common.error'), 'error')
+    } catch (err) {
+      // Surface the plugin/API error so native save failures are diagnosable.
+      toast(err instanceof Error ? err.message : t('common.error'), 'error')
     } finally {
       setBusy(false)
     }
