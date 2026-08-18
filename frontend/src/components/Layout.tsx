@@ -3,7 +3,7 @@ import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { LayoutDashboard, Link2, LogOut, Menu, Monitor, Moon, ScrollText, Settings, Sun, X } from 'lucide-react'
-import { api } from '../lib/api'
+import { api, isApp } from '../lib/api'
 import { setLanguage } from '../lib/i18n'
 // Single source of truth for the brand icon (also embedded server-side and
 // referenced by the READMEs).
@@ -244,13 +244,17 @@ export default function Layout() {
           <span className="w-[18px] text-center text-xs font-semibold">{lang === 'zh' ? '中' : 'EN'}</span>
           {lang === 'zh' ? '中文' : 'English'}
         </button>
-        <button
-          onClick={logout}
-          className="flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm text-muted transition-colors hover:bg-danger/10 hover:text-danger"
-        >
-          <LogOut size={18} />
-          {t('nav.logout')}
-        </button>
+        {/* Token mode (app) has no session to end — the disconnect card on
+            the settings page owns that flow, so the logout button is web-only. */}
+        {!isApp() && (
+          <button
+            onClick={logout}
+            className="flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm text-muted transition-colors hover:bg-danger/10 hover:text-danger"
+          >
+            <LogOut size={18} />
+            {t('nav.logout')}
+          </button>
+        )}
       </div>
     </>
   )
