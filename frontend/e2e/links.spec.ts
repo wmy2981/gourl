@@ -27,7 +27,7 @@ test('rejects a reserved code with a friendly error', async ({ page }) => {
   await page.getByLabel('Destination URL').fill('https://example.com/x')
   await page.getByLabel(/Short code/).fill('api')
   await page.getByRole('button', { name: /^Save$/ }).click()
-  await expect(page.getByText('This short code is a reserved system path')).toBeVisible({ timeout: 15_000 })
+  await expect(page.getByText('This short code is reserved')).toBeVisible({ timeout: 15_000 })
 })
 
 test('rejects a duplicate code', async ({ page, request }) => {

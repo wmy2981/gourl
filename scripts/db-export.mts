@@ -40,6 +40,7 @@ interface LinkRow {
 interface TokenRow {
   id: number
   token: string
+  token_prefix: string
   note: string
   created_at: number
   deleted: boolean
@@ -126,7 +127,7 @@ const links: LinkRow[] = rawLinks.map((r) => ({ ...r, deleted: (r.deleted as num
 writeJson(path.join(outDir, 'links.json'), links)
 
 const rawTokens = db.all(
-  `SELECT id, token, note, created_at, deleted FROM api_tokens ORDER BY id DESC`,
+  `SELECT id, token, token_prefix, note, created_at, deleted FROM api_tokens ORDER BY id DESC`,
 )
 const tokens: TokenRow[] = rawTokens.map((r) => ({ ...r, deleted: (r.deleted as number) !== 0 }))
 writeJson(path.join(outDir, 'tokens.json'), tokens)

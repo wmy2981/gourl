@@ -305,11 +305,12 @@ type exportLink struct {
 }
 
 type exportToken struct {
-	ID        int64  `json:"id"`
-	Token     string `json:"token"`
-	Note      string `json:"note"`
-	CreatedAt int64  `json:"created_at"`
-	Deleted   bool   `json:"deleted"`
+	ID          int64  `json:"id"`
+	Token       string `json:"token"`
+	TokenPrefix string `json:"token_prefix"`
+	Note        string `json:"note"`
+	CreatedAt   int64  `json:"created_at"`
+	Deleted     bool   `json:"deleted"`
 }
 
 type exportDailyClick struct {
@@ -394,14 +395,14 @@ func exportDB(db *sql.DB, outDir string) (nLinks, nTokens, nDaily, nBackups int,
 	nLinks = len(links)
 
 	tokens := []exportToken{}
-	rows, err = db.Query(`SELECT id, token, note, created_at, deleted FROM api_tokens ORDER BY id DESC`)
+	rows, err = db.Query(`SELECT id, token, token_prefix, note, created_at, deleted FROM api_tokens ORDER BY id DESC`)
 	if err != nil {
 		return 0, 0, 0, 0, err
 	}
 	for rows.Next() {
 		var t exportToken
 		var deleted int
-		if err := rows.Scan(&t.ID, &t.Token, &t.Note, &t.CreatedAt, &deleted); err != nil {
+		if err := rows.Scan(&t.ID, &t.Token, &t.TokenPrefix, &t.Note, &t.CreatedAt, &deleted); err != nil {
 			rows.Close()
 			return 0, 0, 0, 0, err
 		}

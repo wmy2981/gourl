@@ -2,8 +2,14 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { ArrowRight, ExternalLink, PlugZap } from 'lucide-react'
-import { api, ApiError, setServerConfig } from '../lib/api'
-import { Button, Input, Label, useToast } from '../components/ui'
+import {
+  api,
+  ApiError,
+  isTrustedInsecureHost,
+  setServerConfig,
+  trustInsecureHost,
+} from '../lib/api'
+import { Button, Dialog, Input, Label, useToast } from '../components/ui'
 
 // Mobile-app connect screen: point the app at a gourl server and store an
 // API token from the web console (Settings → API tokens). Everything after
@@ -15,6 +21,25 @@ export default function Connect() {
   const [url, setUrl] = useState('')
   const [token, setToken] = useState('')
   const [busy, setBusy] = useState(false)
+  // Plain-HTTP server awaiting the one-time insecure-connection confirm.
+  const [pending, setPending] = useState<{ origin: string; token: string } | null>(null)
+
+  const connect = async (origin: string, tok: string) => {
+    setBusy(true)
+    // Probe the server with the token before persisting anything; a bad
+    // token or unreachable host rolls the config back.
+    setServerConfig({ url: origin, token: tok })
+    try {
+      await api.authStatus()
+    } catch (err) {
+      setServerConfig(null)
+      toast(err instanceof ApiError ? err.message : t('connect.failed'), 'error')
+      setBusy(false)
+      return
+    }
+    setBusy(false)
+    navigate('/admin', { replace: true })
+  }
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -27,20 +52,21 @@ export default function Connect() {
       toast(t('connect.invalidUrl'), 'error')
       return
     }
-    setBusy(true)
-    // Probe the server with the token before persisting anything; a bad
-    // token or unreachable host rolls the config back.
-    setServerConfig({ url: parsed.origin, token: token.trim() })
-    try {
-      await api.authStatus()
-    } catch (err) {
-      setServerConfig(null)
-      toast(err instanceof ApiError ? err.message : t('connect.failed'), 'error')
-      setBusy(false)
+    // Plain HTTP is allowed (LAN self-hosted servers), but each origin needs
+    // an explicit confirmation once; afterwards it is remembered.
+    if (parsed.protocol === 'http:' && !isTrustedInsecureHost(parsed.origin)) {
+      setPending({ origin: parsed.origin, token: token.trim() })
       return
     }
-    setBusy(false)
-    navigate('/admin', { replace: true })
+    await connect(parsed.origin, token.trim())
+  }
+
+  const confirmInsecure = () => {
+    if (!pending) return
+    trustInsecureHost(pending.origin)
+    const { origin, token } = pending
+    setPending(null)
+    void connect(origin, token)
   }
 
   const openServer = () => {
@@ -106,6 +132,25 @@ export default function Connect() {
           </button>
         </div>
       </form>
+
+      {/* Dialog at page level, never inside the glass card (backdrop-blur
+          traps fixed descendants). */}
+      <Dialog
+        open={pending !== null}
+        onClose={() => setPending(null)}
+        title={t('connect.insecureTitle')}
+      >
+        <p className="text-sm text-muted">{t('connect.insecureBody', { url: pending?.origin ?? '' })}</p>
+        <div className="mt-5 flex justify-end gap-2">
+          <Button variant="ghost" onClick={() => setPending(null)}>
+            {t('common.cancel')}
+          </Button>
+          <Button onClick={confirmInsecure}>
+            {t('connect.insecureTrust')}
+            <ArrowRight size={16} />
+          </Button>
+        </div>
+      </Dialog>
     </div>
   )
 }

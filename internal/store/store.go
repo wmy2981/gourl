@@ -74,6 +74,11 @@ func Open(path string) (*Store, error) {
 		db.Close()
 		return nil, err
 	}
+	// One-off data migration: plaintext tokens (pre-bcrypt) become hashes.
+	if err := s.MigrateTokenHashes(context.Background()); err != nil {
+		db.Close()
+		return nil, err
+	}
 	return s, nil
 }
 
@@ -177,6 +182,9 @@ var migrations = []string{
 	ALTER TABLE daily_clicks_new RENAME TO daily_clicks;
 	CREATE INDEX idx_daily_clicks_date ON daily_clicks(date);
 	CREATE INDEX idx_daily_clicks_link ON daily_clicks(link_id);`,
+	// v6: api tokens are stored as bcrypt hashes; the plaintext prefix keeps
+	// the UI preview readable (MigrateTokenHashes fills it for legacy rows).
+	`ALTER TABLE api_tokens ADD COLUMN token_prefix TEXT NOT NULL DEFAULT '';`,
 }
 
 // migrate applies pending migrations inside a transaction each, recording the

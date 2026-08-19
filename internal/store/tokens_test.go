@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 )
 
@@ -24,6 +25,14 @@ func TestTokenLifecycle(t *testing.T) {
 	}
 	if got.Note != "ci" || got.ID != id {
 		t.Errorf("unexpected token: %+v", got)
+	}
+	// The stored value is a bcrypt hash, never the plaintext; the prefix
+	// keeps the UI preview readable.
+	if got.Token == "tok-abc" || !strings.HasPrefix(got.Token, "$2a$") {
+		t.Errorf("stored token = %q, want a bcrypt hash", got.Token)
+	}
+	if got.TokenPrefix != "tok-abc" {
+		t.Errorf("token prefix = %q, want %q", got.TokenPrefix, "tok-abc")
 	}
 
 	if err := s.DeleteToken(ctx, id); err != nil {
@@ -72,15 +81,55 @@ func TestRevokeAllTokens(t *testing.T) {
 			t.Errorf("token %s must be revoked, got %v", tok, err)
 		}
 	}
-	// Keys stay permanently taken: the UNIQUE constraint still applies, so a
-	// new token cannot reuse the revoked key.
-	if _, err := s.CreateToken(ctx, "tok-1", "again", 4); err == nil {
-		t.Error("reusing a revoked key should fail the UNIQUE constraint")
+	// Keys stay permanently taken: CreateToken's plaintext check (hashes
+	// cannot share a UNIQUE constraint) refuses the revoked key.
+	if _, err := s.CreateToken(ctx, "tok-1", "again", 4); !errors.Is(err, ErrTaken) {
+		t.Errorf("reusing a revoked key = %v, want ErrTaken", err)
 	}
 
 	// A second pass revokes nothing.
 	n, err = s.RevokeAllTokens(ctx)
 	if err != nil || n != 0 {
 		t.Errorf("second revoke = %d, %v; want 0, nil", n, err)
+	}
+}
+
+// TestMigrateTokenHashes converts legacy plaintext rows (pre-bcrypt) in
+// place; hashed rows are untouched and lookups keep working either way.
+func TestMigrateTokenHashes(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+
+	// A legacy plaintext row, as stored before the bcrypt switch.
+	if _, err := s.db.ExecContext(ctx,
+		`INSERT INTO api_tokens (token, note, created_at) VALUES ('legacy-plain-1', 'legacy', 1)`); err != nil {
+		t.Fatal(err)
+	}
+	// A modern hashed row stays untouched.
+	if _, err := s.CreateToken(ctx, "modern-tok", "modern", 2); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := s.MigrateTokenHashes(ctx); err != nil {
+		t.Fatalf("MigrateTokenHashes: %v", err)
+	}
+
+	got, err := s.GetToken(ctx, "legacy-plain-1")
+	if err != nil {
+		t.Fatalf("legacy token must still match after migration: %v", err)
+	}
+	if got.Token == "legacy-plain-1" || !strings.HasPrefix(got.Token, "$2a$") {
+		t.Errorf("migrated token = %q, want a bcrypt hash", got.Token)
+	}
+	if got.TokenPrefix != "legacy-p" {
+		t.Errorf("migrated prefix = %q, want %q", got.TokenPrefix, "legacy-p")
+	}
+
+	// Idempotent: a second pass changes nothing and lookups still work.
+	if err := s.MigrateTokenHashes(ctx); err != nil {
+		t.Fatalf("second MigrateTokenHashes: %v", err)
+	}
+	if _, err := s.GetToken(ctx, "legacy-plain-1"); err != nil {
+		t.Fatalf("legacy token must still match after a second migration: %v", err)
 	}
 }

@@ -161,7 +161,7 @@ func TestSoftDeleteToken(t *testing.T) {
 	if tokens, err := s.ListTokens(ctx); err != nil || len(tokens) != 0 {
 		t.Fatalf("ListTokens after delete = %d (%v), want 0", len(tokens), err)
 	}
-	if _, err := s.CreateToken(ctx, "tok-1", "reuse", 2); err == nil {
+	if _, err := s.CreateToken(ctx, "tok-1", "reuse", 2); !errors.Is(err, ErrTaken) {
 		t.Fatal("reusing a deleted token key must fail (permanently taken)")
 	}
 }
