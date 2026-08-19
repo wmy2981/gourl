@@ -104,9 +104,16 @@ jobs:
           mkdir -p ../internal/webui
           cp -r dist ../internal/webui/dist
 
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('frontend/package-lock.json') }}
+
       - name: Install Playwright Chromium
         working-directory: frontend
-        run: npx playwright install --with-deps chromium
+        timeout-minutes: 10
+        run: npx playwright install chromium
 
       - name: End-to-end tests
         working-directory: frontend
