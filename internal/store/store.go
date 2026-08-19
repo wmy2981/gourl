@@ -402,34 +402,43 @@ func (s *Store) DeleteLink(ctx context.Context, code string) error {
 }
 
 // DeleteLinks soft-deletes many links in one transaction, returning how many
-// rows were actually deleted (absent or already-deleted codes are skipped).
-func (s *Store) DeleteLinks(ctx context.Context, codes []string) (int64, error) {
+// rows were actually deleted (absent or already-deleted codes are skipped)
+// plus the first link actually deleted (in request order) for logging.
+func (s *Store) DeleteLinks(ctx context.Context, codes []string) (int64, *Link, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return 0, err
+		return 0, nil, err
 	}
 	defer tx.Rollback()
 	var deleted int64
+	var first *Link
 	for _, code := range codes {
-		res, err := tx.ExecContext(ctx,
-			`UPDATE links SET deleted = 1 WHERE code = ? AND deleted = 0`, code)
-		if err != nil {
-			return 0, fmt.Errorf("delete links: %w", err)
+		var id int64
+		err := tx.QueryRowContext(ctx,
+			`SELECT id FROM links WHERE code = ? AND deleted = 0`, code).Scan(&id)
+		if errors.Is(err, sql.ErrNoRows) {
+			continue
 		}
-		n, err := res.RowsAffected()
 		if err != nil {
-			return 0, err
+			return 0, nil, fmt.Errorf("delete links: %w", err)
 		}
-		deleted += n
+		if _, err := tx.ExecContext(ctx,
+			`UPDATE links SET deleted = 1 WHERE code = ? AND deleted = 0`, code); err != nil {
+			return 0, nil, fmt.Errorf("delete links: %w", err)
+		}
+		deleted++
+		if first == nil {
+			first = &Link{ID: id, Code: code}
+		}
 	}
 	if err := tx.Commit(); err != nil {
-		return 0, err
+		return 0, nil, err
 	}
 	for _, code := range codes {
 		s.cache.del(code)
 	}
 	slog.Debug("store: links deleted", "deleted", deleted)
-	return deleted, nil
+	return deleted, first, nil
 }
 
 // CountExpired returns the number of links past their expiry (expires_at in
@@ -445,22 +454,34 @@ func (s *Store) CountExpired(ctx context.Context, now int64) (int64, error) {
 }
 
 // DeleteExpired soft-deletes every expired link in one transaction and
-// returns how many were deleted.
-func (s *Store) DeleteExpired(ctx context.Context, now int64) (int64, error) {
+// returns how many were deleted plus the first deleted link (earliest
+// expiry) for logging.
+func (s *Store) DeleteExpired(ctx context.Context, now int64) (int64, *Link, error) {
+	var first *Link
+	var id int64
+	var code string
+	err := s.db.QueryRowContext(ctx,
+		`SELECT id, code FROM links WHERE deleted = 0 AND expires_at > 0 AND expires_at < ? ORDER BY expires_at LIMIT 1`, now).Scan(&id, &code)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return 0, nil, fmt.Errorf("delete expired: %w", err)
+	}
+	if err == nil {
+		first = &Link{ID: id, Code: code}
+	}
 	res, err := s.db.ExecContext(ctx,
 		`UPDATE links SET deleted = 1 WHERE deleted = 0 AND expires_at > 0 AND expires_at < ?`, now)
 	if err != nil {
-		return 0, fmt.Errorf("delete expired: %w", err)
+		return 0, nil, fmt.Errorf("delete expired: %w", err)
 	}
 	// The sweep touches unknown codes; drop the whole cache to be safe.
 	s.cache.clear()
 	n, err := res.RowsAffected()
 	if err != nil {
 		slog.Debug("store: delete expired failed", "error", err)
-		return 0, err
+		return 0, nil, err
 	}
 	slog.Debug("store: expired links deleted", "deleted", n)
-	return n, nil
+	return n, first, nil
 }
 
 // ListLinks returns links matching the options plus the total count of matches.

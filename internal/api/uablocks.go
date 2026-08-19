@@ -49,7 +49,7 @@ func (s *Server) createUABlock(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_config", err.Error())
 		return
 	}
-	slog.Info("ua block added", "pattern", pattern, "actor", actorFrom(r))
+	logInfo(r, "ua block added", "pattern", pattern)
 	writeJSON(w, http.StatusCreated, map[string]any{"id": len(cfg.UABlocks), "pattern": pattern})
 }
 
@@ -70,6 +70,6 @@ func (s *Server) deleteUABlock(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_config", err.Error())
 		return
 	}
-	slog.Info("ua block removed", "id", id, "actor", actorFrom(r))
+	logInfo(r, "ua block removed", "id", id)
 	w.WriteHeader(http.StatusNoContent)
 }

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ArrowDown, Download, Loader2, Pause, Play } from 'lucide-react'
 import { api, type LogRecord } from '../lib/api'
+import { exportFilename, saveDownload } from '../lib/download'
 import { Button, Card, Input, useToast } from '../components/ui'
 
 const LEVELS = ['debug', 'info', 'warn', 'error'] as const
@@ -123,14 +124,16 @@ export default function Logs() {
     }
   }
 
-  const exportLog = () => {
-    const date = new Date().toISOString().slice(0, 10)
-    const text = filtered.map(formatLogLine).join('\n') + (filtered.length ? '\n' : '')
-    const a = document.createElement('a')
-    a.href = URL.createObjectURL(new Blob([text], { type: 'text/plain' }))
-    a.download = `gourl-logs-${date}.log`
-    a.click()
-    URL.revokeObjectURL(a.href)
+  const exportLog = async () => {
+    // Same download path as json/csv: browser download on web, Downloads/gourl/
+    // in the app (the direct <a download> never landed in the app).
+    try {
+      const text = filtered.map(formatLogLine).join('\n') + (filtered.length ? '\n' : '')
+      const path = await saveDownload(exportFilename('logs', 'log'), text, false, 'text/plain')
+      if (path) toast(t('links.downloadedTo', { path }))
+    } catch (err) {
+      toast(err instanceof Error ? err.message : t('common.error'), 'error')
+    }
   }
 
   const jumpToBottom = () => {

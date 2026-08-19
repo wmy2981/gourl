@@ -343,7 +343,7 @@ func (s *Server) changePassword(w http.ResponseWriter, r *http.Request) {
 	}
 	if !s.adminAuth().verifyPassword(body.OldPassword) {
 		s.loginRate.recordFailure(ip, cfg.LoginRateMaxAttempts, cfg.LoginRateLockSeconds, now)
-		slog.Warn("admin password change failed", "actor", actorFrom(r), "remote", r.RemoteAddr, "ip", ip)
+		logWarn(r, "admin password change failed", "remote", r.RemoteAddr, "ip", ip)
 		writeError(w, http.StatusUnauthorized, "unauthorized", "current password is incorrect")
 		return
 	}
@@ -366,7 +366,7 @@ func (s *Server) changePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.admin.setPasswordHash(string(hash))
-	slog.Info("admin password changed", "actor", actorFrom(r), "remote", r.RemoteAddr)
+	logInfo(r, "admin password changed", "remote", r.RemoteAddr)
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
@@ -380,14 +380,35 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
-// validBearer accepts a management API token from the Authorization header.
-func (s *Server) validBearer(r *http.Request) bool {
+// bearerToken accepts a management API token from the Authorization header
+// and returns its row id (0, false if absent or invalid).
+func (s *Server) bearerToken(r *http.Request) (int64, bool) {
 	h := r.Header.Get("Authorization")
 	if !strings.HasPrefix(h, "Bearer ") {
-		return false
+		return 0, false
 	}
-	_, err := s.store.GetToken(r.Context(), strings.TrimPrefix(h, "Bearer "))
-	return err == nil
+	t, err := s.store.GetToken(r.Context(), strings.TrimPrefix(h, "Bearer "))
+	if err != nil {
+		return 0, false
+	}
+	return t.ID, true
+}
+
+// The mobile app's WebView sends "gourl/<version> <default UA>" (set in
+// MainActivity.java) so the servers it talks to can recognize its requests.
+const appUA = "gourl/"
+
+// appVersionFromUA extracts the app version from a UA string; empty when the
+// request does not come from the app.
+func appVersionFromUA(ua string) string {
+	if !strings.HasPrefix(ua, appUA) {
+		return ""
+	}
+	ver := strings.TrimPrefix(ua, appUA)
+	if i := strings.IndexAny(ver, " \t"); i >= 0 {
+		ver = ver[:i]
+	}
+	return ver
 }
 
 // requireAuth gates admin endpoints behind a session or a management token
@@ -395,19 +416,26 @@ func (s *Server) validBearer(r *http.Request) bool {
 func (s *Server) requireAuth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var actor string
-		switch {
-		case s.adminAuth().validSession(r, s.cfg.Get().SessionEpoch):
+		if s.adminAuth().validSession(r, s.cfg.Get().SessionEpoch) {
 			actor = "session"
-		case s.validBearer(r):
+		} else if id, ok := s.bearerToken(r); ok {
 			actor = "token"
-		case !s.adminAuth().sessionEnabled():
+			// The app authenticates with bearer tokens and identifies itself
+			// through its UA: log actor=app plus the app version and the
+			// token id so the audit trail keeps both.
+			if ver := appVersionFromUA(r.UserAgent()); ver != "" {
+				actor = "app"
+				r = r.WithContext(context.WithValue(r.Context(), appVersionKey{}, ver))
+				r = r.WithContext(context.WithValue(r.Context(), tokenIDKey{}, id))
+			}
+		} else if !s.adminAuth().sessionEnabled() {
 			// No admin password yet: the management API is locked until the
 			// setup flow configures one (bearer tokens keep working, so
 			// scripted access is unaffected).
 			slog.Warn("admin api refused: setup required", "path", r.URL.Path, "remote", r.RemoteAddr)
 			writeError(w, http.StatusForbidden, "setup_required", "admin password not configured, complete the setup flow first")
 			return
-		default:
+		} else {
 			slog.Debug("admin auth rejected", "path", r.URL.Path, "remote", r.RemoteAddr)
 			writeError(w, http.StatusUnauthorized, "unauthorized", "authentication required")
 			return
@@ -419,10 +447,56 @@ func (s *Server) requireAuth(next http.HandlerFunc) http.HandlerFunc {
 // actorKey is the context key for the requireAuth actor.
 type actorKey struct{}
 
-// actorFrom returns how the request was authenticated ("session" or "token").
+// appVersionKey and tokenIDKey are context keys set by requireAuth for app
+// requests (UA starts with "gourl/").
+type appVersionKey struct{}
+type tokenIDKey struct{}
+
+// actorFrom returns how the request was authenticated ("session", "token"
+// or "app").
 func actorFrom(r *http.Request) string {
 	if a, ok := r.Context().Value(actorKey{}).(string); ok {
 		return a
 	}
 	return ""
+}
+
+// appVersionFrom returns the mobile app version recorded for an app request.
+func appVersionFrom(r *http.Request) string {
+	if v, ok := r.Context().Value(appVersionKey{}).(string); ok {
+		return v
+	}
+	return ""
+}
+
+// tokenIDFrom returns the bearer token's id for an app request.
+func tokenIDFrom(r *http.Request) int64 {
+	if id, ok := r.Context().Value(tokenIDKey{}).(int64); ok {
+		return id
+	}
+	return 0
+}
+
+// actorAttrs builds the log attrs shared by business events: the actor plus,
+// for app requests, the app version and the token id.
+func actorAttrs(r *http.Request) []any {
+	attrs := []any{"actor", actorFrom(r)}
+	if v := appVersionFrom(r); v != "" {
+		attrs = append(attrs, "app_version", v)
+	}
+	if id := tokenIDFrom(r); id != 0 {
+		attrs = append(attrs, "token_id", id)
+	}
+	return attrs
+}
+
+// logInfo and logWarn write business-event log lines with the request's
+// actor attrs appended. They exist because variadic spreads must be the
+// sole variadic source in a call (Go 1.26) — the append happens first.
+func logInfo(r *http.Request, msg string, attrs ...any) {
+	slog.Info(msg, append(attrs, actorAttrs(r)...)...)
+}
+
+func logWarn(r *http.Request, msg string, attrs ...any) {
+	slog.Warn(msg, append(attrs, actorAttrs(r)...)...)
 }

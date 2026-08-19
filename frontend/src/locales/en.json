@@ -134,7 +134,8 @@
     "noExpired": "No expired links",
     "clearExpiredConfirm": "This will delete {{count}} expired links. This cannot be undone.",
     "expiredCleared": "Deleted {{count}} expired links",
-    "downloadedTo": "Saved to {{path}}"
+    "downloadedTo": "Saved to {{path}}",
+    "copyFailed": "Copy failed"
   },
   "form": {
     "url": "Destination URL",
@@ -172,7 +173,12 @@
     "selfLinkTarget": "Target URL points at this instance's own short links",
     "codeTaken": "This short code is already in use",
     "reserved": "This short code is a reserved system path",
-    "importFromFile": "Import from file"
+    "importFromFile": "Import from file",
+    "batchDone": "Created {{created}}, failed {{failed}}",
+    "fileReadFailed": "Could not read the file",
+    "importFailed": "Import failed",
+    "created": "Link created",
+    "updated": "Link updated"
   },
   "settings": {
     "heading": "Settings",
@@ -232,6 +238,8 @@
     "saveFailed": "Could not save settings",
     "tokenNeverExpires": "Tokens never expire — revoke them manually when no longer needed.",
     "apiDocs": "API documentation",
+    "tokenCreated": "Token created",
+    "tokenRevoked": "Token revoked",
     "disconnectConfirm": "This will drop the stored server connection and return to the connect screen.",
     "tokenRevokeConfirm": "Deleting this token revokes it immediately. Every request using it will fail and the app will disconnect. This cannot be undone.",
     "connConnected": "Connected",

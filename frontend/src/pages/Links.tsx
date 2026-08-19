@@ -175,7 +175,7 @@ export default function Links() {
       setCopied(code)
       setTimeout(() => setCopied(''), 1500)
     } else {
-      toast(url, 'error')
+      toast(t('links.copyFailed'), 'error')
     }
   }
 

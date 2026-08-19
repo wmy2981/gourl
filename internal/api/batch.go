@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log/slog"
 	"net/http"
 	"sort"
 	"strconv"
@@ -113,6 +112,8 @@ func (s *Server) batchCreate(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "internal_error", "failed to create links")
 		return
 	}
+	var firstCode string
+	var firstID int64
 	for i, err := range errs {
 		res := map[string]any{"index": valid[i].index, "url": valid[i].item.URL}
 		switch {
@@ -143,6 +144,10 @@ func (s *Server) batchCreate(w http.ResponseWriter, r *http.Request) {
 			res["error_message"] = "code is already in use"
 		default:
 			created++
+			if firstCode == "" {
+				firstCode = valid[i].code
+				firstID = links[i].ID
+			}
 			res["status"] = "created"
 			res["code"] = valid[i].code
 			s.meta.enqueue(valid[i].code, valid[i].item.URL)
@@ -157,7 +162,12 @@ func (s *Server) batchCreate(w http.ResponseWriter, r *http.Request) {
 
 	// Legacy counts stay for compatibility; the per-status lists are what the
 	// UI reports ("created N, skipped N, updated N, failed N").
-	slog.Info("links batch created", "created", created, "skipped", skipped, "updated", updated, "failed", failed, "actor", actorFrom(r))
+	attrs := []any{"created", created, "skipped", skipped, "updated", updated, "failed", failed}
+	attrs = append(attrs, actorAttrs(r)...)
+	if firstCode != "" {
+		attrs = append(attrs, "first_code", firstCode, "first_id", firstID)
+	}
+	logInfo(r, "links batch created", attrs...)
 	writeJSON(w, http.StatusCreated, map[string]any{
 		"results":       results,
 		"created":       created,
