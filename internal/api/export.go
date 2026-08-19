@@ -2,7 +2,6 @@ package api
 
 import (
 	"encoding/csv"
-	"log/slog"
 	"net/http"
 	"strconv"
 	"time"
@@ -46,7 +45,7 @@ func (s *Server) exportJSON(w http.ResponseWriter, r *http.Request) {
 	for i := range links {
 		out = append(out, toExportRow(&links[i]))
 	}
-	slog.Info("links exported", "format", "json", "count", len(links), "actor", actorFrom(r))
+	logInfo(r, "links exported", "format", "json", "count", len(links))
 	writeJSON(w, http.StatusOK, out)
 }
 
@@ -59,7 +58,7 @@ func (s *Server) exportCSV(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	slog.Info("links exported", "format", "csv", "count", len(links), "actor", actorFrom(r))
+	logInfo(r, "links exported", "format", "csv", "count", len(links))
 	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
 	w.Header().Set("Content-Disposition",
 		`attachment; filename="gourl-links-`+time.Unix(s.now(), 0).Format("2006-01-02-15-04-05")+`.csv"`)

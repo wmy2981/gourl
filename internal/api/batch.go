@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log/slog"
 	"net/http"
 	"sort"
 	"strconv"
@@ -163,11 +162,12 @@ func (s *Server) batchCreate(w http.ResponseWriter, r *http.Request) {
 
 	// Legacy counts stay for compatibility; the per-status lists are what the
 	// UI reports ("created N, skipped N, updated N, failed N").
-	attrs := []any{"created", created, "skipped", skipped, "updated", updated, "failed", failed, "actor", actorFrom(r)}
+	attrs := []any{"created", created, "skipped", skipped, "updated", updated, "failed", failed}
+	attrs = append(attrs, actorAttrs(r)...)
 	if firstCode != "" {
 		attrs = append(attrs, "first_code", firstCode, "first_id", firstID)
 	}
-	slog.Info("links batch created", attrs...)
+	logInfo(r, "links batch created", attrs...)
 	writeJSON(w, http.StatusCreated, map[string]any{
 		"results":       results,
 		"created":       created,

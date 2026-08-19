@@ -259,7 +259,7 @@ func (s *Server) createLink(w http.ResponseWriter, r *http.Request) {
 	// Title/description are fetched in the background so a slow target site
 	// never delays the response; the meta lands on a later list refetch.
 	s.meta.enqueue(code, req.URL)
-	slog.Info("link created", "code", code, "id", link.ID, "url", req.URL, "actor", actorFrom(r))
+	logInfo(r, "link created", "code", code, "id", link.ID, "url", req.URL)
 	writeJSON(w, http.StatusCreated, toLinkJSON(link))
 }
 
@@ -384,7 +384,7 @@ func (s *Server) updateLink(w http.ResponseWriter, r *http.Request) {
 	if refetchMeta {
 		s.meta.enqueue(link.Code, link.URL)
 	}
-	slog.Info("link updated", "code", link.Code, "id", link.ID, "actor", actorFrom(r))
+	logInfo(r, "link updated", "code", link.Code, "id", link.ID)
 	writeJSON(w, http.StatusOK, toLinkJSON(link))
 }
 
@@ -409,7 +409,7 @@ func (s *Server) deleteLink(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "internal_error", "failed to delete link")
 		return
 	}
-	slog.Info("link deleted", "code", code, "id", link.ID, "actor", actorFrom(r))
+	logInfo(r, "link deleted", "code", code, "id", link.ID)
 	w.WriteHeader(http.StatusNoContent)
 }
 

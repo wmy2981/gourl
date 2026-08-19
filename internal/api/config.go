@@ -38,6 +38,6 @@ func (s *Server) updateConfig(w http.ResponseWriter, r *http.Request) {
 	}
 	// The log level is part of the business config now: apply it immediately.
 	logx.SetLevel(logx.ParseLevel(cfg.LogLevel))
-	slog.Info("config updated", "actor", actorFrom(r), "log_level", cfg.LogLevel)
+	logInfo(r, "config updated", "log_level", cfg.LogLevel)
 	writeJSON(w, http.StatusOK, s.cfg.Get())
 }

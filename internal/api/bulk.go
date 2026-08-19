@@ -28,11 +28,12 @@ func (s *Server) deleteLinks(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "internal_error", "failed to delete links")
 		return
 	}
-	attrs := []any{"deleted", deleted, "actor", actorFrom(r)}
+	attrs := []any{"deleted", deleted}
+	attrs = append(attrs, actorAttrs(r)...)
 	if first != nil {
 		attrs = append(attrs, "first_code", first.Code, "first_id", first.ID)
 	}
-	slog.Info("links batch deleted", attrs...)
+	logInfo(r, "links batch deleted", attrs...)
 	writeJSON(w, http.StatusOK, map[string]any{"deleted": deleted})
 }
 
@@ -56,10 +57,11 @@ func (s *Server) deleteExpired(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "internal_error", "failed to delete expired links")
 		return
 	}
-	attrs := []any{"deleted", deleted, "actor", actorFrom(r)}
+	attrs := []any{"deleted", deleted}
+	attrs = append(attrs, actorAttrs(r)...)
 	if first != nil {
 		attrs = append(attrs, "first_code", first.Code, "first_id", first.ID)
 	}
-	slog.Info("expired links deleted", attrs...)
+	logInfo(r, "expired links deleted", attrs...)
 	writeJSON(w, http.StatusOK, map[string]any{"deleted": deleted})
 }

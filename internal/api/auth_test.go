@@ -54,6 +54,63 @@ func TestLoginSuccessSetsSessionCookie(t *testing.T) {
 	}
 }
 
+// TestAppUAFlaggedAsApp: requests whose UA starts with "gourl/" are recorded
+// as actor=app with the app version (from the UA) and the bearer token id.
+func TestAppUAFlaggedAsApp(t *testing.T) {
+	s, _ := newTestServer(t)
+	tokenID, err := s.store.CreateToken(context.Background(), "app-token-1", "ci", s.now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var gotActor, gotVersion string
+	var gotTokenID int64
+	h := s.requireAuth(func(w http.ResponseWriter, r *http.Request) {
+		gotActor = actorFrom(r)
+		gotVersion = appVersionFrom(r)
+		gotTokenID = tokenIDFrom(r)
+		w.WriteHeader(http.StatusOK)
+	})
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/test", nil)
+	req.Header.Set("Authorization", "Bearer app-token-1")
+	req.Header.Set("User-Agent", "gourl/1.0.0.alpha.1 Mozilla/5.0 (Linux; Android 15)")
+	rec := httptest.NewRecorder()
+	h(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	if gotActor != "app" {
+		t.Errorf("actor = %q, want app", gotActor)
+	}
+	if gotVersion != "1.0.0.alpha.1" {
+		t.Errorf("app version = %q, want 1.0.0.alpha.1", gotVersion)
+	}
+	if gotTokenID != tokenID {
+		t.Errorf("token id = %d, want %d", gotTokenID, tokenID)
+	}
+}
+
+// TestAppUARequiresBearer: an app-like UA on a session request must not flip
+// the actor (the app never uses sessions, but the actor must stay truthful).
+func TestAppUARequiresBearer(t *testing.T) {
+	s, _ := newTestServer(t)
+	var gotActor string
+	h := s.requireAuth(func(w http.ResponseWriter, r *http.Request) {
+		gotActor = actorFrom(r)
+		w.WriteHeader(http.StatusOK)
+	})
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/test", nil)
+	req.AddCookie(loginAs(t, s, "test-password"))
+	req.Header.Set("User-Agent", "gourl/9.9 Mozilla/5.0")
+	rec := httptest.NewRecorder()
+	h(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	if gotActor != "session" {
+		t.Errorf("actor = %q, want session (app UA only applies to bearer auth)", gotActor)
+	}
+}
+
 func TestLoginWrongPassword(t *testing.T) {
 	s, _ := newTestServer(t)
 	rec := do(t, s, http.MethodPost, "/api/v1/auth/login", map[string]any{"password": "wrong"})
