@@ -27,6 +27,7 @@ Subdirectory conventions for the Go backend packages. Root-level conventions (co
 
 - Schema changes go through the ordered `migrations` slice (currently v1–v5, details in code comments) — never raw DDL
 - **Soft deletes** (links + tokens): only `deleted = 1`; the partial index `idx_links_code_active` keeps codes unique among non-deleted rows (freed codes reusable, token keys permanently taken); every read path, the redirect route and the API exports exclude deleted rows; only db-export surfaces them
+- **API tokens are bcrypt hashes** (v6, `token_prefix` keeps the UI preview): hashes cannot match by SQL equality, so `GetToken` scans active rows (counts are tiny) and `CreateToken`'s plaintext check enforces "keys stay permanently taken" (`ErrTaken`) — writes close their read result sets first (the `:memory:` test store pins one connection)
 - **`daily_clicks` is permanent history keyed by `(link_id, date)`** (v5): pre-v5 orphans keep a NULL `link_id` and still feed totals; `ApplyCounts` resolves the live id per flush so a reused code counts from zero — never clean up click rows on link deletion
 - `backups` is append-only: `BackupLink` snapshots the pre-edit row with a 1-based `b_id` (exported as `b-1, b-2, …`); the api layer backs up on manual edits, renames and batch conflict=update, never on count flushes
 - `DeleteLinks`/`DeleteExpired` return the first link actually deleted (request order / earliest expiry) so api logs can name a concrete `code` + `id`
