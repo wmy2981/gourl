@@ -62,7 +62,7 @@ func (s *Server) exportCSV(w http.ResponseWriter, r *http.Request) {
 	slog.Info("links exported", "format", "csv", "count", len(links), "actor", actorFrom(r))
 	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
 	w.Header().Set("Content-Disposition",
-		`attachment; filename="gourl-links-`+time.Unix(s.now(), 0).Format("20060102")+`.csv"`)
+		`attachment; filename="gourl-links-`+time.Unix(s.now(), 0).Format("2006-01-02-15-04-05")+`.csv"`)
 	w.Write([]byte("\xEF\xBB\xBF")) // UTF-8 BOM
 
 	cw := csv.NewWriter(w)

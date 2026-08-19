@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Trans, useTranslation } from 'react-i18next'
 import { FileJson, FileSpreadsheet } from 'lucide-react'
 import { api } from '../lib/api'
-import { blobToBase64, saveDownload } from '../lib/download'
+import { blobToBase64, exportFilename, saveDownload } from '../lib/download'
 import { Button, Dialog, useToast } from './ui'
 
 // Export dialog: CSV and JSON share one button; the format is picked here.
@@ -25,8 +25,7 @@ export default function ExportDialog({
     setBusy(true)
     try {
       const blob = await api.exportCsv()
-      const date = new Date().toISOString().slice(0, 10)
-      const path = await saveDownload(`gourl-links-${date}.csv`, await blobToBase64(blob), true, 'text/csv')
+      const path = await saveDownload(exportFilename('links', 'csv'), await blobToBase64(blob), true, 'text/csv')
       if (path) toast(t('links.downloadedTo', { path }))
       onClose()
     } catch (err) {
@@ -42,9 +41,8 @@ export default function ExportDialog({
     setBusy(true)
     try {
       const links = await api.exportJson()
-      const date = new Date().toISOString().slice(0, 10)
       const path = await saveDownload(
-        `gourl-links-${date}.json`,
+        exportFilename('links', 'json'),
         JSON.stringify(links, null, 2),
         false,
         'application/json',
