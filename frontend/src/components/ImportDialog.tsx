@@ -51,7 +51,7 @@ export default function ImportDialog({
         setText(raw)
       }
     } catch {
-      toast(t('form.invalidCode'), 'error')
+      toast(t('form.fileReadFailed'), 'error')
     }
   }
 
@@ -74,7 +74,7 @@ export default function ImportDialog({
       onImported()
       onClose()
     } catch (err) {
-      toast(err instanceof ApiError ? err.message : t('form.invalidCode'), 'error')
+      toast(err instanceof ApiError ? err.message : t('form.importFailed'), 'error')
     } finally {
       setBusy(false)
     }

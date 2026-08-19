@@ -84,6 +84,7 @@ export default function LinkFormDialog({
       } else {
         await api.createLink({ url, code: code || undefined, description, expires_at: expires })
       }
+      toast(link ? t('form.updated') : t('form.created'))
       onSaved()
       onClose()
     } catch (err) {

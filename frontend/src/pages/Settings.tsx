@@ -317,6 +317,7 @@ export default function Settings() {
               setNewToken(res.token)
               setTokenNote('')
               queryClient.invalidateQueries({ queryKey: ['tokens'] })
+              toast(t('settings.tokenCreated'))
             } catch (err) {
               toast(err instanceof ApiError ? err.message : t('common.error'), 'error')
             }
@@ -468,6 +469,7 @@ function TokenSection({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tokens'] })
       setRevoking(null)
+      toast(t('settings.tokenRevoked'))
     },
     onError: (err: unknown) =>
       toast(err instanceof ApiError ? err.message : t('common.error'), 'error'),
@@ -501,7 +503,7 @@ function TokenSection({
           <Button variant="ghost" className="mt-1 !p-1 text-xs" onClick={async () => {
             // Same multi-tier fallback chain as the link-row copy button.
             const ok = await copyText(newToken)
-            toast(ok ? t('links.copied') : newToken, ok ? 'success' : 'error')
+            toast(ok ? t('links.copied') : t('links.copyFailed'), ok ? 'success' : 'error')
           }}>
             {t('links.copy')}
           </Button>
