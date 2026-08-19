@@ -14,8 +14,10 @@ android {
         release {
             // CI-injected properties: GOURL_KEYSTORE_FILE, GOURL_KEYSTORE_PASSWORD,
             // GOURL_KEY_ALIAS, GOURL_KEY_PASSWORD. Absent on local builds.
+            // rootProject.file resolves against the project root, matching the
+            // keystore/ path the workflow writes.
             if (findProperty('GOURL_KEYSTORE_FILE')) {
-                storeFile file(findProperty('GOURL_KEYSTORE_FILE'))
+                storeFile rootProject.file(findProperty('GOURL_KEYSTORE_FILE'))
                 storePassword findProperty('GOURL_KEYSTORE_PASSWORD')
                 keyAlias findProperty('GOURL_KEY_ALIAS')
                 keyPassword findProperty('GOURL_KEY_PASSWORD')
