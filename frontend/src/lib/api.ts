@@ -30,6 +30,32 @@ export function setServerConfig(cfg: ServerConfig | null) {
   else localStorage.removeItem(SERVER_KEY)
 }
 
+const TRUSTED_HOSTS_KEY = 'gourl-trusted-insecure-hosts'
+
+/** Origins (http://host:port) the user explicitly allowed over plain HTTP. */
+export function isTrustedInsecureHost(origin: string): boolean {
+  try {
+    const raw = localStorage.getItem(TRUSTED_HOSTS_KEY)
+    if (!raw) return false
+    return (JSON.parse(raw) as string[]).includes(origin)
+  } catch {
+    return false
+  }
+}
+
+export function trustInsecureHost(origin: string) {
+  try {
+    const raw = localStorage.getItem(TRUSTED_HOSTS_KEY)
+    const list = raw ? (JSON.parse(raw) as string[]) : []
+    if (!list.includes(origin)) {
+      list.push(origin)
+      localStorage.setItem(TRUSTED_HOSTS_KEY, JSON.stringify(list))
+    }
+  } catch {
+    // Storage may be unavailable; the confirm dialog already served its purpose.
+  }
+}
+
 /** Reports whether the SPA runs inside the Capacitor app (token mode). */
 export function isApp(): boolean {
   // @capacitor/core registers a window.Capacitor stub on the web too, so the

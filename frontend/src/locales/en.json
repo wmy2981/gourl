@@ -49,7 +49,10 @@
     "step1": "Open your gourl web console in a browser and sign in",
     "step2": "Settings → API tokens → create a token",
     "step3": "Input the server address and token above",
-    "openServer": "Open the server page in the browser"
+    "openServer": "Open the server page in the browser",
+    "insecureTitle": "Insecure connection",
+    "insecureBody": "{{url}} is not secure — it uses plain HTTP. Continue?",
+    "insecureTrust": "Trust & connect"
   },
   "changePassword": {
     "heading": "Change admin password",

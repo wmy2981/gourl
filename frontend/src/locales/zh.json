@@ -49,7 +49,10 @@
     "step1": "在浏览器中打开你的 gourl 管理后台并登录",
     "step2": "设置 → API tokens → 创建 token",
     "step3": "将服务器地址和 token 输入到上方",
-    "openServer": "在浏览器中打开服务器页面"
+    "openServer": "在浏览器中打开服务器页面",
+    "insecureTitle": "不安全的连接",
+    "insecureBody": "{{url}} 使用明文 HTTP，连接不安全。仍然连接？",
+    "insecureTrust": "信任并连接"
   },
   "changePassword": {
     "heading": "修改管理员密码",
