@@ -12,16 +12,8 @@ import (
 	"github.com/wmy2981/gourl/internal/store"
 )
 
-// tokenPreview masks a token except for its first 8 characters.
-func tokenPreview(t string) string {
-	if len(t) <= 8 {
-		return t
-	}
-	return t[:8] + "…"
-}
-
 // listTokens handles GET /api/v1/tokens. Full tokens are never returned;
-// only a preview plus metadata.
+// only the stored plaintext prefix plus metadata.
 func (s *Server) listTokens(w http.ResponseWriter, r *http.Request) {
 	tokens, err := s.store.ListTokens(r.Context())
 	if err != nil {
@@ -32,7 +24,7 @@ func (s *Server) listTokens(w http.ResponseWriter, r *http.Request) {
 	for _, t := range tokens {
 		out = append(out, map[string]any{
 			"id":          t.ID,
-			"token":       tokenPreview(t.Token),
+			"token":       t.TokenPrefix,
 			"note":        t.Note,
 			"created_at":  t.CreatedAt,
 		})
@@ -59,6 +51,10 @@ func (s *Server) createToken(w http.ResponseWriter, r *http.Request) {
 	token := hex.EncodeToString(raw)
 	id, err := s.store.CreateToken(r.Context(), token, body.Note, s.now())
 	if err != nil {
+		if errors.Is(err, store.ErrTaken) {
+			writeError(w, http.StatusConflict, "token_taken", "token already exists")
+			return
+		}
 		writeError(w, http.StatusInternalServerError, "internal_error", "failed to store token")
 		return
 	}
