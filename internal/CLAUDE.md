@@ -29,6 +29,7 @@ Subdirectory conventions for the Go backend packages. Root-level conventions (co
 - **Soft deletes** (links + tokens): only `deleted = 1`; the partial index `idx_links_code_active` keeps codes unique among non-deleted rows (freed codes reusable, token keys permanently taken); every read path, the redirect route and the API exports exclude deleted rows; only db-export surfaces them
 - **`daily_clicks` is permanent history keyed by `(link_id, date)`** (v5): pre-v5 orphans keep a NULL `link_id` and still feed totals; `ApplyCounts` resolves the live id per flush so a reused code counts from zero — never clean up click rows on link deletion
 - `backups` is append-only: `BackupLink` snapshots the pre-edit row with a 1-based `b_id` (exported as `b-1, b-2, …`); the api layer backs up on manual edits, renames and batch conflict=update, never on count flushes
+- `DeleteLinks`/`DeleteExpired` return the first link actually deleted (request order / earliest expiry) so api logs can name a concrete `code` + `id`
 - **`GetLink` serves from an in-memory TTL cache (60s)**, totals included — every write path must invalidate: create/update/rename/meta/delete del the code, `ApplyCounts` dels touched codes, `DeleteExpired` clears the whole cache
 - `:memory:` SQLite is per-connection — fine for tests; a shared in-memory DB across goroutines needs a file DSN
 
@@ -45,7 +46,7 @@ Subdirectory conventions for the Go backend packages. Root-level conventions (co
 - Setup requires the **bootstrap code**: `NewServer` generates an 8-char mixed-alphanumeric code, prints it to terminal + log, persists it as `setup.code` next to the database (0600 — `gourl setup-code` reads it), constant-time-compares it (`invalid_setup_code`, no rate limit), then removes the file
 - `POST /api/v1/auth/change-password` (login limiter applies) writes a fresh hash and **bumps `session_epoch`** — every session, the changer's included, is revoked; bearer tokens unaffected
 - Sessions are stateless `exp.epoch.nonce.hmac` (4 parts; exp 0 = never expires): TTL applies at issue time only; `verifyToken` checks the epoch against `config.session_epoch` (bumping it revokes everything); `SESSION_SECRET` unset → ephemeral per-process secret (sessions do not survive a restart)
-- `requireAuth` stamps the request context with `actor` (session|token) — business-event logs must carry `actorFrom(r)`
+- `requireAuth` stamps the request context with `actor` (session|token|app) — bearer requests whose UA starts with `gourl/<version>` (the Capacitor WebView) become `actor=app` and gain `app_version` + `token_id`; business-event logs must go through `logInfo`/`logWarn` (they append `actorAttrs(r)`)
 - **`GET /api/v1/config` doubles as the app's connection probe** (polled every 10s + on app foreground: 200 = connected, 401 = dead token, network error = unreachable) — keep it behind `requireAuth`, never public, or the probe silently reports the wrong state
 - New API endpoints must update `internal/webui/openapi.yaml` too
 
