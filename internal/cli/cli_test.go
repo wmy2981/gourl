@@ -62,7 +62,8 @@ func TestExportDBFormat(t *testing.T) {
 			title TEXT, description TEXT, expires_at INTEGER NOT NULL DEFAULT 0, click_count INTEGER NOT NULL DEFAULT 0,
 			created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, deleted INTEGER NOT NULL DEFAULT 0)`,
 		`CREATE TABLE api_tokens (id INTEGER PRIMARY KEY AUTOINCREMENT, token TEXT NOT NULL UNIQUE,
-			note TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL, deleted INTEGER NOT NULL DEFAULT 0)`,
+			token_prefix TEXT NOT NULL DEFAULT '', note TEXT NOT NULL DEFAULT '',
+			created_at INTEGER NOT NULL, deleted INTEGER NOT NULL DEFAULT 0)`,
 		`CREATE TABLE daily_clicks (link_id INTEGER, code TEXT NOT NULL, date TEXT NOT NULL, count INTEGER NOT NULL)`,
 		`CREATE TABLE backups (b_id INTEGER PRIMARY KEY, link_id INTEGER NOT NULL, code TEXT NOT NULL, url TEXT NOT NULL,
 			title TEXT, description TEXT, expires_at INTEGER NOT NULL DEFAULT 0, click_count INTEGER NOT NULL DEFAULT 0,
@@ -78,7 +79,7 @@ func TestExportDBFormat(t *testing.T) {
 	if _, err := db.Exec(`INSERT INTO links (code, url, title, created_at, updated_at, deleted) VALUES ('del', 'https://d.com', 'gone', 2, 2, 1)`); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Exec(`INSERT INTO api_tokens (token, note, created_at, deleted) VALUES ('tok-1', 'ci', 3, 0)`); err != nil {
+	if _, err := db.Exec(`INSERT INTO api_tokens (token, token_prefix, note, created_at, deleted) VALUES ('tok-1', 'tok-1', 'ci', 3, 0)`); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := db.Exec(`INSERT INTO daily_clicks (link_id, code, date, count) VALUES (1, 'abc', '2026-08-18', 5)`); err != nil {
@@ -140,10 +141,10 @@ func TestExportDBFormat(t *testing.T) {
 		t.Errorf("backups = %+v, want a single b-1", backups)
 	}
 
-	// tokens.json carries the full token value.
+	// tokens.json carries the full token value and the preview prefix.
 	var tokens []exportToken
 	readJSON(t, filepath.Join(out, "tokens.json"), &tokens)
-	if len(tokens) != 1 || tokens[0].Token != "tok-1" {
+	if len(tokens) != 1 || tokens[0].Token != "tok-1" || tokens[0].TokenPrefix != "tok-1" {
 		t.Errorf("tokens = %+v", tokens)
 	}
 }
