@@ -99,6 +99,50 @@ func TestSoftDeleteCountsFromZero(t *testing.T) {
 	}
 }
 
+// TestBatchDeleteReportsFirst: batch deletes report the first link actually
+// deleted (request order for DeleteLinks, earliest expiry for DeleteExpired)
+// so the api layer can log a concrete code+id.
+func TestBatchDeleteReportsFirst(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	for _, c := range []string{"a", "b", "c"} {
+		if err := s.CreateLink(ctx, sampleLink(c)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// "nope" is absent: skipped, not the first.
+	deleted, first, err := s.DeleteLinks(ctx, []string{"nope", "b", "a"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if deleted != 2 {
+		t.Fatalf("deleted = %d, want 2", deleted)
+	}
+	if first == nil || first.Code != "b" || first.ID == 0 {
+		t.Fatalf("first = %+v, want the first deleted link (code b)", first)
+	}
+
+	// The expired sweep reports the earliest-expiring link.
+	c, err := s.GetLink(ctx, "c")
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.ExpiresAt = 1000
+	if err := s.UpdateLink(ctx, c); err != nil {
+		t.Fatal(err)
+	}
+	n, first, err := s.DeleteExpired(ctx, 2000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 1 {
+		t.Fatalf("deleted expired = %d, want 1", n)
+	}
+	if first == nil || first.Code != "c" || first.ID != c.ID {
+		t.Fatalf("first expired = %+v, want code c id %d", first, c.ID)
+	}
+}
+
 // TestSoftDeleteToken: revoked tokens disappear from reads and auth, the row
 // stays, and the key stays permanently taken.
 func TestSoftDeleteToken(t *testing.T) {

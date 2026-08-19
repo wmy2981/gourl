@@ -23,12 +23,16 @@ func (s *Server) deleteLinks(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_request", "batch exceeds 500 items")
 		return
 	}
-	deleted, err := s.store.DeleteLinks(r.Context(), body.Codes)
+	deleted, first, err := s.store.DeleteLinks(r.Context(), body.Codes)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "internal_error", "failed to delete links")
 		return
 	}
-	slog.Info("links batch deleted", "deleted", deleted, "actor", actorFrom(r))
+	attrs := []any{"deleted", deleted, "actor", actorFrom(r)}
+	if first != nil {
+		attrs = append(attrs, "first_code", first.Code, "first_id", first.ID)
+	}
+	slog.Info("links batch deleted", attrs...)
 	writeJSON(w, http.StatusOK, map[string]any{"deleted": deleted})
 }
 
@@ -47,11 +51,15 @@ func (s *Server) expiredCount(w http.ResponseWriter, r *http.Request) {
 // deleteExpired handles DELETE /api/v1/links/expired: removes every link
 // whose expiry has passed (daily click history is kept, as always).
 func (s *Server) deleteExpired(w http.ResponseWriter, r *http.Request) {
-	deleted, err := s.store.DeleteExpired(r.Context(), s.now())
+	deleted, first, err := s.store.DeleteExpired(r.Context(), s.now())
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "internal_error", "failed to delete expired links")
 		return
 	}
-	slog.Info("expired links deleted", "deleted", deleted, "actor", actorFrom(r))
+	attrs := []any{"deleted", deleted, "actor", actorFrom(r)}
+	if first != nil {
+		attrs = append(attrs, "first_code", first.Code, "first_id", first.ID)
+	}
+	slog.Info("expired links deleted", attrs...)
 	writeJSON(w, http.StatusOK, map[string]any{"deleted": deleted})
 }
