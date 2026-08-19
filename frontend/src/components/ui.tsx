@@ -375,7 +375,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         onMouseEnter={() => setExpanded(true)}
         onMouseLeave={() => setExpanded(false)}
       >
-        <div className="pointer-events-auto flex flex-col">
+        <div className="pointer-events-auto flex flex-col items-end">
           <AnimatePresence>
             {[...toasts].reverse().map((toast, i, arr) => {
               // Newest renders last (bottom, front-most). Rear cards get a
