@@ -3,16 +3,23 @@ apply plugin: 'com.android.application'
 android {
     namespace = "com.wmy2981.gourl"
     compileSdk = rootProject.ext.compileSdkVersion
-    // The debug keystore is committed so every build (CI included) signs the
-    // APK identically — a fresh runner key would otherwise force uninstall
-    // before reinstall. VERSION_CODE from the env keeps the code monotonic
-    // (default 1 locally), so updates can always overwrite the previous APK.
+    // The committed debug keystore was removed (2026-08): AGP generates its
+    // own debug key per build, and CI builds the SIGNED release variant —
+    // android.yml decrypts the release keystore from GitHub secrets into
+    // gradle properties, so every release APK signs identically and updates
+    // can overwrite the previous install. Without those properties (local
+    // builds) the release buildType stays unsigned. VERSION_CODE from the
+    // env keeps the code monotonic (default 1 locally).
     signingConfigs {
-        debug {
-            storeFile rootProject.file('keystore/debug.keystore')
-            storePassword 'android'
-            keyAlias 'androiddebugkey'
-            keyPassword 'android'
+        release {
+            // CI-injected properties: GOURL_KEYSTORE_FILE, GOURL_KEYSTORE_PASSWORD,
+            // GOURL_KEY_ALIAS, GOURL_KEY_PASSWORD. Absent on local builds.
+            if (findProperty('GOURL_KEYSTORE_FILE')) {
+                storeFile file(findProperty('GOURL_KEYSTORE_FILE'))
+                storePassword findProperty('GOURL_KEYSTORE_PASSWORD')
+                keyAlias findProperty('GOURL_KEY_ALIAS')
+                keyPassword findProperty('GOURL_KEY_PASSWORD')
+            }
         }
     }
     buildFeatures {
@@ -34,12 +41,12 @@ android {
         }
     }
     buildTypes {
-        debug {
-            signingConfig signingConfigs.debug
-        }
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            if (findProperty('GOURL_KEYSTORE_FILE')) {
+                signingConfig signingConfigs.release
+            }
         }
     }
 }

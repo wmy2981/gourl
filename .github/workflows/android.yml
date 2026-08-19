@@ -1,9 +1,11 @@
 name: Build Android App
 
-# Debug APK builds for the Android app — kept separate from the server CI.
-# Runs on every dev/main push. The version string follows the Docker
-# convention (plain VERSION on main, "VERSION (sha7)" on dev); when this
-# push advances the version and the release workflow creates v{VERSION},
+# Signed release APK builds for the Android app — kept separate from the
+# server CI. Runs on every dev/main push. The release keystore never lives
+# in the repo: the workflow decrypts it from GitHub secrets into gradle
+# properties, so every APK signs identically. The version string follows the
+# Docker convention (plain VERSION on main, "VERSION (sha7)" on dev); when
+# this push advances the version and the release workflow creates v{VERSION},
 # the APK is attached to it as a release asset.
 on:
   push:
@@ -51,11 +53,11 @@ jobs:
           VERSION=$(cat VERSION)
           if [ "${{ github.ref_name }}" = "main" ]; then
             echo "VERSION_STR=$VERSION" >> "$GITHUB_ENV"
-            echo "APK_NAME=gourl-${VERSION}-debug.apk" >> "$GITHUB_ENV"
+            echo "APK_NAME=gourl-${VERSION}-release.apk" >> "$GITHUB_ENV"
           else
             SHA=$(git rev-parse --short=7 HEAD)
             echo "VERSION_STR=${VERSION} (${SHA})" >> "$GITHUB_ENV"
-            echo "APK_NAME=gourl-${VERSION}-${SHA}-debug.apk" >> "$GITHUB_ENV"
+            echo "APK_NAME=gourl-${VERSION}-${SHA}-release.apk" >> "$GITHUB_ENV"
           fi
 
       - name: Stamp the Android version
@@ -74,22 +76,39 @@ jobs:
         run: |
           echo "VERSION_CODE=$(date -u +%y%j%H%M)" >> gradle.properties
 
-      - name: Assemble debug APK
+      - name: Import the release keystore from secrets
+        working-directory: frontend/android
+        run: |
+          mkdir -p keystore
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > keystore/release.keystore
+          chmod 600 keystore/release.keystore
+
+      - name: Configure release signing
+        working-directory: frontend/android
+        run: |
+          {
+            echo "GOURL_KEYSTORE_FILE=keystore/release.keystore"
+            echo "GOURL_KEYSTORE_PASSWORD=${{ secrets.KEYSTORE_PASSWORD }}"
+            echo "GOURL_KEY_ALIAS=${{ secrets.KEY_ALIAS }}"
+            echo "GOURL_KEY_PASSWORD=${{ secrets.KEY_PASSWORD }}"
+          } >> gradle.properties
+
+      - name: Assemble signed release APK
         working-directory: frontend/android
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug
+          ./gradlew assembleRelease
 
       - name: Stage the APK
         run: |
           mkdir -p dist-apk
-          cp frontend/android/app/build/outputs/apk/debug/app-debug.apk \
+          cp frontend/android/app/build/outputs/apk/release/app-release.apk \
             "dist-apk/${APK_NAME}"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: gourl-debug-apk
+          name: gourl-release-apk
           path: dist-apk/
           if-no-files-found: error
 
