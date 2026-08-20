@@ -304,7 +304,7 @@ export default function Layout() {
               transition: dragX !== null ? 'none' : 'transform 0.3s cubic-bezier(0.32, 0.72, 0, 1)',
             }}
           >
-            <button onClick={closeMobile} className="mb-4 self-end rounded-lg p-1.5" aria-label={t('common.close')}>
+            <button onClick={closeMobile} className="mb-4 mt-2 self-end rounded-lg p-1.5" aria-label={t('common.close')}>
               <X size={20} />
             </button>
             {sidebarContent}
