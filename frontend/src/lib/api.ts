@@ -67,6 +67,15 @@ export function isApp(): boolean {
   return cap?.isNativePlatform?.() === true
 }
 
+/** Resolves a server-relative asset path against the connected server in app
+ * mode. The SPA loads from the WebView's local origin there, so a plain
+ * relative path would miss the server's /assets/ uploads; on the web the path
+ * is returned unchanged (same-origin). */
+export function assetUrl(path: string): string {
+  const server = getServerConfig()
+  return server ? `${server.url.replace(/\/+$/, '')}${path}` : path
+}
+
 export interface ApiErrorBody {
   error: { code: string; message: string }
 }
