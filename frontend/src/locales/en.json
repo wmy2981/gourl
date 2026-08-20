@@ -14,6 +14,13 @@
     "settings": "Settings",
     "logout": "Sign out"
   },
+  "page": {
+    "notFoundHeading": "Page not found",
+    "notFoundMessage": "The short link you visited does not exist, has been removed, or has expired.",
+    "blockedHeading": "Access blocked",
+    "blockedUaMessage": "Your request was blocked. Matched User-Agent keyword: {{detail}}",
+    "blockedIpMessage": "Your request was blocked. Matched IP rule: {{detail}}"
+  },
   "logs": {
     "live": "Live",
     "reconnecting": "Disconnected, reconnecting…",

@@ -10,6 +10,14 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cp -f "$ROOT/assets/favicon.svg" "$ROOT/frontend/src/assets/icon.svg"
 cp -f "$ROOT/assets/favicon.svg" "$ROOT/internal/webui/icon.svg"
 
+# Locale files are the single source for backend-rendered page copy
+# (404 / blocked pages) — copy them next to the go:embed inputs.
+locales="$ROOT/internal/webui/locales"
+rm -rf "$locales"
+mkdir -p "$locales"
+cp -f "$ROOT/frontend/src/locales/en.json" "$locales/en.json"
+cp -f "$ROOT/frontend/src/locales/zh.json" "$locales/zh.json"
+
 cd "$ROOT/frontend"
 npm ci --no-audit --no-fund
 npm run build

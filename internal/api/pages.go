@@ -4,6 +4,8 @@ import (
 	"html/template"
 	"net/http"
 	"strings"
+
+	"github.com/wmy2981/gourl/internal/webui"
 )
 
 // pageTmpl renders the public error pages (blocked / not found).
@@ -66,14 +68,26 @@ func langOf(r *http.Request) string {
 	return "en"
 }
 
+// pageCopy is the backend-rendered page copy, loaded once from the embedded
+// locale files (single source: frontend/src/locales/*.json).
+var pageCopy = map[string]map[string]string{
+	"en": webui.PageLocale("en"),
+	"zh": webui.PageLocale("zh"),
+}
+
+// pageText returns the locale copy for key in lang, falling back to the
+// English locale.
+func pageText(lang, key string) string {
+	if v := pageCopy[lang][key]; v != "" {
+		return v
+	}
+	return pageCopy["en"][key]
+}
+
 func (s *Server) renderNotFound(w http.ResponseWriter, r *http.Request) {
 	cfg := s.cfg.Get()
 	lang := langOf(r)
-	heading, message := "Page not found", "The short link you visited does not exist or has been removed."
-	if lang == "zh" {
-		heading, message = "页面不存在", "您访问的短链接不存在或已被删除。"
-	}
-	s.renderPage(w, http.StatusNotFound, lang, heading, message, "", cfg.Site.Title, cfg.Site.Description, cfg.Site.Keywords)
+	s.renderPage(w, http.StatusNotFound, lang, pageText(lang, "notFoundHeading"), pageText(lang, "notFoundMessage"), "", cfg.Site.Title, cfg.Site.Description, cfg.Site.Keywords)
 }
 
 // renderBlocked renders the 403 page explaining why the request was blocked,
@@ -82,23 +96,12 @@ func (s *Server) renderNotFound(w http.ResponseWriter, r *http.Request) {
 func (s *Server) renderBlocked(w http.ResponseWriter, r *http.Request, kind, detail string) {
 	cfg := s.cfg.Get()
 	lang := langOf(r)
-	var heading, msg string
-	if lang == "zh" {
-		heading = "访问被拦截"
-		if kind == "ua" {
-			msg = "您的请求被本服务拦截。命中的 User-Agent 关键词：" + detail
-		} else {
-			msg = "您的请求被本服务拦截。命中的 IP 规则：" + detail
-		}
-	} else {
-		heading = "Access blocked"
-		if kind == "ua" {
-			msg = "Your request was blocked. Matched User-Agent keyword: " + detail
-		} else {
-			msg = "Your request was blocked. Matched IP rule: " + detail
-		}
+	key := "blockedUaMessage"
+	if kind == "ip" {
+		key = "blockedIpMessage"
 	}
-	s.renderPage(w, http.StatusForbidden, lang, heading, msg, "", cfg.Site.Title, cfg.Site.Description, cfg.Site.Keywords)
+	msg := strings.ReplaceAll(pageText(lang, key), "{{detail}}", detail)
+	s.renderPage(w, http.StatusForbidden, lang, pageText(lang, "blockedHeading"), msg, "", cfg.Site.Title, cfg.Site.Description, cfg.Site.Keywords)
 }
 
 // renderPage renders the page template from the live site config.

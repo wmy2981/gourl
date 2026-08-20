@@ -8,6 +8,14 @@ Set-Location "$PSScriptRoot\.."
 Copy-Item "assets\favicon.svg" "frontend\src\assets\icon.svg" -Force
 Copy-Item "assets\favicon.svg" "internal\webui\icon.svg" -Force
 
+# Locale files are the single source for backend-rendered page copy
+# (404 / blocked pages) — copy them next to the go:embed inputs.
+$locales = "$PSScriptRoot\..\internal\webui\locales"
+if (Test-Path $locales) { Remove-Item $locales -Recurse -Force }
+New-Item -ItemType Directory -Path $locales | Out-Null
+Copy-Item "frontend\src\locales\en.json" "$locales\en.json"
+Copy-Item "frontend\src\locales\zh.json" "$locales\zh.json"
+
 Set-Location frontend
 npm ci --no-audit --no-fund
 npm run build
