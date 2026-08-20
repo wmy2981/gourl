@@ -21,13 +21,27 @@ const buttonStyles: Record<ButtonVariant, string> = {
     'border border-hairline hover:bg-black/5 dark:hover:bg-white/10',
 }
 
+// Light key-press feedback for button taps (GourlBridge.buttonHaptic): the
+// system's softest haptic through the touch engine, not the vibrator motor,
+// and it honors the system haptic-feedback setting. Web: no-op.
+function buttonHaptic() {
+  if (!isApp()) return
+  const bridge = (window as Window & { GourlBridge?: { buttonHaptic?: () => void } }).GourlBridge
+  bridge?.buttonHaptic?.()
+}
+
 export function Button({
   variant = 'primary',
   className = '',
+  onClick,
   ...props
 }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: ButtonVariant }) {
   return (
     <button
+      onClick={(e) => {
+        buttonHaptic()
+        onClick?.(e)
+      }}
       className={`inline-flex items-center justify-center gap-1.5 rounded-xl px-3.5 py-2 text-sm font-medium transition-colors disabled:opacity-50 disabled:pointer-events-none ${buttonStyles[variant]} ${className}`}
       {...props}
     />

@@ -54,6 +54,11 @@ public class MainActivity extends BridgeActivity {
      * engine the system switches use, respects the user's haptic-feedback
      * setting, and needs no VIBRATE permission. TOGGLE_ON/OFF exist since
      * API 33; below that CLOCK_TICK is the closest light tick.
+     *
+     * buttonHaptic — the same engine's lightest standard feedback
+     * (KEYBOARD_TAP, a soft virtual-key press) for button presses; it also
+     * respects the user's haptic-feedback setting. KEYBOARD_TAP exists
+     * since API 5, so no version branch is needed.
      */
     public class GourlBridge {
         @JavascriptInterface
@@ -97,6 +102,12 @@ public class MainActivity extends BridgeActivity {
                         : HapticFeedbackConstants.CLOCK_TICK;
                 getBridge().getWebView().performHapticFeedback(feedback);
             });
+        }
+
+        @JavascriptInterface
+        public void buttonHaptic() {
+            runOnUiThread(() ->
+                getBridge().getWebView().performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP));
         }
     }
 }
