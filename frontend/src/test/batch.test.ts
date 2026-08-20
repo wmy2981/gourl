@@ -55,8 +55,17 @@ describe('parseBatchLine', () => {
     expect(parseBatchLine('[abc](2030/13/01)https://example.com/a').error).toBe('invalidDate')
   })
 
-  it('rejects a non-http url', () => {
-    expect(parseBatchLine('ftp://example.com/a').error).toBe('invalidUrl')
+  it('accepts any protocol scheme', () => {
+    expect(parseBatchLine('ftp://example.com/a').ok).toBe(true)
+    expect(parseBatchLine('tcp://10.0.0.1:8080').ok).toBe(true)
+    expect(parseBatchLine('openapp://open').ok).toBe(true)
+    expect(parseBatchLine('mailto:user@example.com').ok).toBe(true)
+  })
+
+  it('rejects a url without a scheme', () => {
+    expect(parseBatchLine('example.com/a').error).toBe('invalidUrl')
+    expect(parseBatchLine('a:').error).toBe('invalidUrl')
+    expect(parseBatchLine('://host').error).toBe('invalidUrl')
   })
 
   it('rejects a missing url', () => {

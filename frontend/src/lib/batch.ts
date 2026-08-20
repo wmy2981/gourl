@@ -21,10 +21,17 @@ export interface BatchLineResult {
   item?: ParsedBatchItem
 }
 
-const HTTP_URL_RE = /^https?:\/\/[^\s/]+/i
-
-function isHttpUrl(s: string): boolean {
-  return HTTP_URL_RE.test(s) && /^https?:\/\/([^/]+)/i.exec(s)?.[1] !== undefined
+// Absolute-URL check mirroring the backend's isAbsoluteURL (internal/api/
+// links.go): any non-empty scheme with a host or path — http(s), tcp,
+// openapp, mailto: all qualify; scheme-less strings do not.
+function isAbsoluteUrl(s: string): boolean {
+  let u: URL
+  try {
+    u = new URL(s)
+  } catch {
+    return false
+  }
+  return u.protocol !== '' && (u.host !== '' || u.pathname !== '')
 }
 
 /** Parses yyyy/MM/dd or yyyy-MM-dd (loose month/day) into local-midnight unix seconds. */
@@ -66,7 +73,7 @@ export function parseBatchLine(line: string): BatchLineResult {
 
   const url = rest.trim()
   if (!url) return { ok: false, error: 'invalidSyntax' }
-  if (!isHttpUrl(url)) return { ok: false, error: 'invalidUrl' }
+  if (!isAbsoluteUrl(url)) return { ok: false, error: 'invalidUrl' }
 
   return { ok: true, item: { url, code, expires_at: expiresAt } }
 }

@@ -73,14 +73,15 @@ test('batch create shows line numbers and flags invalid lines', async ({ page })
   await expect(dialog.locator('.cm-gutterElement.cm-error-gutter')).toHaveCount(2)
   // Create stays disabled while invalid lines remain.
   await expect(dialog.getByRole('button', { name: /^Create$/ })).toBeDisabled()
-  // Fix the flagged lines: the flags clear and create works.
+  // Fix the flagged lines: the flags clear and create works. The last line
+  // uses a non-http scheme, which batch create accepts.
   await editor.fill(
-    '[e2e-ok](2030/12/31)https://example.com/ok\n[e2e-bad]https://example.com/bad\n[e2e-broken]https://example.com/broken',
+    '[e2e-ok](2030/12/31)https://example.com/ok\n[e2e-bad]https://example.com/bad\n[e2e-ftp]ftp://example.com/file',
   )
   await expect(dialog.locator('.cm-gutterElement.cm-error-gutter')).toHaveCount(0)
   await dialog.getByRole('button', { name: /^Create$/ }).click()
   await expect(page.getByText('e2e-bad', { exact: true })).toBeVisible({ timeout: 15_000 })
-  await expect(page.getByText('e2e-broken', { exact: true })).toBeVisible({ timeout: 15_000 })
+  await expect(page.getByText('e2e-ftp', { exact: true })).toBeVisible({ timeout: 15_000 })
 })
 
 test('edits a link title', async ({ page, request }) => {
