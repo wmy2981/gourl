@@ -20,6 +20,17 @@ mkdir -p "$locales"
 cp -f "$ROOT/frontend/src/locales/en.json" "$locales/en.json"
 cp -f "$ROOT/frontend/src/locales/zh.json" "$locales/zh.json"
 
+# Version string mirrors the Docker build: plain VERSION on main, "VERSION
+# (sha7)" on any other branch — the same identity the image and APK carry.
+# A failed git probe falls back to the plain file (like a Docker build
+# without the VERSION_STR ARG).
+version_str="$(cat "$ROOT/VERSION")"
+if [ "$(git -C "$ROOT" branch --show-current 2>/dev/null)" != "main" ]; then
+  sha="$(git -C "$ROOT" rev-parse --short=7 HEAD 2>/dev/null || true)"
+  if [ -n "$sha" ]; then version_str="$version_str ($sha)"; fi
+fi
+export VERSION_STR="$version_str"
+
 cd "$ROOT/frontend"
 npm ci --no-audit --no-fund
 npm run build
