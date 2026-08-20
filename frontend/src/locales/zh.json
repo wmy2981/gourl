@@ -198,6 +198,7 @@
     "securityHint": "修改管理员密码将使所有会话下线。",
     "changePassword": "修改管理员密码",
     "appConnection": "App 连接",
+    "noTextSelect": "禁止选中文字",
     "connectedTo": "已连接到",
     "disconnectApp": "断开连接",
     "siteName": "服务名称",

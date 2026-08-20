@@ -116,6 +116,18 @@
   html.capacitor * {
     scrollbar-width: none;
   }
+  /* App setting "no text selection": select nothing, but keep editable
+     fields usable. Applied via the html.no-select class (App.tsx). */
+  html.no-select * {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  html.no-select input,
+  html.no-select textarea,
+  html.no-select [contenteditable] {
+    -webkit-user-select: text;
+    user-select: text;
+  }
   * {
     scrollbar-width: thin;
     scrollbar-color: rgba(134, 134, 139, 0.45) transparent;

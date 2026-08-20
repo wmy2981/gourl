@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { api, getServerConfig, isApp } from './lib/api'
+import { applyNoSelect } from './lib/appSettings'
 import Layout from './components/Layout'
 import { ToastProvider } from './components/ui'
 import ChangePassword from './pages/ChangePassword'
@@ -25,6 +26,8 @@ if (savedTheme === 'dark' || (savedTheme !== 'light' && prefersDark)) {
 // insets) that must never leak into the web console.
 if (isApp()) {
   document.documentElement.classList.add('capacitor')
+  // Device-local app settings that gate document-level CSS.
+  applyNoSelect()
 }
 
 export default function App() {

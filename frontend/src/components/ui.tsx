@@ -88,6 +88,41 @@ export function Checkbox({
   )
 }
 
+/* ---------- Switch ---------- */
+
+// Drawn switch (same amber-on-graphite language as the Checkbox): a sliding
+// knob on a hairline track, amber fill when on.
+export function Switch({
+  checked,
+  onChange,
+  'aria-label': ariaLabel,
+  className = '',
+}: {
+  checked: boolean
+  onChange: (checked: boolean) => void
+  'aria-label'?: string
+  className?: string
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={ariaLabel}
+      onClick={() => onChange(!checked)}
+      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border transition-colors ${
+        checked ? 'border-accent bg-accent' : 'border-muted/45 bg-transparent hover:border-accent'
+      } ${className}`}
+    >
+      <span
+        className={`pointer-events-none size-4 rounded-full transition-transform ${
+          checked ? 'translate-x-6 bg-white' : 'translate-x-0.5 bg-muted/70'
+        }`}
+      />
+    </button>
+  )
+}
+
 /* ---------- Select ---------- */
 
 // popOutMs matches --animate-pop-out (0.18s): long enough for the exit

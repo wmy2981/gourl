@@ -4,8 +4,9 @@ import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { KeyRound, PlugZap, Plus, Trash2, Upload } from 'lucide-react'
 import { api, ApiError, getServerConfig, isApp, setServerConfig, type AppConfig, type TokenInfo } from '../lib/api'
+import { noSelectEnabled, setNoSelect } from '../lib/appSettings'
 import { copyText } from '../lib/clipboard'
-import { Button, Card, Dialog, Input, Label, Select, Textarea, useToast } from '../components/ui'
+import { Button, Card, Dialog, Input, Label, Select, Switch, Textarea, useToast } from '../components/ui'
 
 export default function Settings() {
   const { t } = useTranslation()
@@ -345,6 +346,9 @@ function ConnectionCard() {
   const server = getServerConfig()
   const [confirmDisconnect, setConfirmDisconnect] = useState(false)
   const [status, setStatus] = useState<ConnStatus>('checking')
+  // Device-local app settings mirror the persisted state in React so the
+  // switch reflects toggles; the storage write applies the effect live.
+  const [noSelect, setNoSelectChecked] = useState(noSelectEnabled())
 
   // Probe the remote server through the authenticated config endpoint: only
   // a valid bearer token passes requireAuth, so a 401 means the stored token
@@ -416,6 +420,18 @@ function ConnectionCard() {
           <PlugZap size={15} />
           {t('settings.disconnectApp')}
         </Button>
+        {/* Device-local app settings: stored on the device, applied live. */}
+        <div className="mt-4 flex items-center justify-between gap-3 border-t border-hairline pt-4">
+          <span className="text-sm">{t('settings.noTextSelect')}</span>
+          <Switch
+            checked={noSelect}
+            onChange={(v) => {
+              setNoSelectChecked(v)
+              setNoSelect(v)
+            }}
+            aria-label={t('settings.noTextSelect')}
+          />
+        </div>
       </Card>
       {/* The dialog is a sibling of the card, never inside it: the card's
           backdrop-blur creates a containing block that traps the dialog's

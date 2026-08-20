@@ -198,6 +198,7 @@
     "securityHint": "Changing the admin password signs out every session.",
     "changePassword": "Change admin password",
     "appConnection": "App connection",
+    "noTextSelect": "Disable text selection",
     "connectedTo": "Connected to",
     "disconnectApp": "Disconnect",
     "siteName": "Service name",
