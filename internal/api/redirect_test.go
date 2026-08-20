@@ -145,11 +145,35 @@ func TestRedirectReservedPrefixWins(t *testing.T) {
 	}
 }
 
-func TestRootRedirectsToAdmin(t *testing.T) {
+func TestRootServesPublicPage(t *testing.T) {
 	s, _ := newTestServer(t)
 	rec := get(t, s, "/", nil)
-	if rec.Code != http.StatusFound || rec.Header().Get("Location") != "/admin" {
-		t.Errorf("root: status %d, location %q", rec.Code, rec.Header().Get("Location"))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("root status = %d, want 200", rec.Code)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "<h1>gourl</h1>") ||
+		!strings.Contains(body, "This is a short link service") ||
+		!strings.Contains(body, "/favicon.svg") {
+		t.Errorf("public page missing name/notice/icon: %s", body)
+	}
+
+	rec = get(t, s, "/?lang=zh", nil)
+	if !strings.Contains(rec.Body.String(), "短链接服务") {
+		t.Errorf("zh public page missing notice: %s", rec.Body.String())
+	}
+}
+
+func TestRootHiddenWhenWebuiDisabled(t *testing.T) {
+	s, _ := newTestServer(t)
+	cfg := s.cfg.Get()
+	cfg.WebUIEnabled = false
+	if err := s.cfg.Update(cfg); err != nil {
+		t.Fatalf("disable webui: %v", err)
+	}
+	rec := get(t, s, "/", nil)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("root status = %d, want 404 with webui off", rec.Code)
 	}
 }
 

@@ -19,7 +19,8 @@
     "notFoundMessage": "您访问的短链接不存在、已删除或已过期。",
     "blockedHeading": "访问被拦截",
     "blockedUaMessage": "您的请求被本服务拦截。命中的 User-Agent 关键词：{{detail}}",
-    "blockedIpMessage": "您的请求被本服务拦截。命中的 IP 规则：{{detail}}"
+    "blockedIpMessage": "您的请求被本服务拦截。命中的 IP 规则：{{detail}}",
+    "publicNotice": "这是一个短链接服务，本页面不可直接访问。"
   },
   "logs": {
     "live": "实时",

@@ -125,6 +125,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/logs/stream", s.requireAuth(s.logStream))
 	mux.Handle("GET /assets/", s.assetsHandler())
 	mux.HandleFunc("GET /favicon.svg", s.favicon)
+	mux.HandleFunc("GET /{$}", s.renderPublic)
 	mux.Handle("GET /docs/", http.StripPrefix("/docs/", http.FileServer(http.FS(webui.Docs()))))
 	mux.HandleFunc("GET /docs/openapi.yaml", s.openAPISpec)
 	mux.HandleFunc("GET /admin", s.adminOnly(s.spaIndex))
