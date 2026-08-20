@@ -44,6 +44,8 @@ test('batch imports links and reports per-item results', async ({ page }) => {
   await page.getByRole('dialog').locator('.cm-content').fill(
     '[{"url": "https://example.com/b1", "code": "e2e-b1"}, {"url": "https://example.com/b2", "code": "e2e-b2"}]',
   )
+  // JSON syntax highlighting is active: tokens are wrapped in highlight spans.
+  await expect(page.getByRole('dialog').locator('.cm-content span').first()).toBeVisible()
   await page.getByRole('button', { name: /^Create$/ }).click()
   // Result rows are the stable assertion; the success toast is transient.
   await expect(page.getByText('e2e-b1', { exact: true })).toBeVisible({ timeout: 15_000 })
