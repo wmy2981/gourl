@@ -5,6 +5,8 @@ Set-Location "$PSScriptRoot\.."
 
 # Single source of truth for the brand icon: assets/favicon.svg. Copy it to
 # the places the frontend (vite import) and backend (go:embed) need it.
+# (mkdir: a clean checkout has neither src/assets nor any generated embed file.)
+New-Item -ItemType Directory -Force -Path "frontend\src\assets", "internal\webui" | Out-Null
 Copy-Item "assets\favicon.svg" "frontend\src\assets\icon.svg" -Force
 Copy-Item "assets\favicon.svg" "internal\webui\icon.svg" -Force
 

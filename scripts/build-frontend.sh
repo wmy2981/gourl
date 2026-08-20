@@ -7,6 +7,8 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 # Single source of truth for the brand icon: assets/favicon.svg. Copy it to
 # the places the frontend (vite import) and backend (go:embed) need it.
+# (mkdir: a clean checkout has neither src/assets nor any generated embed file.)
+mkdir -p "$ROOT/frontend/src/assets" "$ROOT/internal/webui"
 cp -f "$ROOT/assets/favicon.svg" "$ROOT/frontend/src/assets/icon.svg"
 cp -f "$ROOT/assets/favicon.svg" "$ROOT/internal/webui/icon.svg"
 

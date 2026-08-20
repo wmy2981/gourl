@@ -23,12 +23,16 @@ FROM golang:1.26-alpine AS build
 ARG VERSION_STR
 WORKDIR /app
 COPY go.mod go.sum ./
-RUN go mod download
+# One retry: the module proxy intermittently resets connections on runners.
+RUN go mod download || (sleep 3 && go mod download)
 COPY . .
 # Frontend artifacts land in the embed location (relative to the webui package).
 COPY --from=frontend /app/dist ./internal/webui/dist
 # Brand icon for the Go embed (generated location, single source assets/favicon.svg).
 COPY assets/favicon.svg ./internal/webui/icon.svg
+# Locale files feed the backend-rendered page copy (404 / blocked pages) —
+# same generated embed location the local build script uses.
+COPY frontend/src/locales/ ./internal/webui/locales/
 # The version string (quoted — dev builds carry "VERSION (sha7)") comes from
 # the build ARG; without one (local builds) it falls back to the VERSION file.
 RUN CGO_ENABLED=0 go build -trimpath \

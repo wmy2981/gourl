@@ -20,19 +20,10 @@ jobs:
           go-version: '1.26'
           cache: true
 
-      - name: Sync brand icon from single source
-        run: |
-          mkdir -p frontend/src/assets internal/webui
-          cp assets/favicon.svg frontend/src/assets/icon.svg
-          cp assets/favicon.svg internal/webui/icon.svg
-
-      - name: Build frontend into embed location
-        working-directory: frontend
-        run: |
-          npm ci --no-audit --no-fund
-          npm run build
-          mkdir -p ../internal/webui
-          cp -r dist ../internal/webui/dist
+      # The shared build script puts every go:embed input (dist, locales,
+      # icon) in place — reuse it so CI cannot drift from local builds.
+      - name: Build frontend into embed locations
+        run: scripts/build-frontend.sh
 
       - name: Go vet
         run: go vet ./...
@@ -97,12 +88,13 @@ jobs:
           cp assets/favicon.svg frontend/src/assets/icon.svg
           cp assets/favicon.svg internal/webui/icon.svg
 
-      - name: Build frontend into embed location
+      - name: Build frontend into embed locations
         working-directory: frontend
         run: |
           npm run build
-          mkdir -p ../internal/webui
+          mkdir -p ../internal/webui/locales
           cp -r dist ../internal/webui/dist
+          cp src/locales/en.json src/locales/zh.json ../internal/webui/locales/
 
       - name: Cache Playwright browsers
         uses: actions/cache@v4
