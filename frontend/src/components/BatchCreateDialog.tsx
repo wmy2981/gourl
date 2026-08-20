@@ -2,7 +2,8 @@ import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api, ApiError, type ImportItem } from '../lib/api'
 import { parseBatchLine, type ParsedBatchItem } from '../lib/batch'
-import { Button, Dialog, Label, Textarea, useToast } from './ui'
+import { Button, Dialog, Label, useToast } from './ui'
+import CodeEditor from './CodeEditor'
 
 interface Failure {
   line: string
@@ -109,13 +110,14 @@ export default function BatchCreateDialog({
       <div className="flex flex-col gap-3">
         <div>
           <Label htmlFor="batch-lines">{t('form.batchHint')}</Label>
-          <Textarea
+          <CodeEditor
             id="batch-lines"
-            rows={8}
+            className="h-48"
             value={text}
-            onChange={(e) => setText(e.target.value)}
-            className="short-code"
+            onChange={setText}
             placeholder="[mycode](2030/12/31)https://example.com/page"
+            ariaLabel={t('form.batchHint')}
+            errorLines={errorLines.map((e) => e.line)}
           />
         </div>
 

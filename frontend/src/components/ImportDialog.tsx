@@ -3,7 +3,8 @@ import { useTranslation } from 'react-i18next'
 import { Upload } from 'lucide-react'
 import { api, ApiError, type ImportItem } from '../lib/api'
 import { parseCSV } from '../lib/csv'
-import { Button, Dialog, Label, Select, Textarea, useToast } from './ui'
+import { Button, Dialog, Label, Select, useToast } from './ui'
+import CodeEditor from './CodeEditor'
 
 // Batch import: items pasted as JSON or loaded from a file, with a conflict
 // policy for codes that already exist. JSON files are parsed as-is; CSV files
@@ -98,12 +99,12 @@ export default function ImportDialog({
           onChange={(e) => loadFile(e.target.files?.[0])}
         />
       </div>
-      <Textarea
-        rows={10}
+      <CodeEditor
+        className="h-60"
         value={text}
-        onChange={(e) => setText(e.target.value)}
-        className="short-code"
+        onChange={setText}
         placeholder='[{"url": "https://example.com/1"}, {"url": "https://example.com/2", "code": "two"}]'
+        ariaLabel={t('form.importHint')}
       />
       <div className="mt-4 flex items-end justify-between gap-2">
         <div className="w-44">

@@ -39,13 +39,42 @@ test('rejects a duplicate code', async ({ page, request }) => {
 test('batch imports links and reports per-item results', async ({ page }) => {
   await page.goto('/admin/links')
   await page.getByRole('button', { name: /import/i }).click()
-  await page.getByRole('dialog').getByRole('textbox').fill(
+  // The CodeMirror editor replaces the textarea: its editable area is
+  // .cm-content (the hidden .cm-textarea helper would also match textbox).
+  await page.getByRole('dialog').locator('.cm-content').fill(
     '[{"url": "https://example.com/b1", "code": "e2e-b1"}, {"url": "https://example.com/b2", "code": "e2e-b2"}]',
   )
   await page.getByRole('button', { name: /^Create$/ }).click()
   // Result rows are the stable assertion; the success toast is transient.
   await expect(page.getByText('e2e-b1', { exact: true })).toBeVisible({ timeout: 15_000 })
   await expect(page.getByText('e2e-b2', { exact: true })).toBeVisible({ timeout: 15_000 })
+})
+
+test('batch create shows line numbers and flags invalid lines', async ({ page }) => {
+  await page.goto('/admin/links')
+  await page.getByRole('button', { name: /batch create/i }).click()
+  const dialog = page.getByRole('dialog')
+  const editor = dialog.locator('.cm-content')
+  await editor.fill(
+    '[e2e-ok](2030/12/31)https://example.com/ok\n[e2e-bad](2030/13/01)https://example.com/bad\n[e2e-broken]',
+  )
+  // Line numbers 1..3 are always visible in the gutter (the hidden spacer
+  // element that measures gutter width is filtered out by :visible).
+  const lineNumbers = dialog.locator('.cm-lineNumbers .cm-gutterElement:visible')
+  await expect(lineNumbers.nth(0)).toHaveText('1')
+  await expect(lineNumbers.nth(2)).toHaveText('3')
+  // Lines 2 (bad date) and 3 (missing url) are flagged in red.
+  await expect(dialog.locator('.cm-gutterElement.cm-error-gutter')).toHaveCount(2)
+  // Create stays disabled while invalid lines remain.
+  await expect(dialog.getByRole('button', { name: /^Create$/ })).toBeDisabled()
+  // Fix the flagged lines: the flags clear and create works.
+  await editor.fill(
+    '[e2e-ok](2030/12/31)https://example.com/ok\n[e2e-bad]https://example.com/bad\n[e2e-broken]https://example.com/broken',
+  )
+  await expect(dialog.locator('.cm-gutterElement.cm-error-gutter')).toHaveCount(0)
+  await dialog.getByRole('button', { name: /^Create$/ }).click()
+  await expect(page.getByText('e2e-bad', { exact: true })).toBeVisible({ timeout: 15_000 })
+  await expect(page.getByText('e2e-broken', { exact: true })).toBeVisible({ timeout: 15_000 })
 })
 
 test('edits a link title', async ({ page, request }) => {

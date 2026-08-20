@@ -183,3 +183,57 @@
   font-family: var(--font-mono);
   letter-spacing: 0.02em;
 }
+
+/* CodeMirror editor shell (batch create/import dialogs): the same visual
+   language as the Textarea it replaces — hairline border, rounded-xl, amber
+   focus ring, mono font — plus an always-visible line-number gutter on a
+   faintly darker strip. Colors hang off the theme CSS variables, so the
+   .dark class switch applies automatically. */
+.cm-editor.batch-editor {
+  height: 100%;
+  border: 1px solid var(--color-hairline);
+  border-radius: 0.75rem;
+  background: rgba(255, 255, 255, 0.7);
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
+  letter-spacing: 0.02em;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+.dark .cm-editor.batch-editor {
+  background: rgba(255, 255, 255, 0.07);
+}
+.cm-editor.batch-editor:focus-within {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.3);
+}
+.cm-editor.batch-editor .cm-content {
+  padding: 0.5rem 0.875rem;
+}
+.cm-editor.batch-editor .cm-gutters {
+  border-right: 1px solid var(--color-hairline);
+  background: rgba(0, 0, 0, 0.02);
+  color: var(--color-muted);
+}
+.dark .cm-editor.batch-editor .cm-gutters {
+  background: rgba(255, 255, 255, 0.03);
+}
+.cm-editor.batch-editor .cm-gutterElement {
+  padding: 0 0.625rem;
+  text-align: right;
+}
+/* Invalid batch lines: the line number turns danger-red (the marker's
+   elementClass lands on the gutter element) and the content line gets a
+   faint red wash. */
+.cm-editor.batch-editor .cm-gutterElement.cm-error-gutter {
+  color: var(--color-danger);
+  font-weight: 600;
+}
+.cm-editor.batch-editor .cm-line.cm-error-line {
+  background: rgba(255, 59, 48, 0.06);
+}
+.cm-editor.batch-editor .cm-placeholder {
+  color: var(--color-muted);
+  opacity: 0.7;
+}
