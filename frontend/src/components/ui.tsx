@@ -4,6 +4,7 @@ import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, TextareaHTML
 import { useTranslation } from 'react-i18next'
 import { AnimatePresence, motion } from 'motion/react'
 import { AlertCircle, Check, CheckCircle2, ChevronDown, X } from 'lucide-react'
+import { isApp } from '../lib/api'
 
 /* ---------- Button ---------- */
 
@@ -90,8 +91,20 @@ export function Checkbox({
 
 /* ---------- Switch ---------- */
 
+// Native toggle tick for the Android app (GourlBridge.switchHaptic): the
+// system's switch haptic through the touch engine — not the vibrator motor,
+// and it honors the system haptic-feedback setting. Web: no-op.
+function switchHaptic(on: boolean) {
+  if (!isApp()) return
+  const bridge = (window as Window & { GourlBridge?: { switchHaptic?: (on: boolean) => void } }).GourlBridge
+  bridge?.switchHaptic?.(on)
+}
+
 // Drawn switch (same amber-on-graphite language as the Checkbox): a sliding
-// knob on a hairline track, amber fill when on.
+// knob on a hairline track, amber fill when on. The knob keeps a 3px inset
+// from the track edge in both positions (h-6 track, size-4 knob) and floats
+// on a soft shadow; the off track gets a faint muted fill so it reads as a
+// track rather than a bare outline.
 export function Switch({
   checked,
   onChange,
@@ -109,14 +122,19 @@ export function Switch({
       role="switch"
       aria-checked={checked}
       aria-label={ariaLabel}
-      onClick={() => onChange(!checked)}
+      onClick={() => {
+        onChange(!checked)
+        switchHaptic(!checked)
+      }}
       className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border transition-colors ${
-        checked ? 'border-accent bg-accent' : 'border-muted/45 bg-transparent hover:border-accent'
+        checked
+          ? 'border-accent bg-accent'
+          : 'border-muted/45 bg-muted/15 hover:border-accent dark:bg-white/10'
       } ${className}`}
     >
       <span
-        className={`pointer-events-none size-4 rounded-full transition-transform ${
-          checked ? 'translate-x-6 bg-white' : 'translate-x-0.5 bg-muted/70'
+        className={`pointer-events-none size-4 rounded-full shadow-[0_1px_2px_rgba(0,0,0,0.2)] transition-transform ${
+          checked ? 'translate-x-[23px] bg-white' : 'translate-x-[3px] bg-muted/70'
         }`}
       />
     </button>
