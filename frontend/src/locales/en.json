@@ -257,7 +257,10 @@
     "connConnected": "Connected",
     "connUnauthorized": "Token rejected",
     "connUnreachable": "Cannot reach the server",
-    "connChecking": "Checking…"
+    "connChecking": "Checking…",
+    "serverVersion": "Server version",
+    "appVersion": "App version",
+    "connRefresh": "Refresh"
   },
   "common": {
     "loading": "Loading…",

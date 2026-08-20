@@ -257,7 +257,10 @@
     "connConnected": "已连接",
     "connUnauthorized": "Token 无效",
     "connUnreachable": "无法连接",
-    "connChecking": "检查中…"
+    "connChecking": "检查中…",
+    "serverVersion": "服务端版本",
+    "appVersion": "App 版本",
+    "connRefresh": "刷新"
   },
   "common": {
     "loading": "加载中…",

@@ -278,7 +278,7 @@ export const api = {
       body: JSON.stringify({ code, password }),
     }),
   authStatus: () => request<{ configured: boolean }>('/api/v1/auth/status'),
-  health: () => request<{ name: string }>('/api/v1/health'),
+  health: (init?: RequestInit) => request<{ name: string; version: string }>('/api/v1/health', init),
 
   listLinks: (params: Record<string, string | number | undefined>) => {
     const q = new URLSearchParams()
@@ -405,7 +405,10 @@ export const api = {
   deleteToken: (id: number) =>
     request<void>(`/api/v1/tokens/${id}`, { method: 'DELETE' }),
 
-  getConfig: () => request<AppConfig>('/api/v1/config'),
+  // init passes through (e.g. { signal: AbortSignal.timeout(...) } — the
+  // connection-card probe gives up after 5s so a hung server shows as
+  // unreachable instead of spinning forever).
+  getConfig: (init?: RequestInit) => request<AppConfig>('/api/v1/config', init),
   updateConfig: (cfg: AppConfig) =>
     request<AppConfig>('/api/v1/config', {
       method: 'PUT',
