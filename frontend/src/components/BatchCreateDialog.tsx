@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api, ApiError, type ImportItem } from '../lib/api'
 import { parseBatchLine, type ParsedBatchItem } from '../lib/batch'
+import { batchHighlight } from '../lib/batchHighlight'
 import { Button, Dialog, Label, useToast } from './ui'
 import CodeEditor from './CodeEditor'
 
@@ -118,6 +119,7 @@ export default function BatchCreateDialog({
             placeholder="[mycode](2030/12/31)https://example.com/page"
             ariaLabel={t('form.batchHint')}
             errorLines={errorLines.map((e) => e.line)}
+            extensions={[batchHighlight]}
           />
         </div>
 

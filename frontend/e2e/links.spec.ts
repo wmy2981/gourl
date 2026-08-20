@@ -60,6 +60,10 @@ test('batch create shows line numbers and flags invalid lines', async ({ page })
   await editor.fill(
     '[e2e-ok](2030/12/31)https://example.com/ok\n[e2e-bad](2030/13/01)https://example.com/bad\n[e2e-broken]',
   )
+  // Custom line highlighting: [code] amber, (date) blue, url green.
+  await expect(dialog.locator('.cm-content .tok-code').first()).toBeVisible()
+  await expect(dialog.locator('.cm-content .tok-date').first()).toBeVisible()
+  await expect(dialog.locator('.cm-content .tok-url').first()).toBeVisible()
   // Line numbers 1..3 are always visible in the gutter (the hidden spacer
   // element that measures gutter width is filtered out by :visible).
   const lineNumbers = dialog.locator('.cm-lineNumbers .cm-gutterElement:visible')

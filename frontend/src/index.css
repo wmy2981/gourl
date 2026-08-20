@@ -237,3 +237,29 @@
   color: var(--color-muted);
   opacity: 0.7;
 }
+/* Batch-create line tokens ([code](date)url) — VSCode One Dark palette in
+   dark mode (orange code, green date, blue url), deepened equivalents in
+   light mode to keep the contrast on light backgrounds. */
+.cm-editor.batch-editor {
+  --tok-code: #b45309;
+  --tok-date: #4d7c0f;
+  --tok-url: #1d4ed8;
+}
+.dark .cm-editor.batch-editor {
+  --tok-code: #e5c07b;
+  --tok-date: #98c379;
+  --tok-url: #61afef;
+}
+.cm-editor.batch-editor .tok-code {
+  color: var(--tok-code);
+}
+.cm-editor.batch-editor .tok-date {
+  color: var(--tok-date);
+}
+.cm-editor.batch-editor .tok-url {
+  color: var(--tok-url);
+}
+.cm-editor.batch-editor .tok-comment {
+  color: var(--color-muted);
+  opacity: 0.8;
+}
