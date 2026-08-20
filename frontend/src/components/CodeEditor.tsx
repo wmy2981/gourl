@@ -85,6 +85,12 @@ export default function CodeEditor({
       doc: value,
       parent,
       extensions: [
+        // The dialog editor's look lives in index.css scoped to
+        // .cm-editor.batch-editor (height 100% so the wrapper's h-* size
+        // wins, the dark-mode gutter and the tok-* token colors) — without
+        // this class the editor grows to its content height and overflows
+        // the dialog.
+        EditorView.editorAttributes.of({ class: 'batch-editor' }),
         ...(ariaLabel ? [EditorView.contentAttributes.of({ 'aria-label': ariaLabel })] : []),
         basicSetup,
         errorField,
