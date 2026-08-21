@@ -193,6 +193,10 @@
   height: 100%;
   border: 1px solid var(--color-hairline);
   border-radius: 0.75rem;
+  /* Keep every interior paint (selections, line washes, the gutter strip)
+     inside the rounded frame — square line backgrounds otherwise poke past
+     the corners once the document scrolls. */
+  overflow: hidden;
   background: rgba(255, 255, 255, 0.7);
   font-family: var(--font-mono);
   font-size: 0.875rem;
@@ -202,26 +206,66 @@
     box-shadow 0.15s ease;
 }
 .dark .cm-editor.batch-editor {
-  background: rgba(255, 255, 255, 0.07);
+  /* Transparent: the dialog panel paints #1c1c1e, so a translucent overlay
+     here would read a tone lighter than the window it sits in. */
+  background: transparent;
 }
 .cm-editor.batch-editor:focus-within {
   border-color: var(--color-accent);
   box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.3);
 }
+/* CodeMirror's default theme paints a dotted black outline on .cm-focused;
+   the amber focus ring above is this UI's focus language. */
+.cm-editor.batch-editor.cm-focused {
+  outline: none;
+}
+.cm-editor.batch-editor .cm-scroller {
+  /* Vertical breathing room lives here, NOT on .cm-content: CodeMirror
+     aligns the gutter line numbers against the content padding, so a
+     nonzero padding there double-offsets them once the document scrolls.
+     Scroller padding never scrolls, so both columns move together and the
+     numbers stay on their lines at any scroll position. */
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+}
 .cm-editor.batch-editor .cm-content {
-  padding: 0.5rem 0.875rem;
+  padding: 0 0.875rem;
 }
 .cm-editor.batch-editor .cm-gutters {
   border-right: 1px solid var(--color-hairline);
-  background: rgba(0, 0, 0, 0.02);
+  /* Fully opaque: the gutter is position: sticky, so horizontally scrolled
+     content passes underneath it — a translucent background would let the
+     characters show through and blur into the line numbers. The colors are
+     the flattened equivalents of the previous translucent strips. */
+  background: #fafafa;
   color: var(--color-muted);
+  /* Match the editor's rounded corners (minus the hairline border). */
+  border-top-left-radius: calc(0.75rem - 1px);
+  border-bottom-left-radius: calc(0.75rem - 1px);
 }
 .dark .cm-editor.batch-editor .cm-gutters {
-  background: rgba(255, 255, 255, 0.03);
+  /* A shade below the dark panel (#1c1c1e) — keeps the gutter as the darker
+     strip the light theme implies. */
+  background: #171719;
 }
 .cm-editor.batch-editor .cm-gutterElement {
-  padding: 0 0.625rem;
+  padding: 0 0.375rem;
   text-align: right;
+}
+/* The fold-gutter arrow needs less room than the numbers; the pair used to
+   eat 58px of the dialog width, so tighten both. */
+.cm-editor.batch-editor .cm-foldGutter .cm-gutterElement {
+  padding: 0 0.25rem;
+}
+/* CodeMirror's default theme paints the active line and selections in
+   light-mode blues, which glare on the dark panel — reuse the accent. */
+.dark .cm-editor.batch-editor .cm-activeLine,
+.dark .cm-editor.batch-editor .cm-activeLineGutter {
+  background: rgba(255, 255, 255, 0.045);
+}
+.dark .cm-editor.batch-editor .cm-selectionBackground,
+.dark .cm-editor.batch-editor ::selection {
+  background: rgba(245, 158, 11, 0.28);
 }
 /* Invalid batch lines: the line number turns danger-red (the marker's
    elementClass lands on the gutter element) and the content line gets a
