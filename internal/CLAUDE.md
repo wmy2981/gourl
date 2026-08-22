@@ -49,7 +49,8 @@ Subdirectory conventions for the Go backend packages. Root-level conventions (co
 - Sessions are stateless `exp.epoch.nonce.hmac` (4 parts; exp 0 = never expires): TTL applies at issue time only; `verifyToken` checks the epoch against `config.session_epoch` (bumping it revokes everything); `SESSION_SECRET` unset → ephemeral per-process secret (sessions do not survive a restart)
 - `requireAuth` stamps the request context with `actor` (session|token|app) — bearer requests whose UA starts with `gourl/<version>` (the Capacitor WebView) become `actor=app` and gain `app_version` + `token_id`; business-event logs must go through `logInfo`/`logWarn` (they append `actorAttrs(r)`)
 - **`GET /api/v1/config` doubles as the app's connection probe** (polled every 10s + on app foreground: 200 = connected, 401 = dead token, network error = unreachable) — keep it behind `requireAuth`, never public, or the probe silently reports the wrong state
-- New API endpoints must update `internal/webui/openapi.yaml` too
+- New API endpoints must update `internal/webui/openapi.yaml` too — CI lints the spec with Redocly (`openapi` job), so structural errors fail the build
+- The exports share one 7-field row shape (`exportRow`) and carry **export metadata**: JSON wraps as `{meta: {site, version, count, exported_at}, items}`, CSV prepends `#`-comment lines (after the BOM), markdown uses YAML front matter with an English body. `decodeBatchRequest` accepts the wrapped dump, the legacy bare array and `{items}` — unknown top-level keys are ignored
 
 ### fetcher
 
