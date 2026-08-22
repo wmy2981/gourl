@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -82,5 +83,55 @@ func TestExportMarkdownRequiresAuth(t *testing.T) {
 	s.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusUnauthorized {
 		t.Errorf("unauth status = %d, want 401", rec.Code)
+	}
+}
+
+// The JSON export wraps the 7-field rows in a meta object mirroring the
+// markdown front matter; the CSV carries the same metadata as #-comment
+// lines ahead of the header row.
+func TestExportMetaInfo(t *testing.T) {
+	s, _ := newTestServer(t)
+	rec := do(t, s, http.MethodPost, "/api/v1/links", map[string]any{
+		"url": "https://example.com/meta", "code": "meta1",
+	})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create status = %d", rec.Code)
+	}
+
+	// JSON: {"meta": {site, version, count, exported_at}, "items": [...]}
+	rec = do(t, s, http.MethodGet, "/api/v1/export.json", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("json export status = %d", rec.Code)
+	}
+	var dump struct {
+		Meta  map[string]any `json:"meta"`
+		Items []struct {
+			Code string `json:"code"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &dump); err != nil {
+		t.Fatalf("decode json export: %v", err)
+	}
+	if dump.Meta["site"] != "gourl" || dump.Meta["version"] == "" || dump.Meta["exported_at"] == "" {
+		t.Errorf("json meta incomplete: %+v", dump.Meta)
+	}
+	if len(dump.Items) != 1 || dump.Items[0].Code != "meta1" {
+		t.Errorf("json items wrong: %+v", dump.Items)
+	}
+
+	// CSV: #-comment metadata lines, then the header row.
+	rec = do(t, s, http.MethodGet, "/api/v1/export.csv", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("csv export status = %d", rec.Code)
+	}
+	lines := strings.Split(strings.TrimPrefix(rec.Body.String(), "\xEF\xBB\xBF"), "\n")
+	if !strings.HasPrefix(lines[0], "# site: gourl") ||
+		!strings.HasPrefix(lines[1], "# version:") ||
+		!strings.HasPrefix(lines[2], "# count: 1") ||
+		!strings.HasPrefix(lines[3], "# exported_at:") {
+		t.Errorf("csv metadata lines wrong:\n%s", strings.Join(lines[:4], "\n"))
+	}
+	if lines[4] != "code,url,title,description,expires_at,click_count,created_at" {
+		t.Errorf("csv header row wrong: %q", lines[4])
 	}
 }

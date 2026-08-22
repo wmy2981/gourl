@@ -52,6 +52,18 @@ test('batch imports links and reports per-item results', async ({ page }) => {
   await expect(page.getByText('e2e-b2', { exact: true })).toBeVisible({ timeout: 15_000 })
 })
 
+test('imports the wrapped export dump (meta + items)', async ({ page }) => {
+  await page.goto('/admin/links')
+  await page.getByRole('button', { name: /import/i }).click()
+  await page.getByRole('dialog').locator('.cm-content').fill(
+    '{"meta": {"site": "gourl", "version": "dev", "count": 1, "exported_at": "2026/08/22 14:00"}, ' +
+      '"items": [{"url": "https://example.com/dump", "code": "e2e-dump"}]}',
+  )
+  await page.getByRole('button', { name: /^Create$/ }).click()
+  // The meta wrapper is ignored; the item inside is created.
+  await expect(page.getByText('e2e-dump', { exact: true })).toBeVisible({ timeout: 15_000 })
+})
+
 test('batch create shows line numbers and flags invalid lines on blur', async ({ page }) => {
   await page.goto('/admin/links')
   await page.getByRole('button', { name: /batch create/i }).click()

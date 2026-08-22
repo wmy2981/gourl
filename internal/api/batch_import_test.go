@@ -246,3 +246,42 @@ func TestBatchImportConflictCaseInsensitive(t *testing.T) {
 		t.Errorf("skip must leave the existing link alone: %+v", l)
 	}
 }
+
+// TestBatchImportAcceptsExportDump: the new export.json wraps the rows in
+// {"meta": {...}, "items": [...]} — importing it must ignore the meta object
+// and treat items like any other batch. The legacy bare array keeps working.
+func TestBatchImportAcceptsExportDump(t *testing.T) {
+	s, _ := newTestServer(t)
+
+	rec := do(t, s, http.MethodPost, "/api/v1/links/batch", map[string]any{
+		"meta": map[string]any{
+			"site":        "gourl",
+			"version":     "1.0.2.alpha.1",
+			"count":       2,
+			"exported_at": "2026/08/22 14:00",
+		},
+		"items": []map[string]any{
+			{"url": "https://example.com/dump1", "code": "dump1"},
+			{"url": "https://example.com/dump2", "code": "dump2"},
+		},
+	})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("wrapped dump status = %d, body %s", rec.Code, rec.Body.String())
+	}
+	for _, code := range []string{"dump1", "dump2"} {
+		if _, err := s.store.GetLink(context.Background(), code); err != nil {
+			t.Errorf("%s not created: %v", code, err)
+		}
+	}
+
+	// Legacy bare array (old export files) still imports.
+	rec = do(t, s, http.MethodPost, "/api/v1/links/batch", []map[string]any{
+		{"url": "https://example.com/legacy", "code": "legacy1"},
+	})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("legacy array status = %d, body %s", rec.Code, rec.Body.String())
+	}
+	if _, err := s.store.GetLink(context.Background(), "legacy1"); err != nil {
+		t.Errorf("legacy1 not created: %v", err)
+	}
+}

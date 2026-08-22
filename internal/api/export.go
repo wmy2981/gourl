@@ -37,7 +37,10 @@ func toExportRow(l *store.Link) exportRow {
 }
 
 // exportJSON handles GET /api/v1/export.json: every link as a JSON array of
-// the same 7 fields the CSV carries (import/export symmetry).
+// the same 7 fields the CSV carries (import/export symmetry), wrapped with a
+// meta object (site, version, count, exported_at) mirroring the markdown
+// export's front matter. The importer accepts both this form and the legacy
+// bare array.
 func (s *Server) exportJSON(w http.ResponseWriter, r *http.Request) {
 	links, err := s.store.ListAllLinks(r.Context())
 	if err != nil {
@@ -49,7 +52,16 @@ func (s *Server) exportJSON(w http.ResponseWriter, r *http.Request) {
 		out = append(out, toExportRow(&links[i]))
 	}
 	logInfo(r, "links exported", "format", "json", "count", len(links))
-	writeJSON(w, http.StatusOK, out)
+	cfg := s.cfg.Get()
+	writeJSON(w, http.StatusOK, map[string]any{
+		"meta": map[string]any{
+			"site":        cfg.Site.Name,
+			"version":     version.Version,
+			"count":       len(links),
+			"exported_at": time.Unix(s.now(), 0).Format("2006/01/02 15:04"),
+		},
+		"items": out,
+	})
 }
 
 // exportCSV handles GET /api/v1/export.csv: every link as a CSV with a UTF-8
@@ -62,10 +74,16 @@ func (s *Server) exportCSV(w http.ResponseWriter, r *http.Request) {
 	}
 
 	logInfo(r, "links exported", "format", "csv", "count", len(links))
+	cfg := s.cfg.Get()
 	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
 	w.Header().Set("Content-Disposition",
 		`attachment; filename="gourl-links-`+time.Unix(s.now(), 0).Format("2006-01-02-15-04-05")+`.csv"`)
 	w.Write([]byte("\xEF\xBB\xBF")) // UTF-8 BOM
+
+	// Metadata as #-comment lines: spreadsheet apps and the importer's
+	// parseCSV skip them, so the header row stays the first real row.
+	fmt.Fprintf(w, "# site: %s\n# version: %s\n# count: %d\n# exported_at: %s\n",
+		cfg.Site.Name, version.Version, len(links), time.Unix(s.now(), 0).Format("2006/01/02 15:04"))
 
 	cw := csv.NewWriter(w)
 	cw.Write([]string{"code", "url", "title", "description", "expires_at", "click_count", "created_at"})

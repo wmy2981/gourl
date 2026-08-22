@@ -34,7 +34,8 @@ export default function ImportDialog({
     try {
       const raw = await file.text()
       if (file.name.toLowerCase().endsWith('.csv')) {
-        const rows = parseCSV(raw)
+        // Skip the #-comment metadata lines the exporter prepends.
+        const rows = parseCSV(raw.split('\n').filter((l) => !l.startsWith('#')).join('\n'))
         const items: ImportItem[] = rows.map((r) => {
           const item: ImportItem = { url: r.url }
           if (r.code) item.code = r.code
@@ -62,9 +63,18 @@ export default function ImportDialog({
     if (busy) return
     setBusy(true)
     try {
-      const parsed = JSON.parse(text)
-      if (!Array.isArray(parsed)) throw new Error('not an array')
-      const res = await api.batchCreate(parsed as ImportItem[], conflict)
+      // Accepts both the legacy bare array and the current export dump
+      // ({"meta": {...}, "items": [...]}); anything else fails.
+      const parsed: unknown = JSON.parse(text)
+      let items: unknown[]
+      if (Array.isArray(parsed)) {
+        items = parsed
+      } else if (parsed && typeof parsed === 'object' && Array.isArray((parsed as { items?: unknown }).items)) {
+        items = (parsed as { items: unknown[] }).items
+      } else {
+        throw new Error('not an array')
+      }
+      const res = await api.batchCreate(items as ImportItem[], conflict)
       toast(
         t('form.importResults', {
           created: res.succeeded,
