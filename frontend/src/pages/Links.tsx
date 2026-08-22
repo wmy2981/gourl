@@ -421,7 +421,7 @@ export default function Links() {
                     )}
                   </td>
                   <td className="short-code px-5 py-3 text-right tabular-nums">{link.click_count}</td>
-                  <td className={`px-5 py-3 ${isExpired(link) ? 'text-danger' : 'text-muted'}`}>
+                  <td className={`whitespace-nowrap px-5 py-3 ${isExpired(link) ? 'text-danger' : 'text-muted'}`}>
                     {formatDate(link.expires_at, t)}
                   </td>
                   <td className="px-5 py-3">
