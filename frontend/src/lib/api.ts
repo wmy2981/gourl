@@ -316,7 +316,7 @@ export const api = {
     // directly (absolute URL + Bearer in token mode, cookie in the web console).
     const server = getServerConfig()
     const res = await fetch(
-      server ? `${server.url.replace(/\/+$/, '')}/api/v1/export.csv` : '/api/v1/export.csv',
+      server ? `${server.url.replace(/\/+$/, '')}/api/v1/links/export.csv` : '/api/v1/links/export.csv',
       {
         credentials: server ? 'omit' : 'same-origin',
         headers: server ? { Authorization: `Bearer ${server.token}` } : {},
@@ -325,13 +325,13 @@ export const api = {
     if (!res.ok) throw new ApiError(res.status, 'unknown', `HTTP ${res.status}`)
     return res.blob()
   },
-  exportJson: () => request<Record<string, unknown>[]>('/api/v1/export.json'),
+  exportJson: () => request<Record<string, unknown>[]>('/api/v1/links/export.json'),
   // The markdown endpoint is an attachment like CSV, so it also bypasses
   // request() and returns the raw blob.
   exportMarkdown: async () => {
     const server = getServerConfig()
     const res = await fetch(
-      server ? `${server.url.replace(/\/+$/, '')}/api/v1/export.md` : '/api/v1/export.md',
+      server ? `${server.url.replace(/\/+$/, '')}/api/v1/links/export.md` : '/api/v1/links/export.md',
       {
         credentials: server ? 'omit' : 'same-origin',
         headers: server ? { Authorization: `Bearer ${server.token}` } : {},
