@@ -40,9 +40,8 @@ func TestExportMarkdown(t *testing.T) {
 
 	body := rec.Body.String()
 	for _, want := range []string{
-		"# gourl 链接导出",
-		"共 1 条 · ",
-		"| 短码 | 目标链接 | 标题 | 描述 | 点击数 | 过期时间 | 创建时间 |",
+		"---\nsite: gourl\nversion: dev\ncount: 1\nexported_at: \"",
+		"| code | url | title | description | click_count | expires_at | created_at |",
 		"`demo`",
 		"[https://example.com/page](https://example.com/page)",
 		"ti\\|tle",
@@ -66,7 +65,7 @@ func TestExportMarkdownEmpty(t *testing.T) {
 	}
 	body := rec.Body.String()
 	// Header still renders; only the table header rows follow (no data rows).
-	if !strings.Contains(body, "共 0 条") || !strings.Contains(body, "| 短码 |") {
+	if !strings.Contains(body, "count: 0") || !strings.Contains(body, "| code |") {
 		t.Errorf("empty export body unexpected:\n%s", body)
 	}
 	if strings.Count(body, "\n|") > 2 { // header + separator only

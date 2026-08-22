@@ -121,11 +121,18 @@ func (s *Server) exportMarkdown(w http.ResponseWriter, r *http.Request) {
 
 	cfg := s.cfg.Get()
 	var b strings.Builder
-	fmt.Fprintf(&b, "# %s 链接导出\n\n", cfg.Site.Name)
-	fmt.Fprintf(&b, "共 %d 条 · %s 导出 · v%s\n\n",
-		len(links), time.Unix(s.now(), 0).Format("2006/01/02 15:04"), version.Version)
-	b.WriteString("| 短码 | 目标链接 | 标题 | 描述 | 点击数 | 过期时间 | 创建时间 |\n")
-	b.WriteString("|------|----------|------|------|--------|----------|----------|\n")
+	// YAML front matter carries the document metadata; the body stays
+	// English so the file reads the same in any editor or renderer.
+	b.WriteString("---\n")
+	fmt.Fprintf(&b, "site: %s\n", mdCell(cfg.Site.Name))
+	fmt.Fprintf(&b, "version: %s\n", version.Version)
+	fmt.Fprintf(&b, "count: %d\n", len(links))
+	fmt.Fprintf(&b, "exported_at: %q\n", time.Unix(s.now(), 0).Format("2006/01/02 15:04"))
+	b.WriteString("---\n\n")
+	// Column names match the CSV/JSON field names so one header fits all
+	// three export formats.
+	b.WriteString("| code | url | title | description | click_count | expires_at | created_at |\n")
+	b.WriteString("|------|-----|-------|-------------|-------------|------------|------------|\n")
 	for i := range links {
 		l := &links[i]
 		fmt.Fprintf(&b, "| `%s` | [%s](%s) | %s | %s | %d | %s | %s |\n",
