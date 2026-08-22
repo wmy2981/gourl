@@ -1,0 +1,85 @@
+package api
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+// The markdown export shares the CSV/JSON link set; these tests pin the
+// document shape: header metadata, the 7-column table and the cell escapes.
+func TestExportMarkdown(t *testing.T) {
+	s, _ := newTestServer(t)
+
+	// One row exercising every escape path: a pipe in the title, a newline in
+	// the description, never-expires. CreatedAt comes from the pinned test
+	// clock (1700000000 → 2023/11/14 in server-local time).
+	rec := do(t, s, http.MethodPost, "/api/v1/links", map[string]any{
+		"url":         "https://example.com/page",
+		"code":        "demo",
+		"title":       "ti|tle",
+		"description": "first line\nsecond line",
+	})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create status = %d, body %s", rec.Code, rec.Body.String())
+	}
+
+	rec = do(t, s, http.MethodGet, "/api/v1/export.md", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("export status = %d, body %s", rec.Code, rec.Body.String())
+	}
+	ct := rec.Header().Get("Content-Type")
+	if !strings.HasPrefix(ct, "text/markdown") {
+		t.Errorf("content-type = %q, want text/markdown", ct)
+	}
+	cd := rec.Header().Get("Content-Disposition")
+	if !strings.Contains(cd, `filename="gourl-links-2023-11-15`) {
+		t.Errorf("content-disposition = %q, want gourl-links timestamp", cd)
+	}
+
+	body := rec.Body.String()
+	for _, want := range []string{
+		"# gourl 链接导出",
+		"共 1 条 · ",
+		"| 短码 | 目标链接 | 标题 | 描述 | 点击数 | 过期时间 | 创建时间 |",
+		"`demo`",
+		"[https://example.com/page](https://example.com/page)",
+		"ti\\|tle",
+		"first line<br>second line",
+		"| — |", // never-expires cell
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("export body missing %q:\n%s", want, body)
+		}
+	}
+	if strings.Contains(body, "ti|tle") || strings.Contains(body, "first line\nsecond") {
+		t.Errorf("unescaped content leaked into the table:\n%s", body)
+	}
+}
+
+func TestExportMarkdownEmpty(t *testing.T) {
+	s, _ := newTestServer(t)
+	rec := do(t, s, http.MethodGet, "/api/v1/export.md", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("export status = %d", rec.Code)
+	}
+	body := rec.Body.String()
+	// Header still renders; only the table header rows follow (no data rows).
+	if !strings.Contains(body, "共 0 条") || !strings.Contains(body, "| 短码 |") {
+		t.Errorf("empty export body unexpected:\n%s", body)
+	}
+	if strings.Count(body, "\n|") > 2 { // header + separator only
+		t.Errorf("empty export carries data rows:\n%s", body)
+	}
+}
+
+func TestExportMarkdownRequiresAuth(t *testing.T) {
+	s, _ := newTestServer(t)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/export.md", nil)
+	rec := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("unauth status = %d, want 401", rec.Code)
+	}
+}

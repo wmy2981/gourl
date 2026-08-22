@@ -303,6 +303,18 @@ paths:
               schema:
                 type: array
                 items: { $ref: "#/components/schemas/ExportRow" }
+  /export.md:
+    get:
+      tags: [links]
+      summary: Export all links as a human-readable markdown table (same 7 fields)
+      description: "One table row per link under a header carrying the site name, version, link count and server-local export time. Pipes are escaped, newlines become <br>, empty fields read as an em dash, timestamps are yyyy/MM/dd HH:mm (0 = —)."
+      responses:
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/SetupRequired" }
+        "200":
+          description: Markdown attachment
+          content:
+            text/markdown: { schema: { type: string } }
   /logs:
     get:
       tags: [logs]
