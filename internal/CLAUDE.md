@@ -55,7 +55,7 @@ Subdirectory conventions for the Go backend packages. Root-level conventions (co
 ### fetcher
 
 - **Any reachable host is allowed** (no SSRF filtering — fetches are only triggered by an authenticated admin); every hop must still be an absolute http(s) URL, with a 5s timeout, 5-hop redirect cap and 1 MiB body limit
-- Lenient by design: non-200 statuses and non-html content types are parsed anyway (internal services answer oddly yet carry a `<title>`); a fetch finding nothing must **not** wipe existing meta — the metaQueue worker skips `UpdateMeta` when title and description are both empty; failures log at warning level
+- Lenient by design: non-200 statuses and non-html content types are parsed anyway (internal services answer oddly yet carry a `<title>`); failures log at warning level. `store.UpdateMeta` guards both fields in SQL: an empty fetched title never wipes the old one, and a stored description is **never overwritten once non-empty** (user-entered descriptions survive every refetch). Any link mutation re-enqueues a fetch except patches that carry an explicit title (a manual title must not be clobbered seconds later)
 
 ### shortcode
 
