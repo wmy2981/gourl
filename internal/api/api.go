@@ -108,9 +108,14 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/links/{code...}", s.requireAuth(s.getLink))
 	mux.HandleFunc("PATCH /api/v1/links/{code...}", s.requireAuth(s.updateLink))
 	mux.HandleFunc("DELETE /api/v1/links/{code...}", s.requireAuth(s.deleteLink))
-	mux.HandleFunc("GET /api/v1/export.csv", s.requireAuth(s.exportCSV))
-	mux.HandleFunc("GET /api/v1/export.json", s.requireAuth(s.exportJSON))
-	mux.HandleFunc("GET /api/v1/export.md", s.requireAuth(s.exportMarkdown))
+	mux.HandleFunc("GET /api/v1/links/export.csv", s.requireAuth(s.exportCSV))
+	mux.HandleFunc("GET /api/v1/links/export.json", s.requireAuth(s.exportJSON))
+	mux.HandleFunc("GET /api/v1/links/export.md", s.requireAuth(s.exportMarkdown))
+	// Legacy export paths (pre-1.0.2 clients): 308 keeps the GET method, so
+	// old callers follow it transparently (see exportLegacyRedirect).
+	mux.Handle("GET /api/v1/export.csv", http.HandlerFunc(exportLegacyRedirect("csv")))
+	mux.Handle("GET /api/v1/export.json", http.HandlerFunc(exportLegacyRedirect("json")))
+	mux.Handle("GET /api/v1/export.md", http.HandlerFunc(exportLegacyRedirect("md")))
 	mux.HandleFunc("GET /api/v1/tokens", s.requireAuth(s.listTokens))
 	mux.HandleFunc("POST /api/v1/tokens", s.requireAuth(s.createToken))
 	mux.HandleFunc("DELETE /api/v1/tokens/{id}", s.requireAuth(s.deleteToken))

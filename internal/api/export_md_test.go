@@ -26,7 +26,7 @@ func TestExportMarkdown(t *testing.T) {
 		t.Fatalf("create status = %d, body %s", rec.Code, rec.Body.String())
 	}
 
-	rec = do(t, s, http.MethodGet, "/api/v1/export.md", nil)
+	rec = do(t, s, http.MethodGet, "/api/v1/links/export.md", nil)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("export status = %d, body %s", rec.Code, rec.Body.String())
 	}
@@ -62,7 +62,7 @@ func TestExportMarkdown(t *testing.T) {
 
 func TestExportMarkdownEmpty(t *testing.T) {
 	s, _ := newTestServer(t)
-	rec := do(t, s, http.MethodGet, "/api/v1/export.md", nil)
+	rec := do(t, s, http.MethodGet, "/api/v1/links/export.md", nil)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("export status = %d", rec.Code)
 	}
@@ -78,11 +78,30 @@ func TestExportMarkdownEmpty(t *testing.T) {
 
 func TestExportMarkdownRequiresAuth(t *testing.T) {
 	s, _ := newTestServer(t)
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/export.md", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/links/export.md", nil)
 	rec := httptest.NewRecorder()
 	s.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusUnauthorized {
 		t.Errorf("unauth status = %d, want 401", rec.Code)
+	}
+}
+
+// Pre-1.0.2 export paths answer a permanent redirect to the /api/v1/links/
+// home so old scripted clients and app builds keep working. The redirect is
+// served without auth (the target route authenticates), and follows the
+// query string.
+func TestLegacyExportPathsRedirect(t *testing.T) {
+	s, _ := newTestServer(t)
+	for _, name := range []string{"export.csv", "export.json", "export.md"} {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/"+name, nil)
+		rec := httptest.NewRecorder()
+		s.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusPermanentRedirect {
+			t.Errorf("GET /api/v1/%s status = %d, want 308", name, rec.Code)
+		}
+		if loc := rec.Header().Get("Location"); loc != "/api/v1/links/"+name {
+			t.Errorf("GET /api/v1/%s location = %q, want /api/v1/links/%s", name, loc, name)
+		}
 	}
 }
 
@@ -99,7 +118,7 @@ func TestExportMetaInfo(t *testing.T) {
 	}
 
 	// JSON: {"meta": {site, version, count, exported_at}, "items": [...]}
-	rec = do(t, s, http.MethodGet, "/api/v1/export.json", nil)
+	rec = do(t, s, http.MethodGet, "/api/v1/links/export.json", nil)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("json export status = %d", rec.Code)
 	}
@@ -120,7 +139,7 @@ func TestExportMetaInfo(t *testing.T) {
 	}
 
 	// CSV: #-comment metadata lines, then the header row.
-	rec = do(t, s, http.MethodGet, "/api/v1/export.csv", nil)
+	rec = do(t, s, http.MethodGet, "/api/v1/links/export.csv", nil)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("csv export status = %d", rec.Code)
 	}

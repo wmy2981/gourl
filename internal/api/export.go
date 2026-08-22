@@ -36,7 +36,20 @@ func toExportRow(l *store.Link) exportRow {
 	}
 }
 
-// exportJSON handles GET /api/v1/export.json: every link as a JSON array of
+// exportLegacyRedirect returns a handler that 308-redirects the pre-1.0.2
+// export paths (/api/v1/export.*) to their /api/v1/links/ home. 308 preserves
+// the GET method and the Authorization header, so old scripted clients and
+// the mobile app follow it transparently. The route is registered without
+// requireAuth: an unauthenticated caller must still be redirected (fetch
+// strips Authorization across redirects, so the new URL is re-authenticated
+// with its own credentials), while a wrong token fails on the target route.
+func exportLegacyRedirect(name string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/api/v1/links/export."+name, http.StatusPermanentRedirect)
+	}
+}
+
+// exportJSON handles GET /api/v1/links/export.json: every link as a JSON array of
 // the same 7 fields the CSV carries (import/export symmetry), wrapped with a
 // meta object (site, version, count, exported_at) mirroring the markdown
 // export's front matter. The importer accepts both this form and the legacy
@@ -64,7 +77,7 @@ func (s *Server) exportJSON(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// exportCSV handles GET /api/v1/export.csv: every link as a CSV with a UTF-8
+// exportCSV handles GET /api/v1/links/export.csv: every link as a CSV with a UTF-8
 // BOM so spreadsheet apps detect the encoding.
 func (s *Server) exportCSV(w http.ResponseWriter, r *http.Request) {
 	links, err := s.store.ListAllLinks(r.Context())
@@ -122,7 +135,7 @@ func mdTime(unix int64) string {
 	return time.Unix(unix, 0).Format("2006/01/02 15:04")
 }
 
-// exportMarkdown handles GET /api/v1/export.md: every link as one markdown
+// exportMarkdown handles GET /api/v1/links/export.md: every link as one markdown
 // table row (the same 7 fields as CSV/JSON), under a header carrying the
 // site name, version, link count and server-local export time.
 func (s *Server) exportMarkdown(w http.ResponseWriter, r *http.Request) {
