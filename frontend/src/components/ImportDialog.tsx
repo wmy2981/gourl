@@ -4,6 +4,7 @@ import { json } from '@codemirror/lang-json'
 import { Upload } from 'lucide-react'
 import { api, ApiError, type ImportItem } from '../lib/api'
 import { parseCSV } from '../lib/csv'
+import { jsonHighlight } from '../lib/jsonHighlight'
 import { Button, Dialog, Label, Select, useToast } from './ui'
 import CodeEditor from './CodeEditor'
 
@@ -106,7 +107,7 @@ export default function ImportDialog({
         onChange={setText}
         placeholder='[{"url": "https://example.com/1"}, {"url": "https://example.com/2", "code": "two"}]'
         ariaLabel={t('form.importHint')}
-        extensions={[json()]}
+        extensions={[json(), jsonHighlight]}
       />
       <div className="mt-4 flex items-end justify-between gap-2">
         <div className="w-44">

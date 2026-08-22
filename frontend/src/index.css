@@ -281,9 +281,11 @@
   color: var(--color-muted);
   opacity: 0.7;
 }
-/* Batch-create line tokens ([code](date)url) — VSCode One Dark palette in
-   dark mode (orange code, green date, blue url), deepened equivalents in
-   light mode to keep the contrast on light backgrounds. */
+/* Editor token colors (batch-create line tokens and the import dialog's
+   JSON) — VSCode One Dark palette in dark mode, deepened Light+ equivalents
+   in light mode to keep the contrast on light backgrounds. Batch create:
+   orange code, green date, blue url; JSON: keys orange, strings green,
+   numbers/bools/null blue. */
 .cm-editor.batch-editor {
   --tok-code: #b45309;
   --tok-date: #4d7c0f;
