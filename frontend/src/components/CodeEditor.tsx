@@ -58,6 +58,7 @@ export default function CodeEditor({
   className = '',
   errorLines,
   extensions = [],
+  onBlur,
 }: {
   value: string
   onChange: (value: string) => void
@@ -73,11 +74,17 @@ export default function CodeEditor({
   errorLines?: readonly number[]
   /** Extra CodeMirror extensions (language highlighting, …). */
   extensions?: Extension[]
+  /** Fired when the editable area loses focus. */
+  onBlur?: () => void
 }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [view, setView] = useState<EditorView | null>(null)
 
   // Mounted once; later prop changes flow through the sync effects below.
+  // onBlur is captured in a ref so callers passing an inline closure don't
+  // remount (and wipe) the editor on every render.
+  const onBlurRef = useRef(onBlur)
+  onBlurRef.current = onBlur
   useEffect(() => {
     const parent = containerRef.current
     if (!parent) return
@@ -98,6 +105,7 @@ export default function CodeEditor({
         lineNumberMarkers.compute([errorField], (state) => state.field(errorField).markers),
         EditorView.updateListener.of((u) => {
           if (u.docChanged) onChange(u.state.doc.toString())
+          if (u.focusChanged && !u.view.hasFocus) onBlurRef.current?.()
         }),
         ...(ph != null ? [placeholder(ph)] : []),
         ...extensions,

@@ -52,7 +52,7 @@ test('batch imports links and reports per-item results', async ({ page }) => {
   await expect(page.getByText('e2e-b2', { exact: true })).toBeVisible({ timeout: 15_000 })
 })
 
-test('batch create shows line numbers and flags invalid lines', async ({ page }) => {
+test('batch create shows line numbers and flags invalid lines on blur', async ({ page }) => {
   await page.goto('/admin/links')
   await page.getByRole('button', { name: /batch create/i }).click()
   const dialog = page.getByRole('dialog')
@@ -64,22 +64,26 @@ test('batch create shows line numbers and flags invalid lines', async ({ page })
   await expect(dialog.locator('.cm-content .tok-code').first()).toBeVisible()
   await expect(dialog.locator('.cm-content .tok-date').first()).toBeVisible()
   await expect(dialog.locator('.cm-content .tok-url').first()).toBeVisible()
+  // Validation is deferred: nothing is flagged while the editor holds focus.
+  await expect(dialog.locator('.cm-gutterElement.cm-error-gutter')).toHaveCount(0)
   // Line numbers 1..3 are always visible in the gutter (the hidden spacer
   // element that measures gutter width is filtered out by :visible).
   const lineNumbers = dialog.locator('.cm-lineNumbers .cm-gutterElement:visible')
   await expect(lineNumbers.nth(0)).toHaveText('1')
   await expect(lineNumbers.nth(2)).toHaveText('3')
-  // Lines 2 (bad date) and 3 (missing url) are flagged in red.
+  // Blurring the editor runs the check: lines 2 (bad date) and 3 (missing
+  // url) are flagged in red.
+  await dialog.getByRole('button', { name: /^Create$/ }).click()
   await expect(dialog.locator('.cm-gutterElement.cm-error-gutter')).toHaveCount(2)
-  // Create stays disabled while invalid lines remain.
-  await expect(dialog.getByRole('button', { name: /^Create$/ })).toBeDisabled()
-  // Fix the flagged lines: the flags clear and create works. The last line
-  // uses a non-http scheme, which batch create accepts.
+  // Create refuses to submit while invalid lines remain.
+  await expect(page.getByText('e2e-ok', { exact: true })).toHaveCount(0)
+  // Fix the flagged lines: the flags clear on the next check and create
+  // works. The last line uses a non-http scheme, which batch create accepts.
   await editor.fill(
     '[e2e-ok](2030/12/31)https://example.com/ok\n[e2e-bad]https://example.com/bad\n[e2e-ftp]ftp://example.com/file',
   )
-  await expect(dialog.locator('.cm-gutterElement.cm-error-gutter')).toHaveCount(0)
   await dialog.getByRole('button', { name: /^Create$/ }).click()
+  await expect(dialog.locator('.cm-gutterElement.cm-error-gutter')).toHaveCount(0)
   await expect(page.getByText('e2e-bad', { exact: true })).toBeVisible({ timeout: 15_000 })
   await expect(page.getByText('e2e-ftp', { exact: true })).toBeVisible({ timeout: 15_000 })
 })

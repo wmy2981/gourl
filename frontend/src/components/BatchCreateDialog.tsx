@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api, ApiError, type ImportItem } from '../lib/api'
 import { parseBatchLine, type ParsedBatchItem } from '../lib/batch'
@@ -11,11 +11,18 @@ interface Failure {
   reason: string
 }
 
+interface Validation {
+  items: ParsedBatchItem[]
+  validLines: string[]
+  errorLines: { line: number; reason: string }[]
+}
+
 // Batch create: one strict-syntax line per item
 //   [code](date)url
-// (both brackets optional). Format errors are flagged before submit; the
-// server then creates each valid line independently, and the failed lines
-// stay editable for a one-click retry.
+// (both brackets optional). Format errors are flagged on blur or when the
+// create button is clicked — not on every keystroke, which would nag while
+// the text is still mid-edit. The server then creates each valid line
+// independently, and the failed lines stay editable for a one-click retry.
 export default function BatchCreateDialog({
   open,
   onClose,
@@ -30,15 +37,19 @@ export default function BatchCreateDialog({
   const [text, setText] = useState('')
   const [busy, setBusy] = useState(false)
   const [failures, setFailures] = useState<Failure[]>([])
+  const [validation, setValidation] = useState<Validation>({
+    items: [],
+    validLines: [],
+    errorLines: [],
+  })
 
-  // Live per-line validation: valid items (skipping comments/blank lines)
-  // and the error lines to flag.
-  const { items, validLines, errorLines } = useMemo(() => {
+  // Per-line validation: valid items (skipping comments/blank lines) and the
+  // error lines to flag.
+  const validate = useCallback((value: string): Validation => {
     const items: ParsedBatchItem[] = []
     const validLines: string[] = []
     const errorLines: { line: number; reason: string }[] = []
-    const rawLines = text.split('\n')
-    rawLines.forEach((raw, i) => {
+    value.split('\n').forEach((raw, i) => {
       const r = parseBatchLine(raw)
       if (r.error === 'skip') return
       if (!r.ok || !r.item) {
@@ -49,7 +60,7 @@ export default function BatchCreateDialog({
       validLines.push(raw.trim())
     })
     return { items, validLines, errorLines }
-  }, [text])
+  }, [])
 
   const reasonText = (reason: string): string => {
     switch (reason) {
@@ -94,15 +105,24 @@ export default function BatchCreateDialog({
     }
   }
 
+  // Create click: validate first — invalid lines surface here instead of
+  // while typing, and nothing is sent until they are fixed.
+  const onCreate = () => {
+    const v = validate(text)
+    setValidation(v)
+    if (v.errorLines.length > 0 || v.items.length === 0) return
+    void submit(v.validLines, v.items)
+  }
+
   const retry = () => {
-    const still = items
-    if (still.length === 0 || busy) return
-    void submit(validLines, still)
+    if (validation.items.length === 0 || busy) return
+    void submit(validation.validLines, validation.items)
   }
 
   const close = () => {
     setText('')
     setFailures([])
+    setValidation({ items: [], validLines: [], errorLines: [] })
     onClose()
   }
 
@@ -118,14 +138,15 @@ export default function BatchCreateDialog({
             onChange={setText}
             placeholder="[mycode](2030/12/31)https://example.com/page"
             ariaLabel={t('form.batchHint')}
-            errorLines={errorLines.map((e) => e.line)}
+            onBlur={() => setValidation(validate(text))}
+            errorLines={validation.errorLines.map((e) => e.line)}
             extensions={[batchHighlight]}
           />
         </div>
 
-        {errorLines.length > 0 && (
+        {validation.errorLines.length > 0 && (
           <ul className="max-h-28 space-y-1 overflow-y-auto rounded-lg border border-danger/20 bg-danger/5 px-3 py-2 text-xs text-danger">
-            {errorLines.map((e) => (
+            {validation.errorLines.map((e) => (
               <li key={e.line}>
                 {t('form.batchLineNum', { line: e.line })}：{reasonText(e.reason)}
               </li>
@@ -151,15 +172,12 @@ export default function BatchCreateDialog({
           <Button variant="ghost" onClick={close}>
             {t('form.cancel')}
           </Button>
-          {failures.length > 0 && items.length > 0 && (
+          {failures.length > 0 && validation.items.length > 0 && (
             <Button variant="outline" onClick={retry} disabled={busy}>
               {t('form.batchRetry')}
             </Button>
           )}
-          <Button
-            onClick={() => void submit(validLines, items)}
-            disabled={busy || items.length === 0 || errorLines.length > 0}
-          >
+          <Button onClick={onCreate} disabled={busy || !text.trim()}>
             {t('form.create')}
           </Button>
         </div>
