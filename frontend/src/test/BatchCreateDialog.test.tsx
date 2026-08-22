@@ -6,13 +6,6 @@ import { ToastProvider } from '../components/ui'
 import { api } from '../lib/api'
 import '../lib/i18n'
 
-// CodeMirror needs ResizeObserver in jsdom (see CodeEditor.test.tsx).
-class ResizeObserverStub {
-  observe() {}
-  unobserve() {}
-  disconnect() {}
-}
-
 vi.mock('../lib/api', () => ({
   api: { batchCreate: vi.fn() },
   ApiError: class ApiError extends Error {},
@@ -53,7 +46,6 @@ const createButton = () => screen.getByRole('button', { name: /^Create$/ })
 const lineError = () => screen.queryByText(/Line 1/)
 
 beforeEach(() => {
-  globalThis.ResizeObserver = ResizeObserverStub
   vi.mocked(api.batchCreate).mockReset()
 })
 

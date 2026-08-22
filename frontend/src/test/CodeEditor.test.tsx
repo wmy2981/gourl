@@ -1,18 +1,6 @@
 import { render } from '@testing-library/react'
-import { beforeEach, expect, it, vi } from 'vitest'
+import { expect, it, vi } from 'vitest'
 import CodeEditor from '../components/CodeEditor'
-
-// CodeMirror tracks the editor size through ResizeObserver; jsdom lacks it.
-class ResizeObserverStub {
-  observe() {}
-  unobserve() {}
-  disconnect() {}
-}
-
-beforeEach(() => {
-  // Test-only polyfill: jsdom ships no ResizeObserver.
-  globalThis.ResizeObserver = ResizeObserverStub
-})
 
 it('puts the batch-editor class on the CodeMirror element', () => {
   // The dialog editor's styles in index.css are scoped to
