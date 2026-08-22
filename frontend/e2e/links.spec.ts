@@ -97,6 +97,31 @@ test('edits a link title', async ({ page, request }) => {
   await expect(page.getByText('https://example.com/changed').first()).toBeVisible({ timeout: 15_000 })
 })
 
+test('exports links as markdown', async ({ page, request }) => {
+  await createLinkApi(request, { url: 'https://example.com/md-target', code: 'e2e-md' })
+  await page.goto('/admin/links')
+  await page.getByRole('button', { name: /export/i }).click()
+  const dialog = page.getByRole('dialog')
+  await expect(dialog.getByRole('button', { name: 'Markdown' })).toBeVisible()
+  const [download] = await Promise.all([
+    page.waitForEvent('download'),
+    dialog.getByRole('button', { name: 'Markdown' }).click(),
+  ])
+  // Filename shape matches exportFilename: gourl-links-<timestamp>.md
+  expect(download.suggestedFilename()).toMatch(/^gourl-links-\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2}\.md$/)
+  const body = await new Promise<string>((resolve) => {
+    download.createReadStream().then((stream) => {
+      const chunks: Buffer[] = []
+      stream.on('data', (c: Buffer) => chunks.push(c))
+      stream.on('end', () => resolve(Buffer.concat(chunks).toString('utf-8')))
+    })
+  })
+  // The markdown table carries the created link with its escapes intact.
+  expect(body).toContain('| code | url | title | description | click_count | expires_at | created_at |')
+  expect(body).toContain('`e2e-md`')
+  expect(body).toContain('[https://example.com/md-target](https://example.com/md-target)')
+})
+
 test('searches and filters links', async ({ page, request }) => {
   await createLinkApi(request, { url: 'https://example.com/find-me', code: 'find-me' })
   await createLinkApi(request, { url: 'https://example.com/other', code: 'other-code' })

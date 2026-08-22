@@ -326,6 +326,20 @@ export const api = {
     return res.blob()
   },
   exportJson: () => request<Record<string, unknown>[]>('/api/v1/export.json'),
+  // The markdown endpoint is an attachment like CSV, so it also bypasses
+  // request() and returns the raw blob.
+  exportMarkdown: async () => {
+    const server = getServerConfig()
+    const res = await fetch(
+      server ? `${server.url.replace(/\/+$/, '')}/api/v1/export.md` : '/api/v1/export.md',
+      {
+        credentials: server ? 'omit' : 'same-origin',
+        headers: server ? { Authorization: `Bearer ${server.token}` } : {},
+      },
+    )
+    if (!res.ok) throw new ApiError(res.status, 'unknown', `HTTP ${res.status}`)
+    return res.blob()
+  },
   logHistory: (limit = 200, offset = 0) =>
     request<LogHistoryResponse>(`/api/v1/logs?limit=${limit}&offset=${offset}`),
   logStream: (onLog: (rec: LogRecord) => void, onError?: () => void) => {

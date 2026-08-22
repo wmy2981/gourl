@@ -146,7 +146,8 @@
     "clearExpiredConfirm": "This will delete {{count}} expired links. This cannot be undone.",
     "expiredCleared": "Deleted {{count}} expired links",
     "downloadedTo": "Saved to {{path}}",
-    "copyFailed": "Copy failed"
+    "copyFailed": "Copy failed",
+    "exportMarkdown": "Markdown"
   },
   "form": {
     "url": "Destination URL",
