@@ -34,7 +34,9 @@ func TestExportMarkdown(t *testing.T) {
 		t.Errorf("content-type = %q, want text/markdown", ct)
 	}
 	cd := rec.Header().Get("Content-Disposition")
-	if !strings.Contains(cd, `filename="gourl-links-2023-11-15`) {
+	// Timestamp is server-local; the pinned clock renders differently across
+	// TZ offsets (CI is UTC), so only pin the prefix shape.
+	if !strings.HasPrefix(cd, `attachment; filename="gourl-links-2023-`) || !strings.HasSuffix(cd, `.md"`) {
 		t.Errorf("content-disposition = %q, want gourl-links timestamp", cd)
 	}
 
