@@ -256,7 +256,9 @@ func TestBatchImportAcceptsExportDump(t *testing.T) {
 	rec := do(t, s, http.MethodPost, "/api/v1/links/batch", map[string]any{
 		"meta": map[string]any{
 			"site":        "gourl",
-			"version":     "1.0.2.alpha.1",
+			// Meta is ignored wholesale — the version string is a dummy,
+			// deliberately not the real VERSION so bumps never touch tests.
+			"version":     "9.9.9",
 			"count":       2,
 			"exported_at": "2026/08/22 14:00",
 		},

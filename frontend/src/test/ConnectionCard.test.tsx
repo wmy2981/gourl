@@ -53,9 +53,10 @@ describe('ConnectionCard', () => {
     renderCard()
     await waitFor(() => expect(screen.getByText('Connected')).toBeInTheDocument())
     // Server version comes from the health probe; the app version is the
-    // embedded build constant (v1.0.1 in tests).
+    // embedded build constant — assert against it, never a literal, so a
+    // VERSION bump doesn't break this test.
     expect(screen.getByText('v9.9.9')).toBeInTheDocument()
-    expect(screen.getByText('v1.0.1')).toBeInTheDocument()
+    expect(screen.getByText(`v${__APP_VERSION__}`)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Refresh' })).toBeInTheDocument()
   })
 
