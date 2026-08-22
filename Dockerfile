@@ -1,7 +1,10 @@
 # syntax=docker/dockerfile:1
 
 # ---------- frontend build ----------
-FROM node:22-alpine AS frontend
+# $BUILDPLATFORM: the JS bundle is platform-independent — always build on the
+# native runner arch. Emulating npm/V8 under QEMU for arm64 intermittently
+# dies with SIGILL and leaves the whole build hanging.
+FROM --platform=$BUILDPLATFORM node:22-alpine AS frontend
 ARG VERSION_STR
 WORKDIR /app
 COPY frontend/package.json frontend/package-lock.json ./
@@ -19,8 +22,11 @@ COPY assets/favicon.svg ./src/assets/icon.svg
 RUN npm run build
 
 # ---------- go build ----------
-FROM golang:1.26-alpine AS build
+# $BUILDPLATFORM + GOARCH cross-compile: CGO is off, so the toolchain targets
+# arm64 natively on the amd64 runner — no QEMU anywhere in the build.
+FROM --platform=$BUILDPLATFORM golang:1.26-alpine AS build
 ARG VERSION_STR
+ARG TARGETARCH
 WORKDIR /app
 COPY go.mod go.sum ./
 # One retry: the module proxy intermittently resets connections on runners.
@@ -35,7 +41,7 @@ COPY assets/favicon.svg ./internal/webui/icon.svg
 COPY frontend/src/locales/ ./internal/webui/locales/
 # The version string (quoted — dev builds carry "VERSION (sha7)") comes from
 # the build ARG; without one (local builds) it falls back to the VERSION file.
-RUN CGO_ENABLED=0 go build -trimpath \
+RUN CGO_ENABLED=0 GOARCH=$TARGETARCH go build -trimpath \
     -ldflags "-s -w -X 'github.com/wmy2981/gourl/internal/version.Version=${VERSION_STR:-$(cat VERSION)}'" \
     -o /gourl ./cmd/gourl
 
