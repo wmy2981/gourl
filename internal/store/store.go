@@ -295,10 +295,17 @@ func (s *Store) CreateLinks(ctx context.Context, links []Link) ([]error, error) 
 }
 
 // UpdateMeta refreshes a link's title/description after an async meta fetch.
+// A fetched title only lands when non-empty (a barren page must not wipe the
+// old title); a stored description is never overwritten once non-empty —
+// user-entered descriptions win over anything the target site offers.
 func (s *Store) UpdateMeta(ctx context.Context, code, title, description string, updatedAt int64) error {
 	_, err := s.db.ExecContext(ctx,
-		`UPDATE links SET title = ?, description = ?, updated_at = ? WHERE code = ? AND deleted = 0`,
-		title, description, updatedAt, code)
+		`UPDATE links SET
+			title = CASE WHEN ?2 != '' THEN ?2 ELSE title END,
+			description = CASE WHEN description = '' THEN ?3 ELSE description END,
+			updated_at = ?4
+		WHERE code = ?1 AND deleted = 0`,
+		code, title, description, updatedAt)
 	if err != nil {
 		slog.Debug("store: update meta failed", "code", code, "error", err)
 		return fmt.Errorf("update meta: %w", err)

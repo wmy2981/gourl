@@ -14,6 +14,14 @@
     "settings": "设置",
     "logout": "退出登录"
   },
+  "page": {
+    "notFoundHeading": "页面不存在",
+    "notFoundMessage": "您访问的短链接不存在、已删除或已过期。",
+    "blockedHeading": "访问被拦截",
+    "blockedUaMessage": "您的请求被本服务拦截。命中的 User-Agent 关键词：{{detail}}",
+    "blockedIpMessage": "您的请求被本服务拦截。命中的 IP 规则：{{detail}}",
+    "publicNotice": "这是一个短链接服务，本页面不可直接访问。"
+  },
   "logs": {
     "live": "实时",
     "reconnecting": "连接断开，正在重连…",
@@ -138,7 +146,8 @@
     "clearExpiredConfirm": "将删除 {{count}} 条过期链接，此操作不可撤销。",
     "expiredCleared": "已删除 {{count}} 条过期链接",
     "downloadedTo": "已保存到 {{path}}",
-    "copyFailed": "复制失败"
+    "copyFailed": "复制失败",
+    "exportMarkdown": "Markdown"
   },
   "form": {
     "url": "目标 URL",
@@ -190,6 +199,7 @@
     "securityHint": "修改管理员密码将使所有会话下线。",
     "changePassword": "修改管理员密码",
     "appConnection": "App 连接",
+    "noTextSelect": "禁止选中文字",
     "connectedTo": "已连接到",
     "disconnectApp": "断开连接",
     "siteName": "服务名称",
@@ -248,7 +258,10 @@
     "connConnected": "已连接",
     "connUnauthorized": "Token 无效",
     "connUnreachable": "无法连接",
-    "connChecking": "检查中…"
+    "connChecking": "检查中…",
+    "serverVersion": "服务端版本",
+    "appVersion": "App 版本",
+    "connRefresh": "刷新"
   },
   "common": {
     "loading": "加载中…",

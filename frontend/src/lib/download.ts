@@ -42,7 +42,7 @@ export async function saveDownload(
  * the file name matches the clock the user sees; the backend CSV header uses
  * the same format (server-local time).
  */
-export function exportFilename(kind: 'links' | 'logs', ext: 'json' | 'csv' | 'log'): string {
+export function exportFilename(kind: 'links' | 'logs', ext: 'json' | 'csv' | 'log' | 'md'): string {
   const d = new Date()
   const pad = (n: number) => String(n).padStart(2, '0')
   const stamp = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}-${pad(d.getHours())}-${pad(d.getMinutes())}-${pad(d.getSeconds())}`

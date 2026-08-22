@@ -43,7 +43,8 @@ Beyond the basics: batch create/delete/import-export, live SSE log page, QR code
 - UA blocks are **config-managed** (`ua_blocks`, comma-separated in settings); `/api/v1/ua-blocks` stays for programmatic use. **IP bans (`ip_blocks`) are the outermost middleware** (every route incl. health): exact IP / CIDR / `192.168.*.*` wildcards → 403 page naming the rule (shared `renderBlocked`)
 - All user-facing strings are bilingual zh/en; site info fields in `config.yaml` are single-language. API error `code`s are stable English identifiers; the frontend maps them
 - Reserved short-code prefixes live in `internal/shortcode` — **new system routes must be added there**. Custom codes may contain simplified Chinese; `MaxLength` counts runes, not bytes; multi-segment entries reserve a whole subtree
-- Export downloads share one filename shape — `gourl-links|logs-<local yyyy-mm-dd-hh-mm-ss>.{csv,json,log}`: the frontend names them via `exportFilename` (download.ts, local time), the backend CSV `Content-Disposition` matches (server-local time)
+- Export downloads share one filename shape — `gourl-links|logs-<local yyyy-mm-dd-hh-mm-ss>.{csv,json,md,log}`: the frontend names them via `exportFilename` (download.ts, local time), the backend CSV/markdown `Content-Disposition` matches (server-local time)
+- The three link exports (`/api/v1/links/export.csv|json|md`) carry the same 7 fields plus **export metadata**: JSON wraps rows as `{meta: {site, version, count, exported_at}, items: [...]}`, CSV prepends `#`-comment metadata lines, markdown uses YAML front matter (English body, `code`/`url`/... column names). **The batch import accepts both** the wrapped dump and the legacy bare array (`decodeBatchRequest` ignores unknown top-level keys; ImportDialog unwraps `.items`; CSV import skips `#` lines)
 
 ### Frontend & Android
 

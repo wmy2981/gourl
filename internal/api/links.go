@@ -318,9 +318,11 @@ func (s *Server) updateLink(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Changing the URL re-fetches the title/description (in the background),
-	// unless the caller overrides them explicitly in the same request.
-	refetchMeta := false
+	// Any mutation re-fetches the title/description (in the background), so
+	// edits keep meta in sync with the target site — unless the caller
+	// provides a title explicitly (a manual title must not be clobbered
+	// seconds later by the fetch result).
+	refetchMeta := mutating && req.Title == nil
 	if req.URL != nil {
 		if !isAbsoluteURL(*req.URL) {
 			writeError(w, http.StatusBadRequest, "invalid_request", "url must be an absolute URL with a scheme")
@@ -331,7 +333,6 @@ func (s *Server) updateLink(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		link.URL = *req.URL
-		refetchMeta = req.Title == nil && req.Description == nil
 	}
 	if req.Title != nil {
 		link.Title = *req.Title

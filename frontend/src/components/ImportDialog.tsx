@@ -1,9 +1,12 @@
 import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { json } from '@codemirror/lang-json'
 import { Upload } from 'lucide-react'
 import { api, ApiError, type ImportItem } from '../lib/api'
 import { parseCSV } from '../lib/csv'
-import { Button, Dialog, Label, Select, Textarea, useToast } from './ui'
+import { jsonHighlight } from '../lib/jsonHighlight'
+import { Button, Dialog, Label, Select, useToast } from './ui'
+import CodeEditor from './CodeEditor'
 
 // Batch import: items pasted as JSON or loaded from a file, with a conflict
 // policy for codes that already exist. JSON files are parsed as-is; CSV files
@@ -31,7 +34,8 @@ export default function ImportDialog({
     try {
       const raw = await file.text()
       if (file.name.toLowerCase().endsWith('.csv')) {
-        const rows = parseCSV(raw)
+        // Skip the #-comment metadata lines the exporter prepends.
+        const rows = parseCSV(raw.split('\n').filter((l) => !l.startsWith('#')).join('\n'))
         const items: ImportItem[] = rows.map((r) => {
           const item: ImportItem = { url: r.url }
           if (r.code) item.code = r.code
@@ -59,9 +63,18 @@ export default function ImportDialog({
     if (busy) return
     setBusy(true)
     try {
-      const parsed = JSON.parse(text)
-      if (!Array.isArray(parsed)) throw new Error('not an array')
-      const res = await api.batchCreate(parsed as ImportItem[], conflict)
+      // Accepts both the legacy bare array and the current export dump
+      // ({"meta": {...}, "items": [...]}); anything else fails.
+      const parsed: unknown = JSON.parse(text)
+      let items: unknown[]
+      if (Array.isArray(parsed)) {
+        items = parsed
+      } else if (parsed && typeof parsed === 'object' && Array.isArray((parsed as { items?: unknown }).items)) {
+        items = (parsed as { items: unknown[] }).items
+      } else {
+        throw new Error('not an array')
+      }
+      const res = await api.batchCreate(items as ImportItem[], conflict)
       toast(
         t('form.importResults', {
           created: res.succeeded,
@@ -98,12 +111,13 @@ export default function ImportDialog({
           onChange={(e) => loadFile(e.target.files?.[0])}
         />
       </div>
-      <Textarea
-        rows={10}
+      <CodeEditor
+        className="h-60"
         value={text}
-        onChange={(e) => setText(e.target.value)}
-        className="short-code"
+        onChange={setText}
         placeholder='[{"url": "https://example.com/1"}, {"url": "https://example.com/2", "code": "two"}]'
+        ariaLabel={t('form.importHint')}
+        extensions={[json(), jsonHighlight]}
       />
       <div className="mt-4 flex items-end justify-between gap-2">
         <div className="w-44">

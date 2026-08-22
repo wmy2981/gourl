@@ -40,25 +40,29 @@ jobs:
           # installed); the platform scales/centers/masks them.
           node scripts/sync-android-icon.mjs
 
+      - name: Resolve version string
+        run: |
+          VERSION=$(cat VERSION)
+          SHA=$(git rev-parse --short=7 HEAD)
+          if [ "${{ github.ref_name }}" = "main" ]; then
+            echo "VERSION_STR=$VERSION" >> "$GITHUB_ENV"
+          else
+            echo "VERSION_STR=${VERSION} (${SHA})" >> "$GITHUB_ENV"
+          fi
+          echo "APK_NAME=gourl-${VERSION}-${SHA}-android-client.apk" >> "$GITHUB_ENV"
+
+      # The SPA footer/login show the resolved string — same injection as the
+      # Docker image (VERSION_STR build arg), so the APK and the server build
+      # identify themselves identically.
       - name: Build the SPA
         working-directory: frontend
         run: npm run build
+        env:
+          VERSION_STR: ${{ env.VERSION_STR }}
 
       - name: Sync web assets into the Android project
         working-directory: frontend
         run: npx cap sync android
-
-      - name: Resolve version string
-        run: |
-          VERSION=$(cat VERSION)
-          if [ "${{ github.ref_name }}" = "main" ]; then
-            echo "VERSION_STR=$VERSION" >> "$GITHUB_ENV"
-            echo "APK_NAME=gourl-${VERSION}-release.apk" >> "$GITHUB_ENV"
-          else
-            SHA=$(git rev-parse --short=7 HEAD)
-            echo "VERSION_STR=${VERSION} (${SHA})" >> "$GITHUB_ENV"
-            echo "APK_NAME=gourl-${VERSION}-${SHA}-release.apk" >> "$GITHUB_ENV"
-          fi
 
       - name: Stamp the Android version
         working-directory: frontend/android
@@ -108,7 +112,7 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: gourl-release-apk
+          name: gourl-android-client
           path: dist-apk/
           if-no-files-found: error
 

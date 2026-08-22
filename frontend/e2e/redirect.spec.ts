@@ -57,11 +57,15 @@ test('expired codes behave like missing ones (404, bilingual copy)', async ({ re
 
   const pageEn = await page.request.get('/expire-me')
   expect(pageEn.status()).toBe(404)
-  expect((await pageEn.text()).toLowerCase()).toContain('page not found')
+  const enText = (await pageEn.text()).toLowerCase()
+  expect(enText).toContain('page not found')
+  expect(enText).toContain('has been removed, or has expired')
 
   const pageZh = await page.request.get('/expire-me?lang=zh')
   expect(pageZh.status()).toBe(404)
-  expect((await pageZh.text())).toContain('页面不存在')
+  const zhText = await pageZh.text()
+  expect(zhText).toContain('页面不存在')
+  expect(zhText).toContain('不存在、已删除或已过期')
 })
 
 test('serves a 404 page for unknown codes and reserved prefixes', async ({ request }) => {

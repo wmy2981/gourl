@@ -145,6 +145,28 @@ func TestUpdateTitleDoesNotRefetch(t *testing.T) {
 	}
 }
 
+// Any mutation re-fetches the title in the background, not just URL changes —
+// an expiry edit keeps meta fresh too.
+func TestUpdateAnyFieldRefetchesTitle(t *testing.T) {
+	s, _ := newTestServer(t)
+	f := &mockFetcher{title: "Old Title"}
+	s.fetcher = f
+	do(t, s, http.MethodPost, "/api/v1/links", map[string]any{
+		"url":  "https://example.com/page",
+		"code": "abc",
+	})
+	waitMeta(t, s, "abc", "Old Title")
+
+	f.title = "Refreshed Title"
+	rec := do(t, s, http.MethodPatch, "/api/v1/links/abc", map[string]any{
+		"expires_at": 0,
+	})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("patch status = %d, body %s", rec.Code, rec.Body.String())
+	}
+	waitMeta(t, s, "abc", "Refreshed Title")
+}
+
 // Lenient fetching parses odd responses too; a refetch that finds nothing
 // usable must not wipe meta the link already has.
 func TestEmptyFetchResultKeepsExistingMeta(t *testing.T) {
@@ -167,6 +189,44 @@ func TestEmptyFetchResultKeepsExistingMeta(t *testing.T) {
 	}
 	if l.Title != "First Title" {
 		t.Errorf("title = %q, want the previous title kept", l.Title)
+	}
+}
+
+// A stored description is sticky: once non-empty, no fetch result ever
+// overwrites it (user-entered descriptions must survive refetches), while a
+// fetched title still lands.
+func TestFetchNeverOverwritesExistingDescription(t *testing.T) {
+	s, _ := newTestServer(t)
+	f := &mockFetcher{title: "Site Title", desc: "Site Description"}
+	s.fetcher = f
+	do(t, s, http.MethodPost, "/api/v1/links", map[string]any{
+		"url":  "https://example.com/page",
+		"code": "abc",
+	})
+	waitMeta(t, s, "abc", "Site Title")
+	if l, _ := s.store.GetLink(context.Background(), "abc"); l.Description != "Site Description" {
+		t.Fatalf("description = %q, want the fetched value on an empty link", l.Description)
+	}
+
+	// The user edits the description; a later fetch offers different meta.
+	rec := do(t, s, http.MethodPatch, "/api/v1/links/abc", map[string]any{
+		"description": "My Own Description",
+	})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("patch status = %d", rec.Code)
+	}
+	f.title = "Newer Title"
+	f.desc = "Newer Description"
+	do(t, s, http.MethodPatch, "/api/v1/links/abc", map[string]any{
+		"expires_at": 0,
+	})
+	waitMeta(t, s, "abc", "Newer Title")
+	l, err := s.store.GetLink(context.Background(), "abc")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if l.Description != "My Own Description" {
+		t.Errorf("description = %q, want the user's text kept", l.Description)
 	}
 }
 

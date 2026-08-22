@@ -77,7 +77,6 @@ export default function ChangePassword() {
           type="password"
           value={oldPassword}
           onChange={(e) => setOldPassword(e.target.value)}
-          autoFocus
           autoComplete="current-password"
         />
 

@@ -4,6 +4,8 @@ import (
 	"html/template"
 	"net/http"
 	"strings"
+
+	"github.com/wmy2981/gourl/internal/webui"
 )
 
 // pageTmpl renders the public error pages (blocked / not found).
@@ -24,6 +26,7 @@ var pageTmpl = template.Must(template.New("page").Parse(`<!DOCTYPE html>
           border-radius: 20px; padding: 48px 40px; max-width: 480px; width: 100%;
           text-align: center; box-shadow: 0 8px 40px rgba(0,0,0,0.08); }
   h1 { font-size: 26px; font-weight: 600; margin: 0 0 12px; letter-spacing: -0.02em; }
+  .icon { width: 64px; height: 64px; margin-bottom: 16px; border-radius: 16px; }
   p { color: #6e6e73; line-height: 1.6; margin: 0; font-size: 15px; }
   .code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px;
           color: #86868b; margin-top: 16px; }
@@ -37,6 +40,7 @@ var pageTmpl = template.Must(template.New("page").Parse(`<!DOCTYPE html>
 </head>
 <body>
 <main class="page">
+  {{if .Icon}}<img class="icon" src="{{.Icon}}" alt="">{{end}}
   <h1>{{.Heading}}</h1>
   <p>{{.Message}}</p>
   {{if .Detail}}<p class="code">{{.Detail}}</p>{{end}}
@@ -52,6 +56,7 @@ type pageData struct {
 	Heading         string
 	Message         string
 	Detail          string
+	Icon            string
 }
 
 // langOf resolves the request language: explicit ?lang= wins, then
@@ -66,14 +71,33 @@ func langOf(r *http.Request) string {
 	return "en"
 }
 
+// pageCopy is the backend-rendered page copy, loaded once from the embedded
+// locale files (single source: frontend/src/locales/*.json).
+var pageCopy = map[string]map[string]string{
+	"en": webui.PageLocale("en"),
+	"zh": webui.PageLocale("zh"),
+}
+
+// pageText returns the locale copy for key in lang, falling back to the
+// English locale.
+func pageText(lang, key string) string {
+	if v := pageCopy[lang][key]; v != "" {
+		return v
+	}
+	return pageCopy["en"][key]
+}
+
 func (s *Server) renderNotFound(w http.ResponseWriter, r *http.Request) {
 	cfg := s.cfg.Get()
 	lang := langOf(r)
-	heading, message := "Page not found", "The short link you visited does not exist or has been removed."
-	if lang == "zh" {
-		heading, message = "页面不存在", "您访问的短链接不存在或已被删除。"
-	}
-	s.renderPage(w, http.StatusNotFound, lang, heading, message, "", cfg.Site.Title, cfg.Site.Description, cfg.Site.Keywords)
+	s.renderPage(w, http.StatusNotFound, pageData{
+		Lang:            lang,
+		Heading:         pageText(lang, "notFoundHeading"),
+		Message:         pageText(lang, "notFoundMessage"),
+		SiteTitle:       cfg.Site.Title,
+		SiteDescription: cfg.Site.Description,
+		SiteKeywords:    cfg.Site.Keywords,
+	})
 }
 
 // renderBlocked renders the 403 page explaining why the request was blocked,
@@ -82,36 +106,45 @@ func (s *Server) renderNotFound(w http.ResponseWriter, r *http.Request) {
 func (s *Server) renderBlocked(w http.ResponseWriter, r *http.Request, kind, detail string) {
 	cfg := s.cfg.Get()
 	lang := langOf(r)
-	var heading, msg string
-	if lang == "zh" {
-		heading = "访问被拦截"
-		if kind == "ua" {
-			msg = "您的请求被本服务拦截。命中的 User-Agent 关键词：" + detail
-		} else {
-			msg = "您的请求被本服务拦截。命中的 IP 规则：" + detail
-		}
-	} else {
-		heading = "Access blocked"
-		if kind == "ua" {
-			msg = "Your request was blocked. Matched User-Agent keyword: " + detail
-		} else {
-			msg = "Your request was blocked. Matched IP rule: " + detail
-		}
+	key := "blockedUaMessage"
+	if kind == "ip" {
+		key = "blockedIpMessage"
 	}
-	s.renderPage(w, http.StatusForbidden, lang, heading, msg, "", cfg.Site.Title, cfg.Site.Description, cfg.Site.Keywords)
+	msg := strings.ReplaceAll(pageText(lang, key), "{{detail}}", detail)
+	s.renderPage(w, http.StatusForbidden, pageData{
+		Lang:            lang,
+		Heading:         pageText(lang, "blockedHeading"),
+		Message:         msg,
+		SiteTitle:       cfg.Site.Title,
+		SiteDescription: cfg.Site.Description,
+		SiteKeywords:    cfg.Site.Keywords,
+	})
 }
 
-// renderPage renders the page template from the live site config.
-func (s *Server) renderPage(w http.ResponseWriter, status int, lang, heading, message, detail, title, description, keywords string) {
+// renderPublic renders the landing page at /: the brand icon and service name
+// from the live config, plus a notice that the page has no direct content.
+// Hidden while the webui is disabled, like /admin.
+func (s *Server) renderPublic(w http.ResponseWriter, r *http.Request) {
+	cfg := s.cfg.Get()
+	if !cfg.WebUIEnabled {
+		s.renderNotFound(w, r)
+		return
+	}
+	lang := langOf(r)
+	s.renderPage(w, http.StatusOK, pageData{
+		Lang:            lang,
+		Heading:         cfg.Site.Name,
+		Message:         pageText(lang, "publicNotice"),
+		Icon:            "/favicon.svg",
+		SiteTitle:       cfg.Site.Title,
+		SiteDescription: cfg.Site.Description,
+		SiteKeywords:    cfg.Site.Keywords,
+	})
+}
+
+// renderPage renders the page template with the given data.
+func (s *Server) renderPage(w http.ResponseWriter, status int, d pageData) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
-	_ = pageTmpl.Execute(w, pageData{
-		Lang:            lang,
-		SiteTitle:       title,
-		SiteDescription: description,
-		SiteKeywords:    keywords,
-		Heading:         heading,
-		Message:         message,
-		Detail:          detail,
-	})
+	_ = pageTmpl.Execute(w, d)
 }

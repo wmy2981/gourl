@@ -1,14 +1,15 @@
 import { useState } from 'react'
 import { Trans, useTranslation } from 'react-i18next'
-import { FileJson, FileSpreadsheet } from 'lucide-react'
+import { FileJson, FileSpreadsheet, FileText } from 'lucide-react'
 import { api } from '../lib/api'
 import { blobToBase64, exportFilename, saveDownload } from '../lib/download'
 import { Button, Dialog, useToast } from './ui'
 
-// Export dialog: CSV and JSON share one button; the format is picked here.
-// Both exports carry the same 7 fields (code, url, title, description,
-// expires_at, click_count, created_at). In the app the files land in
-// Downloads/gourl/ and the path is toasted; the web browser downloads normally.
+// Export dialog: CSV, JSON and Markdown share one button row; the format is
+// picked here. All three carry the same 7 fields (code, url, title,
+// description, expires_at, click_count, created_at) — CSV/JSON for scripts,
+// markdown for reading. In the app the files land in Downloads/gourl/ and the
+// path is toasted; the web browser downloads normally.
 export default function ExportDialog({
   open,
   onClose,
@@ -20,12 +21,14 @@ export default function ExportDialog({
   const { toast } = useToast()
   const [busy, setBusy] = useState(false)
 
-  const exportCsv = async () => {
+  // Shared download path: the caller fetches the payload and this wraps the
+  // busy flag, save + toast + close and error surfacing.
+  const withBusy = async (fetchPayload: () => Promise<{ data: string; base64: boolean; mime: string }>) => {
     if (busy) return
     setBusy(true)
     try {
-      const blob = await api.exportCsv()
-      const path = await saveDownload(exportFilename('links', 'csv'), await blobToBase64(blob), true, 'text/csv')
+      const { data, base64, mime } = await fetchPayload()
+      const path = await saveDownload(exportFilename('links', mimeToExt(mime)), data, base64, mime)
       if (path) toast(t('links.downloadedTo', { path }))
       onClose()
     } catch (err) {
@@ -36,28 +39,39 @@ export default function ExportDialog({
     }
   }
 
-  const exportJson = async () => {
-    if (busy) return
-    setBusy(true)
-    try {
+  const exportCsv = () =>
+    withBusy(async () => ({
+      data: await blobToBase64(await api.exportCsv()),
+      base64: true,
+      mime: 'text/csv',
+    }))
+
+  const exportMarkdown = () =>
+    withBusy(async () => ({
+      data: await blobToBase64(await api.exportMarkdown()),
+      base64: true,
+      mime: 'text/markdown',
+    }))
+
+  const exportJson = () =>
+    withBusy(async () => {
       const links = await api.exportJson()
-      const path = await saveDownload(
-        exportFilename('links', 'json'),
-        JSON.stringify(links, null, 2),
-        false,
-        'application/json',
-      )
-      if (path) toast(t('links.downloadedTo', { path }))
-      onClose()
-    } catch (err) {
-      // Surface the plugin/API error so native save failures are diagnosable.
-      toast(err instanceof Error ? err.message : t('common.error'), 'error')
-    } finally {
-      setBusy(false)
-    }
-  }
+      return { data: JSON.stringify(links, null, 2), base64: false, mime: 'application/json' }
+    })
 
-  const optionClass =
+// mime type → export filename extension.
+function mimeToExt(mime: string): 'csv' | 'md' | 'json' {
+  switch (mime) {
+    case 'text/csv':
+      return 'csv'
+    case 'text/markdown':
+      return 'md'
+    default:
+      return 'json'
+  }
+}
+
+const optionClass =
     'flex flex-col items-center gap-1.5 rounded-xl border border-hairline px-4 py-5 text-sm font-medium transition-colors hover:bg-black/5 dark:hover:bg-white/10'
 
   return (
@@ -70,6 +84,10 @@ export default function ExportDialog({
         <button className={optionClass} onClick={exportJson} disabled={busy}>
           <FileJson size={22} className="text-accent" />
           {t('links.exportJson')}
+        </button>
+        <button className={optionClass} onClick={exportMarkdown} disabled={busy}>
+          <FileText size={22} className="text-accent" />
+          {t('links.exportMarkdown')}
         </button>
       </div>
       <p className="mt-3 text-center text-xs text-muted">

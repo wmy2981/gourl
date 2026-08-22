@@ -67,6 +67,15 @@ export function isApp(): boolean {
   return cap?.isNativePlatform?.() === true
 }
 
+/** Resolves a server-relative asset path against the connected server in app
+ * mode. The SPA loads from the WebView's local origin there, so a plain
+ * relative path would miss the server's /assets/ uploads; on the web the path
+ * is returned unchanged (same-origin). */
+export function assetUrl(path: string): string {
+  const server = getServerConfig()
+  return server ? `${server.url.replace(/\/+$/, '')}${path}` : path
+}
+
 export interface ApiErrorBody {
   error: { code: string; message: string }
 }
@@ -269,7 +278,7 @@ export const api = {
       body: JSON.stringify({ code, password }),
     }),
   authStatus: () => request<{ configured: boolean }>('/api/v1/auth/status'),
-  health: () => request<{ name: string }>('/api/v1/health'),
+  health: (init?: RequestInit) => request<{ name: string; version: string }>('/api/v1/health', init),
 
   listLinks: (params: Record<string, string | number | undefined>) => {
     const q = new URLSearchParams()
@@ -307,7 +316,7 @@ export const api = {
     // directly (absolute URL + Bearer in token mode, cookie in the web console).
     const server = getServerConfig()
     const res = await fetch(
-      server ? `${server.url.replace(/\/+$/, '')}/api/v1/export.csv` : '/api/v1/export.csv',
+      server ? `${server.url.replace(/\/+$/, '')}/api/v1/links/export.csv` : '/api/v1/links/export.csv',
       {
         credentials: server ? 'omit' : 'same-origin',
         headers: server ? { Authorization: `Bearer ${server.token}` } : {},
@@ -316,7 +325,21 @@ export const api = {
     if (!res.ok) throw new ApiError(res.status, 'unknown', `HTTP ${res.status}`)
     return res.blob()
   },
-  exportJson: () => request<Record<string, unknown>[]>('/api/v1/export.json'),
+  exportJson: () => request<Record<string, unknown>[]>('/api/v1/links/export.json'),
+  // The markdown endpoint is an attachment like CSV, so it also bypasses
+  // request() and returns the raw blob.
+  exportMarkdown: async () => {
+    const server = getServerConfig()
+    const res = await fetch(
+      server ? `${server.url.replace(/\/+$/, '')}/api/v1/links/export.md` : '/api/v1/links/export.md',
+      {
+        credentials: server ? 'omit' : 'same-origin',
+        headers: server ? { Authorization: `Bearer ${server.token}` } : {},
+      },
+    )
+    if (!res.ok) throw new ApiError(res.status, 'unknown', `HTTP ${res.status}`)
+    return res.blob()
+  },
   logHistory: (limit = 200, offset = 0) =>
     request<LogHistoryResponse>(`/api/v1/logs?limit=${limit}&offset=${offset}`),
   logStream: (onLog: (rec: LogRecord) => void, onError?: () => void) => {
@@ -396,7 +419,10 @@ export const api = {
   deleteToken: (id: number) =>
     request<void>(`/api/v1/tokens/${id}`, { method: 'DELETE' }),
 
-  getConfig: () => request<AppConfig>('/api/v1/config'),
+  // init passes through (e.g. { signal: AbortSignal.timeout(...) } — the
+  // connection-card probe gives up after 5s so a hung server shows as
+  // unreachable instead of spinning forever).
+  getConfig: (init?: RequestInit) => request<AppConfig>('/api/v1/config', init),
   updateConfig: (cfg: AppConfig) =>
     request<AppConfig>('/api/v1/config', {
       method: 'PUT',

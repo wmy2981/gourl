@@ -1,11 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { KeyRound, PlugZap, Plus, Trash2, Upload } from 'lucide-react'
+import { KeyRound, PlugZap, Plus, RefreshCw, Trash2, Upload } from 'lucide-react'
 import { api, ApiError, getServerConfig, isApp, setServerConfig, type AppConfig, type TokenInfo } from '../lib/api'
+import { noSelectEnabled, setNoSelect } from '../lib/appSettings'
 import { copyText } from '../lib/clipboard'
-import { Button, Card, Dialog, Input, Label, Select, Textarea, useToast } from '../components/ui'
+import { Button, Card, Dialog, Input, Label, Select, Switch, Textarea, useToast } from '../components/ui'
 
 export default function Settings() {
   const { t } = useTranslation()
@@ -336,32 +337,52 @@ export default function Settings() {
 
 type ConnStatus = 'checking' | 'connected' | 'unauthorized' | 'unreachable'
 
-/** App-only card: the stored server, its live connection status and the
- *  disconnect action. Rendered above the config-dependent form so it always
- *  shows — even when the config request is slow or fails entirely. */
-function ConnectionCard() {
+// A probe that gets no answer in 5s counts as unreachable (the fetch abort
+// lands in the catch as a non-ApiError, i.e. the unreachable branch).
+const PROBE_TIMEOUT_MS = 5_000
+
+/** App-only card: the stored server, its live connection status, server and
+ *  app versions, a manual refresh and the disconnect action. Rendered above
+ *  the config-dependent form so it always shows — even when the config
+ *  request is slow or fails entirely. Exported for the component test. */
+export function ConnectionCard() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const server = getServerConfig()
   const [confirmDisconnect, setConfirmDisconnect] = useState(false)
   const [status, setStatus] = useState<ConnStatus>('checking')
+  const [serverVersion, setServerVersion] = useState<string | null>(null)
+  // Device-local app settings mirror the persisted state in React so the
+  // switch reflects toggles; the storage write applies the effect live.
+  const [noSelect, setNoSelectChecked] = useState(noSelectEnabled())
+  // Alive flag outside the effects so the refresh button can probe on demand
+  // without restarting the mount effect's lifecycle.
+  const aliveRef = useRef(true)
 
   // Probe the remote server through the authenticated config endpoint: only
   // a valid bearer token passes requireAuth, so a 401 means the stored token
-  // is dead and a network error means the server is unreachable. Re-check on
-  // mount, on app foreground and every 10s while the page stays open.
-  useEffect(() => {
-    let alive = true
-    const check = async () => {
-      try {
-        await api.getConfig()
-        if (alive) setStatus('connected')
-      } catch (err) {
-        if (!alive) return
-        setStatus(err instanceof ApiError && err.status === 401 ? 'unauthorized' : 'unreachable')
-      }
+  // is dead and a network error means the server is unreachable. Both probes
+  // give up after 5s. The public health endpoint rides along for the server
+  // version; any failure leaves it unset (shown as "—").
+  const check = useCallback(async () => {
+    const [cfg, h] = await Promise.allSettled([
+      api.getConfig({ signal: AbortSignal.timeout(PROBE_TIMEOUT_MS) }),
+      api.health({ signal: AbortSignal.timeout(PROBE_TIMEOUT_MS) }),
+    ])
+    if (!aliveRef.current) return
+    if (cfg.status === 'fulfilled') {
+      setStatus('connected')
+    } else {
+      setStatus(cfg.reason instanceof ApiError && cfg.reason.status === 401 ? 'unauthorized' : 'unreachable')
     }
-    check()
+    setServerVersion(h.status === 'fulfilled' ? h.value.version : null)
+  }, [])
+
+  // Re-check on mount, on app foreground and every 10s while the page stays
+  // open; the refresh button triggers the same probe on demand.
+  useEffect(() => {
+    aliveRef.current = true
+    void check()
     const timer = setInterval(check, 10_000)
     // Same pattern as App.tsx: grab the plugin off the runtime stub — the web
     // build must not depend on the @capacitor/app package.
@@ -372,15 +393,23 @@ function ConnectionCard() {
     const handler = appPlugin?.addListener?.(
       'appStateChange',
       (s: { isActive: boolean }) => {
-        if (s.isActive) check()
+        if (s.isActive) void check()
       },
     )
     return () => {
-      alive = false
+      aliveRef.current = false
       clearInterval(timer)
       handler?.remove()
     }
-  }, [])
+  }, [check])
+
+  const refresh = () => {
+    if (status === 'checking') return
+    // Back to the probing state so the dot and the spin give immediate
+    // feedback while the fresh probe is in flight.
+    setStatus('checking')
+    void check()
+  }
 
   let dot = 'bg-current'
   let text = 'text-muted'
@@ -406,16 +435,53 @@ function ConnectionCard() {
         <p className="mb-3 text-sm text-muted">
           {t('settings.connectedTo')} <span className="short-code">{server?.url ?? '—'}</span>
         </p>
+        {/* Versions under the address: the server one comes from the last
+            probe's health call (— when unavailable), the app one is the
+            embedded build constant. */}
+        <div className="mb-3 space-y-0.5 text-xs text-muted">
+          <p>
+            {t('settings.serverVersion')}{' '}
+            <span className="short-code">{serverVersion != null ? `v${serverVersion}` : '—'}</span>
+          </p>
+          <p>
+            {t('settings.appVersion')} <span className="short-code">v{__APP_VERSION__}</span>
+          </p>
+        </div>
         <div className="mb-3 pl-2">
           <span className={`inline-flex items-center gap-1.5 text-sm ${text}`}>
             <span className={`size-1.5 rounded-full ${dot}`} />
             {label}
           </span>
         </div>
-        <Button variant="outline" onClick={() => setConfirmDisconnect(true)}>
-          <PlugZap size={15} />
-          {t('settings.disconnectApp')}
-        </Button>
+        <div className="flex gap-2">
+          {/* Same icon-only refresh as the Links page header; spinning while
+              a probe is in flight and disabled during it. */}
+          <Button
+            variant="outline"
+            onClick={refresh}
+            disabled={status === 'checking'}
+            aria-label={t('settings.connRefresh')}
+            className="!px-2.5"
+          >
+            <RefreshCw size={16} className={status === 'checking' ? 'animate-spin' : ''} />
+          </Button>
+          <Button variant="outline" onClick={() => setConfirmDisconnect(true)}>
+            <PlugZap size={15} />
+            {t('settings.disconnectApp')}
+          </Button>
+        </div>
+        {/* Device-local app settings: stored on the device, applied live. */}
+        <div className="mt-4 flex items-center justify-between gap-3 border-t border-hairline pt-4">
+          <span className="text-sm">{t('settings.noTextSelect')}</span>
+          <Switch
+            checked={noSelect}
+            onChange={(v) => {
+              setNoSelectChecked(v)
+              setNoSelect(v)
+            }}
+            aria-label={t('settings.noTextSelect')}
+          />
+        </div>
       </Card>
       {/* The dialog is a sibling of the card, never inside it: the card's
           backdrop-blur creates a containing block that traps the dialog's

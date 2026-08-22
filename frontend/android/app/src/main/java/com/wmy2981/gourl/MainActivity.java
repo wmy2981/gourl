@@ -2,10 +2,12 @@ package com.wmy2981.gourl;
 
 import android.content.ContentValues;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.provider.MediaStore;
 import android.util.Base64;
+import android.view.HapticFeedbackConstants;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
@@ -33,7 +35,7 @@ public class MainActivity extends BridgeActivity {
     }
 
     /**
-     * Native bridge for the SPA (window.GourlBridge), for the two things the
+     * Native bridge for the SPA (window.GourlBridge), for the things the
      * Capacitor plugins cannot do correctly here:
      *
      * saveToDownloads — writes a file into the system Downloads/gourl
@@ -45,6 +47,18 @@ public class MainActivity extends BridgeActivity {
      *
      * moveToBackground — Android back returns the app to the launcher with
      * its state intact; App.exitApp() would kill the process.
+     *
+     * switchHaptic — the system's switch tick through the haptic feedback
+     * engine. The Capacitor haptics plugins only drive the vibrator motor
+     * (a buzzing hum, not a click); performHapticFeedback uses the touch
+     * engine the system switches use, respects the user's haptic-feedback
+     * setting, and needs no VIBRATE permission. TOGGLE_ON/OFF exist since
+     * API 33; below that CLOCK_TICK is the closest light tick.
+     *
+     * buttonHaptic — the same engine's lightest standard feedback
+     * (KEYBOARD_TAP, a soft virtual-key press) for button presses; it also
+     * respects the user's haptic-feedback setting. KEYBOARD_TAP exists
+     * since API 5, so no version branch is needed.
      */
     public class GourlBridge {
         @JavascriptInterface
@@ -77,6 +91,23 @@ public class MainActivity extends BridgeActivity {
         @JavascriptInterface
         public void moveToBackground() {
             runOnUiThread(() -> moveTaskToBack(true));
+        }
+
+        @JavascriptInterface
+        public void switchHaptic(boolean on) {
+            runOnUiThread(() -> {
+                int feedback =
+                    Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+                        ? (on ? HapticFeedbackConstants.TOGGLE_ON : HapticFeedbackConstants.TOGGLE_OFF)
+                        : HapticFeedbackConstants.CLOCK_TICK;
+                getBridge().getWebView().performHapticFeedback(feedback);
+            });
+        }
+
+        @JavascriptInterface
+        public void buttonHaptic() {
+            runOnUiThread(() ->
+                getBridge().getWebView().performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP));
         }
     }
 }

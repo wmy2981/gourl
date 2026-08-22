@@ -14,6 +14,14 @@
     "settings": "Settings",
     "logout": "Sign out"
   },
+  "page": {
+    "notFoundHeading": "Page not found",
+    "notFoundMessage": "The short link you visited does not exist, has been removed, or has expired.",
+    "blockedHeading": "Access blocked",
+    "blockedUaMessage": "Your request was blocked. Matched User-Agent keyword: {{detail}}",
+    "blockedIpMessage": "Your request was blocked. Matched IP rule: {{detail}}",
+    "publicNotice": "This is a short link service; this page is not meant to be visited directly."
+  },
   "logs": {
     "live": "Live",
     "reconnecting": "Disconnected, reconnecting…",
@@ -138,7 +146,8 @@
     "clearExpiredConfirm": "This will delete {{count}} expired links. This cannot be undone.",
     "expiredCleared": "Deleted {{count}} expired links",
     "downloadedTo": "Saved to {{path}}",
-    "copyFailed": "Copy failed"
+    "copyFailed": "Copy failed",
+    "exportMarkdown": "Markdown"
   },
   "form": {
     "url": "Destination URL",
@@ -190,6 +199,7 @@
     "securityHint": "Changing the admin password signs out every session.",
     "changePassword": "Change admin password",
     "appConnection": "App connection",
+    "noTextSelect": "Disable text selection",
     "connectedTo": "Connected to",
     "disconnectApp": "Disconnect",
     "siteName": "Service name",
@@ -248,7 +258,10 @@
     "connConnected": "Connected",
     "connUnauthorized": "Token rejected",
     "connUnreachable": "Cannot reach the server",
-    "connChecking": "Checking…"
+    "connChecking": "Checking…",
+    "serverVersion": "Server version",
+    "appVersion": "App version",
+    "connRefresh": "Refresh"
   },
   "common": {
     "loading": "Loading…",

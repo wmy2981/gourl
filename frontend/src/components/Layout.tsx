@@ -3,7 +3,7 @@ import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { LayoutDashboard, Link2, LogOut, Menu, Monitor, Moon, ScrollText, Settings, Sun, X } from 'lucide-react'
-import { api, isApp } from '../lib/api'
+import { api, assetUrl, isApp } from '../lib/api'
 import { setLanguage } from '../lib/i18n'
 // Single source of truth for the brand icon (also embedded server-side and
 // referenced by the READMEs).
@@ -11,10 +11,15 @@ import iconUrl from '../assets/icon.svg'
 
 function AppIcon({ size = 28 }: { size?: number }) {
   // The uploaded custom icon (served from /assets/) replaces the built-in
-  // brand icon wherever the app shows it; falls back to the default.
+  // brand icon wherever the app shows it; falls back to the default. In the
+  // app the SPA loads from the WebView's local origin, so the asset path must
+  // point at the connected server (assetUrl); a load failure (e.g. the
+  // server went offline) falls back to the bundled icon.
   const { data: cfg } = useQuery({ queryKey: ['config'], queryFn: api.getConfig })
-  const src = cfg?.icon ? `/assets/${cfg.icon}` : iconUrl
-  return <img src={src} width={size} height={size} alt="" aria-hidden />
+  const custom = cfg?.icon ? assetUrl(`/assets/${cfg.icon}`) : null
+  const [failedSrc, setFailedSrc] = useState<string | null>(null)
+  const src = custom && failedSrc !== custom ? custom : iconUrl
+  return <img src={src} width={size} height={size} alt="" aria-hidden onError={() => custom && setFailedSrc(custom)} />
 }
 
 type Theme = 'light' | 'dark' | 'system'
@@ -299,7 +304,7 @@ export default function Layout() {
               transition: dragX !== null ? 'none' : 'transform 0.3s cubic-bezier(0.32, 0.72, 0, 1)',
             }}
           >
-            <button onClick={closeMobile} className="mb-4 self-end rounded-lg p-1.5" aria-label={t('common.close')}>
+            <button onClick={closeMobile} className="mb-4 mt-2 self-end rounded-lg p-1.5" aria-label={t('common.close')}>
               <X size={20} />
             </button>
             {sidebarContent}
