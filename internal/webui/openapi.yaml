@@ -158,7 +158,7 @@ paths:
       responses:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/SetupRequired" }
-        "201": { description: Created, returns the link }
+        "201": { description: "Created, returns the link" }
         "400": { description: "Invalid url/code, reserved code, description_too_long (over 500 characters), or self_link_target (target points at this instance's own short links)" }
         "409": { description: Code already in use }
     delete:
@@ -427,7 +427,11 @@ paths:
       responses:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/SetupRequired" }
-        "200": { description: Config, schema: { $ref: "#/components/schemas/Config" } }
+        "200":
+          description: Config
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Config" }
     put:
       tags: [config]
       summary: Update the configuration (validated, written back to config.yaml, hot-applied)
@@ -456,7 +460,7 @@ paths:
       responses:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/SetupRequired" }
-        "200": { description: Uploaded, config icon updated }
+        "200": { description: Uploaded (config icon updated) }
         "400": { description: Wrong type or too large }
     delete:
       tags: [config]
@@ -494,6 +498,10 @@ components:
     bearerAuth:
       type: http
       scheme: bearer
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: gourl_session
   responses:
     Unauthorized:
       description: Missing or invalid session cookie / bearer token

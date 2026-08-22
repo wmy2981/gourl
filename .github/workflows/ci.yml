@@ -60,6 +60,18 @@ jobs:
         working-directory: frontend
         run: npm run test
 
+  openapi:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      # Lint the embedded API spec: catches YAML/schema breakage before the
+      # swagger UI at /docs serves a broken document. The built-in
+      # "no-unresolved-refs"/"no-empty-servers" style rules stay off — we only
+      # want structural validity, not a house style.
+      - name: Validate OpenAPI spec (Redocly)
+        run: npx --yes @redocly/cli@1 lint --skip-rule=no-server-validation-error internal/webui/openapi.yaml
+
   e2e:
     runs-on: ubuntu-latest
     needs: [go-test, frontend]
