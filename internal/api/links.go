@@ -100,6 +100,39 @@ func hostPort(u *url.URL) string {
 	return net.JoinHostPort(h, p)
 }
 
+// selfRootTarget reports whether the target points at this instance's own
+// root (host matches a base URL, empty path). A "/" code with such a target
+// would redirect the site root to itself — an infinite loop.
+func selfRootTarget(cfg *config.Config, r *http.Request, target string) bool {
+	u, err := url.Parse(target)
+	if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
+		return false
+	}
+	bases := make([]string, 0, 1+len(cfg.ExtraBaseURLs))
+	if cfg.BaseURL != "" {
+		bases = append(bases, cfg.BaseURL)
+	} else {
+		bases = append(bases, inferredBaseURL(r))
+	}
+	bases = append(bases, cfg.ExtraBaseURLs...)
+	for _, b := range bases {
+		bu, err := url.Parse(b)
+		if err != nil || bu.Host == "" {
+			continue
+		}
+		if hostPort(bu) == hostPort(u) && (u.Path == "" || u.Path == "/") && u.Fragment == "" {
+			return true
+		}
+	}
+	return false
+}
+
+// checkSelfRoot rejects a "/" code whose target is this instance's own root.
+// The error carries a stable code so the frontend can map it.
+func writeSelfRootError(w http.ResponseWriter) {
+	writeError(w, http.StatusBadRequest, "self_root_target", "the root short code cannot point at this instance's own root")
+}
+
 // inferredBaseURL derives the site's base URL from the request when the
 // config's base_url is unset: X-Forwarded-Proto (reverse proxy) or the TLS
 // state decides the scheme, r.Host the authority.
@@ -218,6 +251,10 @@ func (s *Server) createLink(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	code := req.Code
+	if code == "/" && selfRootTarget(cfg, r, req.URL) {
+		writeSelfRootError(w)
+		return
+	}
 	if code == "" {
 		generated, err := shortcode.Random(cfg.ShortCodeLength)
 		if err != nil {
@@ -363,6 +400,10 @@ func (s *Server) updateLink(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "reserved_code", "code is a reserved system path")
 			return
 		}
+		if newCode == "/" && selfRootTarget(cfg, r, link.URL) {
+			writeSelfRootError(w)
+			return
+		}
 		if err := s.store.RenameLink(r.Context(), oldCode, newCode, link.UpdatedAt); err != nil {
 			if errors.Is(err, store.ErrTaken) {
 				writeError(w, http.StatusConflict, "code_taken", "code is already in use")
@@ -372,6 +413,9 @@ func (s *Server) updateLink(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		link.Code = newCode
+	} else if oldCode == "/" && req.URL != nil && selfRootTarget(cfg, r, *req.URL) {
+		writeSelfRootError(w)
+		return
 	}
 
 	if err := s.store.UpdateLink(r.Context(), link); err != nil {

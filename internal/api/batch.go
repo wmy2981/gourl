@@ -78,6 +78,9 @@ func (s *Server) batchCreate(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		code, verr := s.resolveCode(item, cfg, r)
+		if verr == nil && code == "/" && selfRootTarget(cfg, r, item.URL) {
+			verr = &codeError{"self_root_target", "the root short code cannot point at this instance's own root"}
+		}
 		if verr != nil {
 			failed++
 			failedCodes = append(failedCodes, item.Code)

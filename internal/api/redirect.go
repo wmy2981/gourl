@@ -16,12 +16,6 @@ import (
 // expiry, click counting, and finally the 302 redirect.
 func (s *Server) redirect(w http.ResponseWriter, r *http.Request) {
 	code := pathCode(r.PathValue("code"))
-	if code == "" {
-		// Unreachable: GET /{$} matches the exact root first; keep a safe
-		// fallback for any path shape that slips through.
-		s.redirectRoot(w, r)
-		return
-	}
 
 	cfg := s.cfg.Get()
 	if shortcode.IsReserved(code, cfg.ReservedCodes) {

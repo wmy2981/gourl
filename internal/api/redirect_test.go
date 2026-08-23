@@ -180,6 +180,39 @@ func TestRootRedirectExpiredFallsToNotFound(t *testing.T) {
 	}
 }
 
+// TestRootCodeSelfTargetRejected: a "/" code pointing at this instance's own
+// root would redirect / to itself forever — creation and renames refuse it.
+func TestRootCodeSelfTargetRejected(t *testing.T) {
+	s, _ := newTestServer(t)
+
+	rec := do(t, s, http.MethodPost, "/api/v1/links", map[string]any{"url": "http://example.com/", "code": "/"})
+	if rec.Code != http.StatusBadRequest || decodeError(t, rec) != "self_root_target" {
+		t.Fatalf("self-root create status = %d code %q body %s", rec.Code, decodeError(t, rec), rec.Body.String())
+	}
+
+	// A root code pointing somewhere else is fine.
+	createLink(t, s, "/", "https://example.org/root-target")
+
+	// Renaming another link to "/" with a self-root target is refused too.
+	createLink(t, s, "abc", "https://example.org/other")
+	rec = do(t, s, http.MethodPatch, "/api/v1/links/abc", map[string]any{"code": "/", "url": "http://example.com/"})
+	if rec.Code != http.StatusBadRequest || decodeError(t, rec) != "self_root_target" {
+		t.Fatalf("self-root rename status = %d code %q", rec.Code, decodeError(t, rec))
+	}
+
+	// Pointing the existing "/" code at its own root later is refused as well.
+	rec = do(t, s, http.MethodPatch, "/api/v1/links/_?code=%2F", map[string]any{"url": "http://example.com"})
+	if rec.Code != http.StatusBadRequest || decodeError(t, rec) != "self_root_target" {
+		t.Fatalf("self-root url swap status = %d code %q", rec.Code, decodeError(t, rec))
+	}
+
+	// …while a normal external URL update still works.
+	rec = do(t, s, http.MethodPatch, "/api/v1/links/_?code=%2F", map[string]any{"url": "https://other.example/x"})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("external url swap status = %d body %s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestRedirectReservedPrefixWins(t *testing.T) {
 	s, _ := newTestServer(t)
 	for _, path := range []string{"/api/anything", "/expired", "/health"} {
