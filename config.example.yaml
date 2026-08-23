@@ -17,7 +17,7 @@ site:
   # meta description.
   description: Lightweight self-hosted URL shortener
 
-# Length of randomly generated short codes (4-32).
+# Length of randomly generated short codes (2-64).
 short_code_length: 6
 
 # Primary base URL for building full short URLs (empty = infer from request Host).

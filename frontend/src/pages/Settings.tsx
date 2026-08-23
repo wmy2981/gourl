@@ -156,8 +156,8 @@ export default function Settings() {
               <Input
                 id='cfg-code-length'
                 type="number"
-                min={4}
-                max={32}
+                min={2}
+                max={64}
                 value={form.short_code_length}
                 onChange={(e) => set('short_code_length', Number(e.target.value))}
               />

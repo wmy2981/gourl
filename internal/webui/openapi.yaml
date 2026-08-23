@@ -631,7 +631,7 @@ components:
             title: { type: string }
             keywords: { type: string }
             description: { type: string }
-        short_code_length: { type: integer, minimum: 4, maximum: 32 }
+        short_code_length: { type: integer, minimum: 2, maximum: 64 }
         base_url: { type: string }
         extra_base_urls: { type: array, items: { type: string } }
         reserved_codes: { type: array, items: { type: string } }

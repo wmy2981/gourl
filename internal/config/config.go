@@ -108,8 +108,8 @@ func Load(path string) (*Config, error) {
 
 // Validate checks constraints. An empty name falls back to "gourl".
 func (c *Config) Validate() error {
-	if c.ShortCodeLength < 4 || c.ShortCodeLength > 32 {
-		return fmt.Errorf("short_code_length must be between 4 and 32, got %d", c.ShortCodeLength)
+	if c.ShortCodeLength < 2 || c.ShortCodeLength > 64 {
+		return fmt.Errorf("short_code_length must be between 2 and 64, got %d", c.ShortCodeLength)
 	}
 	if c.Site.Name == "" {
 		c.Site.Name = "gourl"

@@ -52,8 +52,8 @@ func TestValidateRejectsBadConfigs(t *testing.T) {
 		name string
 		mut  func(*Config)
 	}{
-		{"short code length too small", func(c *Config) { c.ShortCodeLength = 3 }},
-		{"short code length too large", func(c *Config) { c.ShortCodeLength = 33 }},
+		{"short code length too small", func(c *Config) { c.ShortCodeLength = 1 }},
+		{"short code length too large", func(c *Config) { c.ShortCodeLength = 65 }},
 		{"base url not absolute", func(c *Config) { c.BaseURL = "s.example.com" }},
 		{"base url wrong scheme", func(c *Config) { c.BaseURL = "ftp://s.example.com" }},
 		{"extra base url invalid", func(c *Config) { c.ExtraBaseURLs = []string{"not-a-url"} }},
