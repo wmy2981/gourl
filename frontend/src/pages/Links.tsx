@@ -407,7 +407,7 @@ export default function Links() {
                   </td>
                   <td className="max-w-[280px] px-5 py-3">
                     <div className="route-line mb-1.5" />
-                    <a href={link.url} target="_blank" rel="noreferrer" className="block truncate text-muted transition-colors hover:text-accent-deep dark:hover:text-accent">
+                    <a href={link.url} target="_blank" rel="noreferrer" title={link.url} className="block truncate text-muted transition-colors hover:text-accent-deep dark:hover:text-accent">
                       {link.url}
                     </a>
                     {link.title && <div className="mt-0.5 max-w-[240px] truncate text-xs text-muted/80">{link.title}</div>}
@@ -495,10 +495,18 @@ export default function Links() {
       <Dialog open={deleting !== null} onClose={() => setDeleting(null)} title={t('links.delete')}>
         <p className="text-sm text-muted">{t('links.deleteConfirm')}</p>
         {deleting && (
-          <div className="mt-3 flex items-center gap-2 rounded-lg border border-hairline bg-black/[0.02] px-3 py-2.5 dark:bg-white/[0.04]">
-            <span className="short-code min-w-0 shrink-0 text-sm font-medium">{deleting.code}</span>
+          <div className="mt-3 flex items-center gap-2 rounded-xl border border-hairline bg-black/[0.02] px-3 py-2.5 dark:bg-white/[0.04]">
+            <span
+              className="short-code min-w-0 max-w-[40%] flex-1 overflow-x-auto text-center text-sm font-medium"
+              title={deleting.code}
+            >
+              {deleting.code}
+            </span>
             <ArrowRight size={14} className="shrink-0 text-accent" aria-hidden="true" />
-            <span className="min-w-0 flex-1 truncate text-sm text-muted" title={deleting.url}>
+            <span
+              className="min-w-0 max-w-[60%] flex-1 overflow-x-auto whitespace-nowrap text-sm text-muted"
+              title={deleting.url}
+            >
               {deleting.url}
             </span>
           </div>
