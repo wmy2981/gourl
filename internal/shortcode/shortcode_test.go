@@ -49,7 +49,7 @@ func TestIsReservedBuiltin(t *testing.T) {
 		}
 	}
 	// First segment only.
-	for _, code := range []string{"api/v1/links", "ADMIN/foo", "docs/readme"} {
+	for _, code := range []string{"api/v1/links", "ADMIN/foo", "docs/readme", "gourl-public-page/inner"} {
 		if !IsReserved(code, nil) {
 			t.Errorf("%q should be reserved via first segment", code)
 		}

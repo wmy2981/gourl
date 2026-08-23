@@ -121,9 +121,9 @@ func (s *Server) renderBlocked(w http.ResponseWriter, r *http.Request, kind, det
 	})
 }
 
-// renderPublic renders the landing page at /: the brand icon and service name
-// from the live config, plus a notice that the page has no direct content.
-// Hidden while the webui is disabled, like /admin.
+// renderPublic renders the landing page at /gourl-public-page: the brand
+// icon and service name from the live config, plus a notice that the page
+// has no direct content. Hidden while the webui is disabled, like /admin.
 func (s *Server) renderPublic(w http.ResponseWriter, r *http.Request) {
 	cfg := s.cfg.Get()
 	if !cfg.WebUIEnabled {

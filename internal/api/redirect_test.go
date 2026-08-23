@@ -145,11 +145,11 @@ func TestRedirectReservedPrefixWins(t *testing.T) {
 	}
 }
 
-func TestRootServesPublicPage(t *testing.T) {
+func TestPublicPageServedAtReservedPath(t *testing.T) {
 	s, _ := newTestServer(t)
-	rec := get(t, s, "/", nil)
+	rec := get(t, s, "/gourl-public-page", nil)
 	if rec.Code != http.StatusOK {
-		t.Fatalf("root status = %d, want 200", rec.Code)
+		t.Fatalf("public page status = %d, want 200", rec.Code)
 	}
 	body := rec.Body.String()
 	if !strings.Contains(body, "<h1>gourl</h1>") ||
@@ -158,7 +158,7 @@ func TestRootServesPublicPage(t *testing.T) {
 		t.Errorf("public page missing name/notice/icon: %s", body)
 	}
 
-	rec = get(t, s, "/?lang=zh", nil)
+	rec = get(t, s, "/gourl-public-page?lang=zh", nil)
 	if !strings.Contains(rec.Body.String(), "短链接服务") {
 		t.Errorf("zh public page missing notice: %s", rec.Body.String())
 	}
@@ -171,9 +171,9 @@ func TestRootHiddenWhenWebuiDisabled(t *testing.T) {
 	if err := s.cfg.Update(cfg); err != nil {
 		t.Fatalf("disable webui: %v", err)
 	}
-	rec := get(t, s, "/", nil)
+	rec := get(t, s, "/gourl-public-page", nil)
 	if rec.Code != http.StatusNotFound {
-		t.Fatalf("root status = %d, want 404 with webui off", rec.Code)
+		t.Fatalf("public page status = %d, want 404 with webui off", rec.Code)
 	}
 }
 
