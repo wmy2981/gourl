@@ -239,9 +239,6 @@
      the flattened equivalents of the previous translucent strips. */
   background: #fafafa;
   color: var(--color-muted);
-  /* Match the editor's rounded corners (minus the hairline border). */
-  border-top-left-radius: calc(0.75rem - 1px);
-  border-bottom-left-radius: calc(0.75rem - 1px);
 }
 .dark .cm-editor.batch-editor .cm-gutters {
   /* A shade below the dark panel (#1c1c1e) — keeps the gutter as the darker
