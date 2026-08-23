@@ -497,7 +497,7 @@ export default function Links() {
         {deleting && (
           <div className="mt-3 flex items-center gap-2 rounded-xl border border-hairline bg-black/[0.02] px-3 py-2.5 dark:bg-white/[0.04]">
             <span
-              className="short-code min-w-0 max-w-[40%] flex-1 overflow-x-auto text-center text-sm font-medium"
+              className="short-code min-w-0 max-w-[40%] flex-1 overflow-x-auto whitespace-nowrap text-center text-sm font-medium"
               title={deleting.code}
             >
               {deleting.code}
