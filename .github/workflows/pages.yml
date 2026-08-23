@@ -1,0 +1,102 @@
+name: Deploy Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Deployment-style workflow: a concurrency group serializes publishes so
+# two rapid pushes to main never interleave their artifact uploads. This
+# deliberately differs from the no-concurrency rule of CI/build workflows.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      # The published spec always comes from main, even on manual dispatch
+      # from another branch.
+      - uses: actions/checkout@v5
+        with:
+          ref: main
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # Self-hosted Swagger UI from the npm package: no CDN dependency,
+      # version pinned for reproducible builds.
+      - name: Install Swagger UI
+        run: npm pack swagger-ui@5.32.14
+
+      - name: Assemble site
+        run: |
+          mkdir -p public/docs
+          tar -xzf swagger-ui-5.32.14.tgz -C public/docs --strip-components=2 package/dist
+          cp internal/webui/openapi.yaml public/docs/
+          cat > public/docs/index.html <<'EOF'
+          <!doctype html>
+          <html lang="en">
+          <head>
+            <meta charset="utf-8">
+            <title>gourl API</title>
+            <link rel="stylesheet" href="./swagger-ui.css">
+            <style>html { box-sizing: border-box; } *, *::before, *::after { box-sizing: inherit; }</style>
+          </head>
+          <body>
+            <div id="swagger-ui"></div>
+            <script src="./swagger-ui-bundle.js" defer></script>
+            <script src="./swagger-ui-standalone-preset.js" defer></script>
+            <script>
+              window.onload = () => {
+                window.ui = SwaggerUIBundle({
+                  url: './openapi.yaml',
+                  dom_id: '#swagger-ui',
+                  deepLinking: true,
+                  presets: [SwaggerUIBundle.presets.apis, SwaggerUIStandalonePreset],
+                  plugins: [SwaggerUIBundle.plugins.DownloadUrl],
+                  layout: 'StandaloneLayout'
+                });
+              };
+            </script>
+          </body>
+          </html>
+          EOF
+          cat > public/index.html <<'EOF'
+          <!doctype html>
+          <html lang="en">
+          <head>
+            <meta charset="utf-8">
+            <title>gourl API Docs</title>
+            <meta http-equiv="refresh" content="0; url=./docs/">
+            <link rel="canonical" href="./docs/">
+          </head>
+          <body>
+            <p>Redirecting to <a href="./docs/">API documentation</a>…</p>
+          </body>
+          </html>
+          EOF
+
+      # enablement: true flips Pages on via the API on the first run, so no
+      # manual Settings visit is needed before the initial deploy.
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+
+      - id: deployment
+        uses: actions/deploy-pages@v4
