@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { KeyRound, PlugZap, Plus, RefreshCw, Trash2, Upload } from 'lucide-react'
+import { Check, Copy, KeyRound, PlugZap, Plus, RefreshCw, Trash2, Upload } from 'lucide-react'
 import { api, ApiError, getServerConfig, isApp, setServerConfig, type AppConfig, type TokenInfo } from '../lib/api'
 import { noSelectEnabled, setNoSelect } from '../lib/appSettings'
 import { copyText } from '../lib/clipboard'
@@ -530,6 +530,7 @@ function TokenSection({
   const queryClient = useQueryClient()
   const { data } = useQuery({ queryKey: ['tokens'], queryFn: api.tokens })
   const [revoking, setRevoking] = useState<TokenInfo | null>(null)
+  const [tokenCopied, setTokenCopied] = useState(false)
   const revokeMutation = useMutation({
     mutationFn: (id: number) => api.deleteToken(id),
     onSuccess: () => {
@@ -564,15 +565,24 @@ function TokenSection({
         </a>
       </p>
       {newToken && (
-        <div className="mb-4 rounded-xl border border-accent/40 bg-accent-soft p-3">
+        <div className="mb-4 flex items-center justify-between gap-2 rounded-xl border border-accent/40 bg-accent-soft p-3">
           <p className="short-code break-all text-sm">{newToken}</p>
-          <Button variant="ghost" className="mt-1 !p-1 text-xs" onClick={async () => {
-            // Same multi-tier fallback chain as the link-row copy button.
-            const ok = await copyText(newToken)
-            toast(ok ? t('links.copied') : t('links.copyFailed'), ok ? 'success' : 'error')
-          }}>
-            {t('links.copy')}
-          </Button>
+          {/* Same icon treatment as the link-row copy button. */}
+          <button
+            onClick={async () => {
+              // Same multi-tier fallback chain as the link-row copy button.
+              const ok = await copyText(newToken)
+              if (ok) {
+                setTokenCopied(true)
+                setTimeout(() => setTokenCopied(false), 1500)
+              }
+              toast(ok ? t('links.copied') : t('links.copyFailed'), ok ? 'success' : 'error')
+            }}
+            title={t('links.copy')}
+            className="shrink-0 rounded-md p-1 text-muted transition-colors hover:bg-accent-soft hover:text-accent-deep dark:hover:text-accent"
+          >
+            {tokenCopied ? <Check size={15} className="text-success" /> : <Copy size={15} />}
+          </button>
         </div>
       )}
       <div className="flex flex-col gap-2">
