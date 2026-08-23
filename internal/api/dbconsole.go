@@ -207,12 +207,21 @@ func pragmaName(stmt string) string {
 	return strings.ToLower(name.String())
 }
 
+// isWriteKeyword reports whether the statement mutates data and must run
+// through ExecContext so its affected-row count surfaces.
+func isWriteKeyword(kw string) bool {
+	switch kw {
+	case "insert", "update", "delete", "replace":
+		return true
+	}
+	return false
+}
+
 // hasWriteStatement reports whether any statement mutates data, deciding the
 // cache invalidation after commit.
 func hasWriteStatement(stmts []string) bool {
 	for _, stmt := range stmts {
-		switch firstKeyword(stmt) {
-		case "insert", "update", "delete", "replace":
+		if isWriteKeyword(firstKeyword(stmt)) {
 			return true
 		}
 	}
@@ -287,19 +296,22 @@ func (s *Server) runSQLBatch(ctx context.Context, stmts []string) ([]dbStatement
 	results := make([]dbStatementResult, 0, len(stmts))
 	for _, stmt := range stmts {
 		res := dbStatementResult{SQL: stmt}
+		if isWriteKeyword(firstKeyword(stmt)) {
+			// DML reports its affected-row count through sql.Result; the
+			// query path would silently return an empty set with 0.
+			execRes, execErr := tx.ExecContext(ctx, stmt)
+			if execErr != nil {
+				return nil, execErr
+			}
+			n, _ := execRes.RowsAffected()
+			res.RowsAffected = n
+			res.Columns = []string{}
+			res.Rows = [][]any{}
+			results = append(results, res)
+			continue
+		}
 		rows, qErr := tx.QueryContext(ctx, stmt)
 		if qErr != nil {
-			// Statements that return no rows (INSERT/UPDATE/…) may surface as
-			// query errors on some drivers; fall back to Exec semantics when
-			// the error indicates no result set.
-			if execRes, execErr := tx.ExecContext(ctx, stmt); execErr == nil {
-				n, _ := execRes.RowsAffected()
-				res.RowsAffected = n
-				res.Columns = []string{}
-				res.Rows = [][]any{}
-				results = append(results, res)
-				continue
-			}
 			return nil, qErr
 		}
 		cols, scanErr := collectRows(rows)
@@ -309,7 +321,6 @@ func (s *Server) runSQLBatch(ctx context.Context, stmts []string) ([]dbStatement
 		}
 		res.Columns = cols.columns
 		res.Rows = cols.rows
-		res.RowsAffected = cols.rowsAffected
 		results = append(results, res)
 	}
 	if err := tx.Commit(); err != nil {
@@ -320,9 +331,8 @@ func (s *Server) runSQLBatch(ctx context.Context, stmts []string) ([]dbStatement
 
 // rowSet is the collected form of a SELECT result.
 type rowSet struct {
-	columns      []string
-	rows         [][]any
-	rowsAffected int64
+	columns []string
+	rows    [][]any
 }
 
 // collectRows drains a result set into JSON-friendly values.

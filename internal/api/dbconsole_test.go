@@ -197,6 +197,25 @@ func TestSQLConsoleLimits(t *testing.T) {
 	}
 }
 
+// TestSQLConsoleRowsAffected: DML reports its affected-row count through the
+// Exec path (the query path returns an empty set with 0 on modernc).
+func TestSQLConsoleRowsAffected(t *testing.T) {
+	s, _ := newTestServer(t)
+	enableSQLConsole(t, s)
+	createLink(t, s, "ra1", "https://ra.com")
+	rec := postSQL(t, s, "UPDATE links SET url = 'https://ra2.com' WHERE code = 'ra1'; DELETE FROM links WHERE code = 'ra1'")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body %s", rec.Code, rec.Body.String())
+	}
+	resp := decodeConsoleResponse(t, rec)
+	if len(resp.Results) != 2 {
+		t.Fatalf("results = %d, want 2", len(resp.Results))
+	}
+	if resp.Results[0].RowsAffected != 1 || resp.Results[1].RowsAffected != 1 {
+		t.Errorf("rows_affected = %d/%d, want 1/1", resp.Results[0].RowsAffected, resp.Results[1].RowsAffected)
+	}
+}
+
 // TestSplitSQLStatements: semicolons inside strings and comments do not
 // split; trailing semicolons and empties are dropped.
 func TestSplitSQLStatements(t *testing.T) {
