@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import {
+  ArrowRight,
   Check,
   ChevronDown,
   ChevronLeft,
@@ -494,7 +495,13 @@ export default function Links() {
       <Dialog open={deleting !== null} onClose={() => setDeleting(null)} title={t('links.delete')}>
         <p className="text-sm text-muted">{t('links.deleteConfirm')}</p>
         {deleting && (
-          <p className="short-code mt-2 text-sm font-medium">{deleting.code}</p>
+          <div className="mt-3 flex items-center gap-2 rounded-lg border border-hairline bg-black/[0.02] px-3 py-2.5 dark:bg-white/[0.04]">
+            <span className="short-code min-w-0 shrink-0 text-sm font-medium">{deleting.code}</span>
+            <ArrowRight size={14} className="shrink-0 text-accent" aria-hidden="true" />
+            <span className="min-w-0 flex-1 truncate text-sm text-muted" title={deleting.url}>
+              {deleting.url}
+            </span>
+          </div>
         )}
         <div className="mt-5 flex justify-end gap-2">
           <Button variant="ghost" onClick={() => setDeleting(null)}>
