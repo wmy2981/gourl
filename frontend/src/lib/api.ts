@@ -106,7 +106,8 @@ export interface Link {
 // linkUrls assembles every complete short URL for a code from the config
 // (mirroring the old backend fullURLs): the base URL — or the current
 // location when unset — plus every extra base URL, deduplicated, trailing
-// slashes trimmed.
+// slashes trimmed. The bare "/" code addresses the site root itself, so no
+// separator is appended (a plain join would produce a double slash).
 export function linkUrls(code: string, cfg: AppConfig): string[] {
   const bases: string[] = []
   const push = (base: string) => {
@@ -115,7 +116,7 @@ export function linkUrls(code: string, cfg: AppConfig): string[] {
   }
   push(cfg.base_url || `${location.protocol}//${location.host}`)
   for (const extra of cfg.extra_base_urls) push(extra)
-  return bases.map((b) => `${b}/${code}`)
+  return code === '/' ? bases : bases.map((b) => `${b}/${code}`)
 }
 
 export interface LinkListResponse {
