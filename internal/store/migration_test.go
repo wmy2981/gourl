@@ -134,3 +134,65 @@ func TestMigrationV5OrphansDailyClicks(t *testing.T) {
 		t.Errorf("global total = %d, want 10 (orphan history kept)", total)
 	}
 }
+
+// TestMigrationV7DropsLegacyUABlocks: a v6 database still carries the dead
+// ua_blocks table (UA blocks live in config.yaml since long); v7 drops it.
+// A fresh database never has it in the first place.
+func TestMigrationV7DropsLegacyUABlocks(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "old.db")
+	db, err := sql.Open("sqlite", "file:"+path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`CREATE TABLE schema_version (version INTEGER NOT NULL)`); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 6; i++ {
+		if _, err := db.Exec(migrations[i]); err != nil {
+			t.Fatalf("v%d: %v", i+1, err)
+		}
+	}
+	if _, err := db.Exec(`INSERT INTO schema_version (version) VALUES (6)`); err != nil {
+		t.Fatal(err)
+	}
+	// The v1..v6 chain no longer creates ua_blocks; emulate the legacy table
+	// a pre-v7 database would carry, with one row of stale data.
+	if _, err := db.Exec(
+		`CREATE TABLE ua_blocks (id INTEGER PRIMARY KEY AUTOINCREMENT, pattern TEXT NOT NULL UNIQUE, created_at INTEGER NOT NULL)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`INSERT INTO ua_blocks (pattern, created_at) VALUES ('Googlebot', 1)`); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	s, err := Open(path)
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer s.Close()
+	var n int
+	if err := s.db.QueryRow(
+		`SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'ua_blocks'`).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != 0 {
+		t.Error("ua_blocks table survived migration v7")
+	}
+
+	// A fresh database goes straight to the final schema without the table.
+	fresh, err := Open(filepath.Join(t.TempDir(), "new.db"))
+	if err != nil {
+		t.Fatalf("open fresh: %v", err)
+	}
+	defer fresh.Close()
+	if err := fresh.db.QueryRow(
+		`SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'ua_blocks'`).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != 0 {
+		t.Error("fresh database created the legacy ua_blocks table")
+	}
+}

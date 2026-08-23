@@ -118,11 +118,6 @@ var migrations = []string{
 		count INTEGER NOT NULL DEFAULT 0,
 		PRIMARY KEY (code, date)
 	);
-	CREATE TABLE ua_blocks (
-		id         INTEGER PRIMARY KEY AUTOINCREMENT,
-		pattern    TEXT NOT NULL UNIQUE,
-		created_at INTEGER NOT NULL
-	);
 	CREATE TABLE api_tokens (
 		id         INTEGER PRIMARY KEY AUTOINCREMENT,
 		token      TEXT NOT NULL UNIQUE,
@@ -195,6 +190,10 @@ var migrations = []string{
 	// v6: api tokens are stored as bcrypt hashes; the plaintext prefix keeps
 	// the UI preview readable (MigrateTokenHashes fills it for legacy rows).
 	`ALTER TABLE api_tokens ADD COLUMN token_prefix TEXT NOT NULL DEFAULT '';`,
+	// v7: drop the legacy ua_blocks table — UA blocks moved to config.yaml
+	// long ago (the settings page and /api/v1/ua-blocks both read the
+	// config), leaving this table dead since then.
+	`DROP TABLE IF EXISTS ua_blocks;`,
 }
 
 // migrate applies pending migrations inside a transaction each, recording the
