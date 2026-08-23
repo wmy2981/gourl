@@ -504,7 +504,7 @@ export default function Links() {
             </span>
             <ArrowRight size={14} className="shrink-0 text-accent" aria-hidden="true" />
             <span
-              className="min-w-0 max-w-[60%] flex-1 overflow-x-auto whitespace-nowrap text-sm text-muted"
+              className="min-w-0 max-w-[60%] flex-1 overflow-x-auto whitespace-nowrap text-center text-sm text-muted"
               title={deleting.url}
             >
               {deleting.url}
