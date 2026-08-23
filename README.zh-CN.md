@@ -16,9 +16,8 @@
 - **自动获取标题** — 后台异步抓取 title/description（不阻塞请求），支持任意可达主机，内网全覆盖
 - **安全防护** — Setup 需输入服务器日志中的一次性校验码；bcrypt 密码、可配置会话有效期、登录按 IP 限流、UA/IP 屏蔽、自链防护
 - **批量与导入导出** — 批量创建/删除、一键清空过期、宽松 CSV/JSON 导入（冲突可选报错/跳过/更新）、完整 JSON 导出
-- **编辑快照** — 每次修改自动追加不可变备份（`b-1, b-2, …`）
-- **容器内 CLI** — `gourl reset …`、`gourl db export`、`gourl status`、`gourl webui on|off`、`gourl restart` 等管理命令
-- **结构化日志** — slog 4 级，镜像到轮转文件，日志页 SSE 实时查看
+- **编辑快照** — 每次修改后数据库自动追加不可变备份
+- **容器内 CLI** — gourl实例管理命令
 
 ## 技术栈
 
@@ -30,7 +29,7 @@ Redis · React 19 + Vite + Tailwind CSS 4 + shadcn 风格组件
 单容器部署——镜像内置 Redis 实例，一次 `compose up` 即完成整套部署。
 
 ```bash
-# 1. 可选：将 config.yaml.example 复制为 config/config.yaml 并按需调整。
+# 1. 可选：将 config.example.yaml 复制为 config/config.yaml 并按需调整。
 # 2. 在 docker-compose.yml 同级创建 .env：
 echo "SESSION_SECRET=$(openssl rand -hex 32)" > .env
 
@@ -57,7 +56,7 @@ docker compose up -d
 | `LOG_DIR` | `./data/log` | 日志镜像轮转文件目录 |
 
 业务配置（站点信息、基址、保留字、限流、日志等级等）在 `config.yaml` 中，
-见 `config.yaml.example`。
+示例见 [Example](config.example.yaml)
 
 ## API 文档
 

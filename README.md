@@ -17,9 +17,8 @@ plus Redis — that's all it takes to run your own short links.
 - **Auto titles** — async `title`/`description` fetching for any reachable host, internal networks included
 - **Security** — setup requires a one-time bootstrap code from the server log; bcrypt admin password, configurable session expiry, per-IP login lockout, UA/IP blocking, self-link guard
 - **Batch & import/export** — bulk create/delete, clear-expired, lenient CSV/JSON import with conflict policies, full JSON export
-- **Edit snapshots** — every edit appends an immutable backup (`b-1, b-2, …`)
-- **Container CLI** — `gourl reset …`, `gourl db export`, `gourl status`, `gourl webui on|off`, `gourl restart` and more, inside the container
-- **Structured logging** — slog with 4 levels, mirrored to a rotating file, live log page via SSE
+- **Edit snapshots** — the database automatically appends an immutable backup after every edit
+- **Container CLI** — management commands for the gourl instance
 
 ## Stack
 
@@ -32,7 +31,7 @@ Single container — the image embeds a Redis instance, so one `compose up`
 is the whole deployment.
 
 ```bash
-# 1. Optional: copy config.yaml.example to config/config.yaml and adjust.
+# 1. Optional: copy config.example.yaml to config/config.yaml and adjust.
 # 2. Create .env next to docker-compose.yml:
 echo "SESSION_SECRET=$(openssl rand -hex 32)" > .env
 
@@ -60,7 +59,7 @@ with `docker compose exec app gourl <command>`.
 | `LOG_DIR` | `./data/log` | Rotating log mirror |
 
 Business settings (site info, base URLs, reserved codes, rate limits, log
-level, …) live in `config.yaml` — see `config.yaml.example`.
+level, …) live in `config.yaml` — see [Example](config.example.yaml).
 
 ## API documentation
 
