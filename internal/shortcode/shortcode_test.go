@@ -43,7 +43,7 @@ func TestRandomDoesNotCollide(t *testing.T) {
 }
 
 func TestIsReservedBuiltin(t *testing.T) {
-	for _, code := range []string{"api", "API", "Api", "admin", "health", "expired", "assets", "favicon"} {
+	for _, code := range []string{"api", "API", "Api", "admin", "health", "expired", "assets", "favicon", "db"} {
 		if !IsReserved(code, nil) {
 			t.Errorf("%q should be reserved", code)
 		}

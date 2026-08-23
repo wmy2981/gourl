@@ -29,6 +29,8 @@ tags:
     description: Site configuration
   - name: dashboard
     description: Aggregate statistics
+  - name: db
+    description: Raw SQL console (disabled unless sql_console_enabled is set in the config file)
 paths:
   /health:
     get:
@@ -493,6 +495,63 @@ paths:
                       properties:
                         date: { type: string }
                         count: { type: integer }
+  /db:
+    post:
+      tags: [db]
+      summary: Run SQL statements against the SQLite database inside one transaction
+      description: |
+        Admin-only raw SQL console. Disabled unless `sql_console_enabled` is
+        set in the config file (default off — toggle with `gourl db console
+        on|off` plus `gourl reload`, never through this API). The whole batch
+        runs in a single transaction: any failing statement rolls everything
+        back. At most 50 statements and a 1 MiB body; a 30s execution window
+        applies.
+
+        Refused by design (403 statement_forbidden): schema changes
+        (CREATE/ALTER/DROP), ATTACH/DETACH, transaction control
+        (BEGIN/COMMIT/ROLLBACK/SAVEPOINT/RELEASE/END), VACUUM (cannot run in
+        a transaction) and every PRAGMA except read-only ones (table_info,
+        integrity_check, …). A committed batch containing writes invalidates
+        the link cache immediately.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sql]
+              properties:
+                sql:
+                  type: string
+                  description: "One or more ;-separated statements (semicolons inside strings/comments are honored)"
+                  example: "SELECT code, url FROM links WHERE deleted = 0 LIMIT 10"
+      responses:
+        "400": { description: "invalid_request (bad JSON, empty script or oversized body), too_many_statements (over 50) or sql_error (the batch failed and was rolled back)" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { description: "sql_console_disabled (switch off), setup_required (no admin password yet) or statement_forbidden (DDL, ATTACH/DETACH, transaction control, VACUUM or a writable PRAGMA)" }
+        "200":
+          description: Per-statement results in submission order
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  duration_ms: { type: integer }
+                  results:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        sql: { type: string }
+                        columns:
+                          type: array
+                          items: { type: string }
+                        rows:
+                          type: array
+                          items:
+                            type: array
+                            items: {}
+                        rows_affected: { type: integer }
 components:
   securitySchemes:
     bearerAuth:

@@ -369,8 +369,15 @@ type exportBackup struct {
 }
 
 func cmdDb(args []string) int {
-	if len(args) == 0 || args[0] != "export" {
-		fmt.Fprintln(os.Stderr, "usage: gourl db export [out-dir]")
+	if len(args) == 0 {
+		fmt.Fprintln(os.Stderr, "usage: gourl db export [out-dir] | db console on|off [-y]")
+		return 2
+	}
+	if args[0] == "console" {
+		return cmdDbConsole(args[1:])
+	}
+	if args[0] != "export" {
+		fmt.Fprintln(os.Stderr, "usage: gourl db export [out-dir] | db console on|off [-y]")
 		return 2
 	}
 	outDir := "."
@@ -704,6 +711,35 @@ func resetAll(yes bool) int {
 }
 
 /* ---------- webui / restart ---------- */
+
+// cmdDbConsole toggles config.sql_console_enabled (the POST /api/v1/db SQL
+// console). File-only field like webui_enabled: edit + SIGHUP, no restart.
+func cmdDbConsole(args []string) int {
+	yes, rest := splitYes(args)
+	if len(rest) != 1 || (rest[0] != "on" && rest[0] != "off") {
+		fmt.Fprintln(os.Stderr, "usage: gourl db console on|off [-y]")
+		return 2
+	}
+	enable := rest[0] == "on"
+	if err := confirm(yes, fmt.Sprintf("turn the SQL console (POST /api/v1/db) %s?", rest[0])); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	m, err := loadConfig()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "load config: %v\n", err)
+		return 1
+	}
+	cur := m.Get()
+	cur.SQLConsoleEnabled = enable
+	if err := m.Update(cur); err != nil {
+		fmt.Fprintf(os.Stderr, "update config: %v\n", err)
+		return 1
+	}
+	notifyReload()
+	fmt.Printf("sql console %s (applied to the running server)\n", rest[0])
+	return 0
+}
 
 func cmdWebUI(args []string) int {
 	yes, rest := splitYes(args)

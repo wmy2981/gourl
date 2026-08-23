@@ -64,6 +64,10 @@ type Config struct {
 	// Swagger /docs is unaffected. Kept out of the JSON contract; updateConfig
 	// carries it over so a plain PUT never disables it.
 	WebUIEnabled bool `yaml:"webui_enabled" json:"-"`
+	// SQLConsoleEnabled gates POST /api/v1/db (the raw SQL console). Default
+	// off; like webui_enabled it is a file-only field, toggled through the
+	// config file + `gourl reload`, never exposed to the JSON contract.
+	SQLConsoleEnabled bool `yaml:"sql_console_enabled" json:"-"`
 	// LogLevel is the process-wide log verbosity (debug/info/warning/error),
 	// applied at startup and hot-applied on every config save.
 	LogLevel string `yaml:"log_level" json:"log_level"`

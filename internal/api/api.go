@@ -127,6 +127,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/v1/icon", s.requireAuth(s.uploadIcon))
 	mux.HandleFunc("DELETE /api/v1/icon", s.requireAuth(s.deleteIcon))
 	mux.HandleFunc("GET /api/v1/dashboard", s.requireAuth(s.dashboard))
+	mux.HandleFunc("POST /api/v1/db", s.requireAuth(s.dbConsole))
 	mux.HandleFunc("GET /api/v1/logs", s.requireAuth(s.logHistory))
 	mux.HandleFunc("GET /api/v1/logs/stream", s.requireAuth(s.logStream))
 	mux.Handle("GET /assets/", s.assetsHandler())
@@ -192,11 +193,13 @@ func (s *Server) logRequests(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		// The token-creation response contains the full token (shown exactly
-		// once) — never mirror it into the log.
+		// once) — never mirror it into the log. Same for the SQL console: its
+		// SELECT results can carry bcrypt hashes and token rows.
 		sw := &statusWriter{
 			ResponseWriter: w,
 			status:         http.StatusOK,
-			capBody:        !(r.Method == http.MethodPost && r.URL.Path == "/api/v1/tokens"),
+			capBody:        !(r.Method == http.MethodPost && r.URL.Path == "/api/v1/tokens") &&
+				!(r.Method == http.MethodPost && r.URL.Path == "/api/v1/db"),
 		}
 		next.ServeHTTP(sw, r)
 		attrs := []any{

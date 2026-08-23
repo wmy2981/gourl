@@ -308,6 +308,38 @@ func TestReloadCommand(t *testing.T) {
 	}
 }
 
+// TestDbConsoleToggle: `gourl db console on|off` persists the switch and
+// signals the running server.
+func TestDbConsoleToggle(t *testing.T) {
+	writeConfig(t, "site:\n  name: test\n")
+	reloaded := false
+	reloadGourlFn = func() error { reloaded = true; return nil }
+	defer func() { reloadGourlFn = reloadGourl }()
+
+	if code := cmdDb([]string{"console", "-y", "on"}); code != 0 {
+		t.Fatalf("db console on exit = %d", code)
+	}
+	if !reloaded {
+		t.Error("db console on must signal the running server to reload")
+	}
+	data, _ := os.ReadFile(cfgPath())
+	if !strings.Contains(string(data), "sql_console_enabled: true") {
+		t.Errorf("db console on did not persist: %s", data)
+	}
+
+	if code := cmdDb([]string{"console", "-y", "off"}); code != 0 {
+		t.Fatalf("db console off exit = %d", code)
+	}
+	data, _ = os.ReadFile(cfgPath())
+	if !strings.Contains(string(data), "sql_console_enabled: false") {
+		t.Errorf("db console off did not persist: %s", data)
+	}
+
+	if code := cmdDb([]string{"console"}); code != 2 {
+		t.Errorf("db console without on|off exit = %d, want 2", code)
+	}
+}
+
 func TestStatusAndHealth(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("CONFIG_PATH", filepath.Join(dir, "config.yaml"))

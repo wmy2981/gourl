@@ -88,6 +88,16 @@ func (s *Store) Close() error { return s.db.Close() }
 // Ping verifies database connectivity.
 func (s *Store) Ping(ctx context.Context) error { return s.db.PingContext(ctx) }
 
+// SQL exposes the raw *sql.DB for the /api/v1/db SQL console. The handler
+// owns statement validation, transactions and logging; the store stays out
+// of interpreting what runs through it.
+func (s *Store) SQL() *sql.DB { return s.db }
+
+// InvalidateCache drops every cached link. The SQL console bypasses the
+// write paths, so after a batch containing writes nothing can be trusted —
+// same contract as DeleteExpired's sweep.
+func (s *Store) InvalidateCache() { s.cache.clear() }
+
 // migrations is an ordered list of schema migrations; index i applies after
 // version i.
 var migrations = []string{

@@ -21,6 +21,7 @@ COMMANDS
   log [lines]                print the last log lines from the mirrored file (default 100)
   db export [out-dir]        dump the SQLite database into links.json, tokens.json,
                              daily-clicks.json and backups.json (default out-dir: .)
+  db console on|off          enable or disable the SQL console (POST /api/v1/db)
   reset <target>             reset a configuration or data area (see below)
   webui on|off               enable or disable the admin console (/admin; /docs unaffected)
   reload                     signal the running server to re-read the config file
