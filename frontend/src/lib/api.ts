@@ -295,14 +295,14 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ conflict, items }),
     }),
-  getLink: (code: string) => request<Link>(`/api/v1/links/${encodePath(code)}`),
+  getLink: (code: string) => request<Link>(`/api/v1/links/${linkAddress(code)}`),
   updateLink: (code: string, body: Record<string, unknown>) =>
-    request<Link>(`/api/v1/links/${encodePath(code)}`, {
+    request<Link>(`/api/v1/links/${linkAddress(code)}`, {
       method: 'PATCH',
       body: JSON.stringify(body),
     }),
   deleteLink: (code: string) =>
-    request<void>(`/api/v1/links/${encodePath(code)}`, { method: 'DELETE' }),
+    request<void>(`/api/v1/links/${linkAddress(code)}`, { method: 'DELETE' }),
   deleteLinks: (codes: string[]) =>
     request<{ deleted: number }>('/api/v1/links', {
       method: 'DELETE',
@@ -439,10 +439,18 @@ export const api = {
 }
 
 // encodePath preserves '/' inside multi-level codes (link1/link2) while
-// encoding everything else safely.
+// encoding everything else safely. The bare "/" code can never travel in a
+// path (the server mux decodes %2F into "/"), so callers append ?code=/
+// instead — see addressedCode in the backend.
 function encodePath(code: string): string {
   return code
     .split('/')
     .map((seg) => encodeURIComponent(seg))
     .join('/')
+}
+
+// linkAddress renders the path (plus optional query) that addresses a code
+// in GET/PATCH/DELETE /api/v1/links/{...}.
+function linkAddress(code: string): string {
+  return code === '/' ? '_?code=%2F' : encodePath(code)
 }

@@ -17,8 +17,9 @@ import (
 func (s *Server) redirect(w http.ResponseWriter, r *http.Request) {
 	code := pathCode(r.PathValue("code"))
 	if code == "" {
-		// Root path: point at the admin console.
-		http.Redirect(w, r, "/admin", http.StatusFound)
+		// Unreachable: GET /{$} matches the exact root first; keep a safe
+		// fallback for any path shape that slips through.
+		s.redirectRoot(w, r)
 		return
 	}
 
@@ -72,6 +73,53 @@ func (s *Server) redirect(w http.ResponseWriter, r *http.Request) {
 	}
 
 	slog.Debug("link redirected", "code", code, "url", link.URL, "remote", r.RemoteAddr)
+	http.Redirect(w, r, link.URL, http.StatusFound)
+}
+
+// redirectRoot handles GET /{$}: the bare "/" is a legitimate short code
+// (the root redirect). When it exists, the visitor goes through the same
+// pipeline as any other code — rate limit, UA block, expiry, click count —
+// and lands on the stored URL; otherwise the root falls back to the public
+// landing page.
+func (s *Server) redirectRoot(w http.ResponseWriter, r *http.Request) {
+	// Shared per-second budget, same as every other short link.
+	if !s.allowLink() {
+		slog.Debug("link rate limited", "code", "/", "remote", r.RemoteAddr)
+		w.WriteHeader(http.StatusTooManyRequests)
+		return
+	}
+
+	if p := s.uaBlocked(r); p != "" {
+		slog.Info("ua blocked", "code", "/", "remote", r.RemoteAddr, "pattern", p)
+		s.renderBlocked(w, r, "ua", p)
+		return
+	}
+
+	link, err := s.store.GetLink(r.Context(), "/")
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			// No root code: the landing page keeps the root meaningful.
+			s.renderPublic(w, r)
+			return
+		}
+		slog.Error("redirect: lookup failed", "code", "/", "error", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	now := s.now()
+	if link.ExpiresAt > 0 && link.ExpiresAt < now {
+		slog.Debug("redirect: code expired", "code", "/", "remote", r.RemoteAddr)
+		s.renderNotFound(w, r)
+		return
+	}
+
+	date := counter.Date(time.Unix(now, 0))
+	if err := s.counter.Incr(r.Context(), "/", date); err != nil {
+		slog.Warn("count click failed", "code", "/", "error", err)
+	}
+
+	slog.Debug("link redirected", "code", "/", "url", link.URL, "remote", r.RemoteAddr)
 	http.Redirect(w, r, link.URL, http.StatusFound)
 }
 

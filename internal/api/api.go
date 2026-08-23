@@ -137,6 +137,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /docs/openapi.yaml", s.openAPISpec)
 	mux.HandleFunc("GET /admin", s.adminOnly(s.spaIndex))
 	mux.HandleFunc("GET /admin/{path...}", s.adminOnly(s.spaIndex))
+	mux.HandleFunc("GET /{$}", s.redirectRoot)
 	mux.HandleFunc("GET /{code...}", s.redirect)
 	return s.logRequests(s.ipBlock(s.cors(mux)))
 }

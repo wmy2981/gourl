@@ -98,6 +98,8 @@ func TestValidate(t *testing.T) {
 		"abc", "a1b2c3", "my-link", "my_link", "link1/link2", "a/b/c/d/e",
 		// Simplified Chinese codes.
 		"中文", "短链", "中文/子码", "混合abc-123", "链接_2026",
+		// The bare "/" is the root-redirect code.
+		"/",
 	}
 	for _, code := range valid {
 		if err := Validate(code); err != nil {
@@ -120,6 +122,8 @@ func TestValidate(t *testing.T) {
 		{"abc?x", "query char"},
 		{"码 ", "trailing space"},
 		{"emoji😀", "outside CJK"},
+		{"//", "double slash only"},
+		{"/a", "slash with segment"},
 	}
 	// 64 runes is fine (the limit counts characters, not UTF-8 bytes).
 	if err := Validate(strings.Repeat("字", 64)); err != nil {

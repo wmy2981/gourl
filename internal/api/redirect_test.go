@@ -130,6 +130,56 @@ func TestRedirectNotFound(t *testing.T) {
 	}
 }
 
+func TestRootRedirectCode(t *testing.T) {
+	s, mr := newTestServer(t)
+
+	// Without the "/" code the root falls back to the public landing page.
+	rec := get(t, s, "/", nil)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "This is a short link service") {
+		t.Errorf("root without code: status %d, want 200 landing page, body: %s", rec.Code, rec.Body.String())
+	}
+
+	createLink(t, s, "/", "https://example.com/root-target")
+
+	rec = get(t, s, "/", nil)
+	if rec.Code != http.StatusFound {
+		t.Fatalf("root with code status = %d, want 302", rec.Code)
+	}
+	if loc := rec.Header().Get("Location"); loc != "https://example.com/root-target" {
+		t.Errorf("Location = %q", loc)
+	}
+
+	total, daily := counter.Keys("/", counter.Date(time.Unix(s.now(), 0)))
+	if got, err := mr.Get(total); err != nil || got != "1" {
+		t.Errorf("root total counter = %q (err %v), want 1", got, err)
+	}
+	if got, _ := mr.Get(daily); got != "1" {
+		t.Errorf("root daily counter = %q, want 1", got)
+	}
+
+	// The API reads it back through the ?code= escape hatch (the mux decodes
+	// %2F into "/" so the path form can never address a bare slash).
+	listRec := do(t, s, http.MethodGet, "/api/v1/links/_?code=%2F", nil)
+	if listRec.Code != http.StatusOK || !strings.Contains(listRec.Body.String(), "root-target") {
+		t.Errorf("GET /api/v1/links?code=/ status = %d, body %s", listRec.Code, listRec.Body.String())
+	}
+}
+
+func TestRootRedirectExpiredFallsToNotFound(t *testing.T) {
+	s, _ := newTestServer(t)
+	createLink(t, s, "/", "https://example.com/root-target")
+	rec := do(t, s, http.MethodPatch, "/api/v1/links/_?code=%2F", map[string]any{"expires_at": s.now() - 1})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("set expiry: %d", rec.Code)
+	}
+	// An expired root code is indistinguishable from a missing one — but the
+	// root keeps answering (landing page fallback only covers ErrNotFound).
+	rec = get(t, s, "/", nil)
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("expired root status = %d, want 404", rec.Code)
+	}
+}
+
 func TestRedirectReservedPrefixWins(t *testing.T) {
 	s, _ := newTestServer(t)
 	for _, path := range []string{"/api/anything", "/expired", "/health"} {
