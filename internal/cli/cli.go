@@ -18,6 +18,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 
 	_ "modernc.org/sqlite" // driver name "sqlite", shared with internal/store
 	"gopkg.in/yaml.v3"
@@ -66,6 +67,8 @@ func Main(args []string) int {
 		return cmdReset(args[1:])
 	case "webui":
 		return cmdWebUI(args[1:])
+	case "reload":
+		return cmdReload(args[1:])
 	case "restart":
 		return cmdRestart(args[1:])
 	default:
@@ -144,6 +147,37 @@ func restartGourl() error {
 // restartGourlFn is indirection over restartGourl so tests can observe the
 // restart without a container.
 var restartGourlFn = restartGourl
+
+// reloadGourl signals the running gourl process to re-read the config file.
+// Same container constraint as restartGourl: gourl is PID 1 there. On
+// failure the caller should warn — the config change is already on disk and
+// `gourl reload` retries it manually.
+func reloadGourl() error {
+	cmdline, err := os.ReadFile("/proc/1/cmdline")
+	if err != nil {
+		return fmt.Errorf("cannot reach the running server (outside the container?) — run `docker exec <container> gourl reload` or restart it")
+	}
+	if !strings.Contains(strings.TrimRight(string(cmdline), "\x00"), "gourl") {
+		return errors.New("PID 1 is not gourl — restart the service manually")
+	}
+	p, err := os.FindProcess(1)
+	if err != nil {
+		return err
+	}
+	return p.Signal(syscall.SIGHUP)
+}
+
+// reloadGourlFn is indirection over reloadGourl so tests can observe the
+// signal without a container.
+var reloadGourlFn = reloadGourl
+
+// notifyReload sends SIGHUP after a config-file change; a failed signal is
+// only a warning because the edit is already persisted.
+func notifyReload() {
+	if err := reloadGourlFn(); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: the change is saved but not applied to the running server: %v\n", err)
+	}
+}
 
 func loadConfig() (*config.Manager, error) {
 	return config.NewManager(cfgPath())
@@ -513,8 +547,8 @@ func cmdReset(args []string) int {
 	}
 }
 
-// resetConfigField mutates the live config after confirmation; the running
-// server picks the change up without a restart.
+// resetConfigField mutates the config file after confirmation, then signals
+// the running server to reload it — the change applies without a restart.
 func resetConfigField(yes bool, prompt string, mutate func(*config.Config)) int {
 	if err := confirm(yes, prompt); err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -531,6 +565,7 @@ func resetConfigField(yes bool, prompt string, mutate func(*config.Config)) int 
 		fmt.Fprintf(os.Stderr, "update config: %v\n", err)
 		return 1
 	}
+	notifyReload()
 	fmt.Println("done")
 	return 0
 }
@@ -692,7 +727,25 @@ func cmdWebUI(args []string) int {
 		fmt.Fprintf(os.Stderr, "update config: %v\n", err)
 		return 1
 	}
-	fmt.Printf("admin console %s (takes effect immediately)\n", rest[0])
+	notifyReload()
+	fmt.Printf("admin console %s (applied to the running server)\n", rest[0])
+	return 0
+}
+
+/* ---------- reload ---------- */
+
+// cmdReload signals the running server to re-read the config file. It is the
+// manual fallback when a CLI config command could not deliver SIGHUP itself.
+func cmdReload(args []string) int {
+	if len(args) != 0 {
+		fmt.Fprintln(os.Stderr, "usage: gourl reload")
+		return 2
+	}
+	if err := reloadGourlFn(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	fmt.Println("reload signal sent")
 	return 0
 }
 

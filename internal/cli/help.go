@@ -23,6 +23,7 @@ COMMANDS
                              daily-clicks.json and backups.json (default out-dir: .)
   reset <target>             reset a configuration or data area (see below)
   webui on|off               enable or disable the admin console (/admin; /docs unaffected)
+  reload                     signal the running server to re-read the config file
   restart                    stop the server so the container restarts it
 
 SENSITIVE OPERATIONS
@@ -46,6 +47,10 @@ RESET TARGETS
   process; the container restart policy starts it again — the confirmation
   prompt and the final message both say so. Click history lives in the
   database and is deleted with it.
+
+  reset uablock, ipblock and sessions plus webui on|off edit only the config
+  file and signal the running server to reload it; if the signal cannot be
+  delivered a warning tells you to run "gourl reload" inside the container.
 
 ENVIRONMENT
   CONFIG_PATH  config file (default ./config/config.yaml)

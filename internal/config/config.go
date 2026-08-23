@@ -237,6 +237,21 @@ func (m *Manager) Get() *Config {
 	return &cp
 }
 
+// Reload re-reads the config file and hot-swaps it into memory. On a parse
+// or validation failure the in-memory config is unchanged and the error is
+// returned — the CLI edits the file in a separate process, so a broken edit
+// must never take the running server's config down.
+func (m *Manager) Reload() error {
+	cfg, err := Load(m.path)
+	if err != nil {
+		return err
+	}
+	m.mu.Lock()
+	m.cfg = cfg
+	m.mu.Unlock()
+	return nil
+}
+
 // Update validates the new config, writes it back atomically to disk, and
 // hot-swaps it into memory. On write failure the in-memory config is unchanged.
 func (m *Manager) Update(c *Config) error {

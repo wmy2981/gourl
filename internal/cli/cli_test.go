@@ -14,6 +14,7 @@ import (
 
 	_ "modernc.org/sqlite"
 
+	"github.com/wmy2981/gourl/internal/config"
 	"github.com/wmy2981/gourl/internal/store"
 )
 
@@ -222,9 +223,15 @@ func TestRestartCommand(t *testing.T) {
 
 func TestWebUIToggle(t *testing.T) {
 	writeConfig(t, "site:\n  name: test\n")
+	reloaded := false
+	reloadGourlFn = func() error { reloaded = true; return nil }
+	defer func() { reloadGourlFn = reloadGourl }()
 	code := cmdWebUI([]string{"-y", "off"})
 	if code != 0 {
 		t.Fatalf("webui off exit = %d", code)
+	}
+	if !reloaded {
+		t.Error("webui off must signal the running server to reload")
 	}
 	data, _ := os.ReadFile(cfgPath())
 	if !strings.Contains(string(data), "webui_enabled: false") {
@@ -241,6 +248,63 @@ func TestWebUIToggle(t *testing.T) {
 	// Bad usage.
 	if code := cmdWebUI(nil); code != 2 {
 		t.Errorf("webui without args exit = %d, want 2", code)
+	}
+}
+
+// TestWebUIToggleWarnsWhenSignalFails: outside the container the SIGHUP
+// cannot be delivered — the command still succeeds because the edit is on
+// disk, and the warning goes to stderr.
+func TestWebUIToggleWarnsWhenSignalFails(t *testing.T) {
+	writeConfig(t, "site:\n  name: test\n")
+	reloadGourlFn = func() error { return errors.New("no server") }
+	defer func() { reloadGourlFn = reloadGourl }()
+	if code := cmdWebUI([]string{"-y", "off"}); code != 0 {
+		t.Fatalf("webui off exit = %d, want 0 despite the failed signal", code)
+	}
+	data, _ := os.ReadFile(cfgPath())
+	if !strings.Contains(string(data), "webui_enabled: false") {
+		t.Errorf("webui off did not persist: %s", data)
+	}
+}
+
+// TestResetConfigFieldReloads: uablock/ipblock/sessions edit the file and
+// signal the running server.
+func TestResetConfigFieldReloads(t *testing.T) {
+	writeConfig(t, "site:\n  name: test\nip_blocks:\n  - 10.0.0.0/8\n")
+	reloaded := false
+	reloadGourlFn = func() error { reloaded = true; return nil }
+	defer func() { reloadGourlFn = reloadGourl }()
+	if code := cmdReset([]string{"-y", "ipblock"}); code != 0 {
+		t.Fatalf("reset ipblock exit = %d", code)
+	}
+	if !reloaded {
+		t.Error("reset ipblock must signal the running server to reload")
+	}
+	m, err := config.NewManager(cfgPath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := len(m.Get().IPBlocks); n != 0 {
+		t.Errorf("ip_blocks after reset = %d entries, want 0", n)
+	}
+}
+
+// TestReloadCommand: the manual fallback signals the server; a failed
+// delivery is an error (exit 1).
+func TestReloadCommand(t *testing.T) {
+	if code := cmdReload([]string{"extra"}); code != 2 {
+		t.Errorf("reload with args exit = %d, want 2", code)
+	}
+	called := false
+	reloadGourlFn = func() error { called = true; return nil }
+	defer func() { reloadGourlFn = reloadGourl }()
+	out, code := captureStdout(t, func() int { return cmdReload(nil) })
+	if code != 0 || !called || !strings.Contains(out, "reload signal sent") {
+		t.Errorf("reload exit = %d, called = %v, out %q", code, called, out)
+	}
+	reloadGourlFn = func() error { return errors.New("no server") }
+	if code := cmdReload(nil); code != 1 {
+		t.Errorf("reload with failed signal exit = %d, want 1", code)
 	}
 }
 

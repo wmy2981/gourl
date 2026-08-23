@@ -221,3 +221,39 @@ func TestManagerUpdateRejectsInvalidAndKeepsOld(t *testing.T) {
 		t.Errorf("config changed after rejected update: %+v", m.Get())
 	}
 }
+
+// TestManagerReloadPicksUpExternalEdits: another process (the CLI) edits the
+// file behind the manager's back; Reload hot-swaps it in. A broken edit
+// keeps the previous config.
+func TestManagerReloadPicksUpExternalEdits(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	m, err := NewManager(path)
+	if err != nil {
+		t.Fatalf("NewManager: %v", err)
+	}
+	if m.Get().Site.Name == "Renamed" {
+		t.Fatal("test precondition: default name must differ from Renamed")
+	}
+
+	if err := os.WriteFile(path, []byte("site:\n  name: Renamed\nwebui_enabled: false\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.Reload(); err != nil {
+		t.Fatalf("Reload: %v", err)
+	}
+	cfg := m.Get()
+	if cfg.Site.Name != "Renamed" || cfg.WebUIEnabled {
+		t.Errorf("reloaded config = name %q webui %v, want Renamed/false", cfg.Site.Name, cfg.WebUIEnabled)
+	}
+
+	if err := os.WriteFile(path, []byte("site:\n  name: Broken\nshort_code_length: 1\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.Reload(); err == nil {
+		t.Error("expected error reloading an invalid config file")
+	}
+	cfg = m.Get()
+	if cfg.Site.Name != "Renamed" || cfg.WebUIEnabled {
+		t.Errorf("failed reload changed the config: name %q webui %v", cfg.Site.Name, cfg.WebUIEnabled)
+	}
+}
