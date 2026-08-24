@@ -71,11 +71,14 @@ export default function Logs() {
     }
   }, [])
 
-  // Live stream; EventSource reconnects automatically.
+  // Live stream. Both modes reconnect forever: onError flags the status,
+  // onOpen clears it again after every successful (re)connection — without
+  // that reset the badge used to stick on "reconnecting" forever.
   useEffect(() => {
     const es = api.logStream(
       (rec) => setRecords((rs) => [...rs, rec]),
       () => setStreamDown(true),
+      () => setStreamDown(false),
     )
     return () => es.close()
   }, [])

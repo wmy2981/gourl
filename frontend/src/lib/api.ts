@@ -343,7 +343,15 @@ export const api = {
   },
   logHistory: (limit = 200, offset = 0) =>
     request<LogHistoryResponse>(`/api/v1/logs?limit=${limit}&offset=${offset}`),
-  logStream: (onLog: (rec: LogRecord) => void, onError?: () => void) => {
+  // Live log stream. Both modes reconnect forever; onOpen fires after every
+  // successful (re)connection so the UI can flip the status back to "live",
+  // onError when a connection drops. The web EventSource retries on its own;
+  // the app's fetch loop retries itself with a short backoff.
+  logStream: (
+    onLog: (rec: LogRecord) => void,
+    onError?: () => void,
+    onOpen?: () => void,
+  ) => {
     const server = getServerConfig()
     const url = server
       ? `${server.url.replace(/\/+$/, '')}/api/v1/logs/stream`
@@ -352,43 +360,69 @@ export const api = {
       // Token mode: EventSource cannot send an Authorization header, so parse
       // the SSE stream over fetch. Frames are `event: log\ndata: {...}\n\n`.
       const abort = new AbortController()
-      fetch(url, { headers: { Authorization: `Bearer ${server.token}` }, signal: abort.signal })
-        .then((res) => {
-          if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`)
-          const reader = res.body.getReader()
-          const decoder = new TextDecoder()
-          let buf = ''
-          const pump = (): Promise<void> =>
-            reader
-              .read()
-              .then(({ done, value }) => {
-                if (done) {
-                  onError?.()
-                  return
-                }
-                buf += decoder.decode(value, { stream: true })
-                let idx: number
-                while ((idx = buf.indexOf('\n\n')) >= 0) {
-                  const dataLine = buf
-                    .slice(0, idx)
-                    .split('\n')
-                    .find((l) => l.startsWith('data:'))
-                  buf = buf.slice(idx + 2)
-                  if (dataLine) {
-                    try {
-                      onLog(JSON.parse(dataLine.slice(5).trim()) as LogRecord)
-                    } catch {
-                      // malformed frame: ignore
+      const connect = () => {
+        if (abort.signal.aborted) return
+        fetch(url, { headers: { Authorization: `Bearer ${server.token}` }, signal: abort.signal })
+          .then((res) => {
+            if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`)
+            onOpen?.()
+            const reader = res.body.getReader()
+            const decoder = new TextDecoder()
+            let buf = ''
+            const pump = (): Promise<void> =>
+              reader
+                .read()
+                .then(({ done, value }) => {
+                  if (done) {
+                    onError?.()
+                    scheduleRetry()
+                    return
+                  }
+                  buf += decoder.decode(value, { stream: true })
+                  let idx: number
+                  while ((idx = buf.indexOf('\n\n')) >= 0) {
+                    const dataLine = buf
+                      .slice(0, idx)
+                      .split('\n')
+                      .find((l) => l.startsWith('data:'))
+                    buf = buf.slice(idx + 2)
+                    if (dataLine) {
+                      try {
+                        onLog(JSON.parse(dataLine.slice(5).trim()) as LogRecord)
+                      } catch {
+                        // malformed frame: ignore
+                      }
                     }
                   }
-                }
-                return pump()
-              })
-              .catch(() => onError?.())
-          return pump()
-        })
-        .catch(() => onError?.())
-      return { close: () => abort.abort() }
+                  return pump()
+                })
+                .catch(() => {
+                  onError?.()
+                  scheduleRetry()
+                })
+            return pump()
+          })
+          .catch(() => {
+            onError?.()
+            scheduleRetry()
+          })
+      }
+      // Backoff between attempts so a down server isn't hammered.
+      let retryTimer: ReturnType<typeof setTimeout> | null = null
+      const scheduleRetry = () => {
+        if (abort.signal.aborted || retryTimer) return
+        retryTimer = setTimeout(() => {
+          retryTimer = null
+          connect()
+        }, 2000)
+      }
+      connect()
+      return {
+        close: () => {
+          abort.abort()
+          if (retryTimer) clearTimeout(retryTimer)
+        },
+      }
     }
     const es = new EventSource(url)
     es.addEventListener('log', (e) => {
@@ -398,6 +432,7 @@ export const api = {
         // malformed frame: ignore
       }
     })
+    es.onopen = () => onOpen?.()
     es.onerror = () => onError?.()
     return es
   },
