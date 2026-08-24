@@ -115,10 +115,13 @@ function switchHaptic(on: boolean) {
 }
 
 // Drawn switch (same amber-on-graphite language as the Checkbox): a sliding
-// knob on a hairline track, amber fill when on. The knob keeps a 3px inset
-// from the track edge in both positions (h-6 track, size-4 knob) and floats
-// on a soft shadow; the off track gets a faint muted fill so it reads as a
-// track rather than a bare outline.
+// knob on a hairline track, amber fill when on. Transforms are layered so
+// they never fight: the motion.span owns the spring slide (light overshoot,
+// ~200ms feel), a group-active rule sinks only the knob while pressed, and
+// the track keeps plain CSS transition-colors. When on, the knob turns white
+// and an amber round-cap check strokes itself in; off reverses the stroke.
+// The check tweens instead of using the spring — pathLength must stay in
+// 0–1 and springs overshoot past their target.
 export function Switch({
   checked,
   onChange,
@@ -140,17 +143,37 @@ export function Switch({
         onChange(!checked)
         switchHaptic(!checked)
       }}
-      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border transition-colors ${
+      className={`group relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border transition-colors ${
         checked
           ? 'border-accent bg-accent'
           : 'border-muted/45 bg-muted/15 hover:border-accent dark:bg-white/10'
       } ${className}`}
     >
-      <span
-        className={`pointer-events-none size-4 rounded-full shadow-[0_1px_2px_rgba(0,0,0,0.2)] transition-transform ${
-          checked ? 'translate-x-[23px] bg-white' : 'translate-x-[3px] bg-muted/70'
-        }`}
-      />
+      <motion.span
+        initial={false}
+        animate={{ x: checked ? 23 : 3 }}
+        transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+        className="pointer-events-none"
+      >
+        <span
+          className={`flex size-4 items-center justify-center rounded-full shadow-[0_1px_2px_rgba(0,0,0,0.2)] transition-[background-color,scale,box-shadow] duration-150 ease-out group-active:scale-90 group-active:shadow-[0_1px_3px_rgba(0,0,0,0.35)] group-active:duration-100 ${
+            checked ? 'bg-white' : 'bg-muted/70'
+          }`}
+        >
+          <svg viewBox="0 0 16 16" fill="none" className="size-3" aria-hidden="true">
+            <motion.path
+              initial={false}
+              animate={{ pathLength: checked ? 1 : 0, opacity: checked ? 1 : 0 }}
+              transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+              d="M4.2 8.4 L6.9 11.1 L11.8 5.4"
+              stroke="var(--color-accent)"
+              strokeWidth={3}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </span>
+      </motion.span>
     </button>
   )
 }
