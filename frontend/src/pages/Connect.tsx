@@ -27,10 +27,15 @@ export default function Connect() {
   const connect = async (origin: string, tok: string) => {
     setBusy(true)
     // Probe the server with the token before persisting anything; a bad
-    // token or unreachable host rolls the config back.
+    // token or unreachable host rolls the config back. The probe must
+    // confirm real authentication — a 200 with authenticated:false means
+    // the server answered but rejected the token.
     setServerConfig({ url: origin, token: tok })
     try {
-      await api.authStatus()
+      const status = await api.authStatus()
+      if (!status.authenticated) {
+        throw new ApiError(401, 'unauthorized', 'token invalid or expired')
+      }
     } catch (err) {
       setServerConfig(null)
       toast(err instanceof ApiError ? err.message : t('connect.failed'), 'error')

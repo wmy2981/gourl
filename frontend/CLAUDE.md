@@ -48,7 +48,7 @@ Subdirectory conventions for the React SPA admin. Root-level conventions (commit
 
 ## Mobile app (Capacitor, `android/`)
 
-- **Token mode**: stored `{url, token}` in `localStorage.gourl-server`, absolute-URL requests with a `Bearer` header + `credentials: 'omit'`; a 401 **never** redirects to login/setup; an unconnected app lands on `/admin/connect` (probe-before-persist). The sidebar logout button is hidden — the settings disconnect card owns that flow
+- **Token mode**: stored `{url, token}` in `localStorage.gourl-server`, absolute-URL requests with a `Bearer` header + `credentials: 'omit'`; a 401 **never** redirects to login/setup; an unconnected app lands on `/admin/connect` (probe-before-persist via `GET /api/v1/auth/status` — the probe requires `authenticated: true`, not just a 200). The sidebar logout button is hidden — the settings disconnect card owns that flow
 - Downloads via `lib/download.ts` (`saveDownload`, used by QRDialog + ExportDialog + the log export): `<a download>` on web; in the app, system **Downloads/gourl/** through the native bridge (`GourlBridge.saveToDownloads` in MainActivity). Filenames come from `exportFilename(kind, ext)` matching the backend's shape
 - Log stream: fetch-parsed SSE with the Bearer header in app mode (EventSource cannot send one); plain `EventSource` on web
 - Back button (App.tsx): Escape to an open `[role="dialog"]` first, then `exitApp()`; `gourl://dashboard|links|log|settings` deep links navigate the SPA

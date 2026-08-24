@@ -84,7 +84,15 @@ paths:
   /auth/status:
     get:
       tags: [auth]
-      summary: Report whether an admin password is configured (routes the SPA to /admin/setup when not)
+      summary: Report the auth setup state and verify the caller's credentials
+      description: |
+        Public endpoint (no credentials required). `configured` reports whether an admin
+        password exists (routes the SPA to /admin/setup when not). `authenticated` is the
+        real credential check — session cookie first, then bearer token, mirroring the
+        requireAuth order — so clients (the app's connect flow in particular) can reject
+        an invalid token before saving it. `actor` names how the request authenticated:
+        session, token, or app (a bearer request whose User-Agent starts with gourl/<version>);
+        empty when not authenticated.
       security: []
       responses:
         "200":
@@ -93,8 +101,11 @@ paths:
             application/json:
               schema:
                 type: object
+                required: [configured, authenticated, actor]
                 properties:
-                  configured: { type: boolean }
+                  configured: { type: boolean, description: An admin password is set }
+                  authenticated: { type: boolean, description: The request carries a valid session cookie or bearer token }
+                  actor: { type: string, enum: [session, token, app, ""], description: How the request authenticated; empty when unauthenticated }
   /auth/logout:
     post:
       tags: [auth]

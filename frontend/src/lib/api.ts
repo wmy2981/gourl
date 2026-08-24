@@ -283,7 +283,7 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ code, password }),
     }),
-  authStatus: () => request<{ configured: boolean }>('/api/v1/auth/status'),
+  authStatus: () => request<{ configured: boolean; authenticated: boolean; actor: 'session' | 'token' | 'app' | '' }>('/api/v1/auth/status'),
   health: (init?: RequestInit) => request<{ name: string; version: string }>('/api/v1/health', init),
 
   listLinks: (params: Record<string, string | number | undefined>) => {

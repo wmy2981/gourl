@@ -111,6 +111,92 @@ func TestAppUARequiresBearer(t *testing.T) {
 	}
 }
 
+// authStatusBody decodes GET /api/v1/auth/status responses.
+func authStatusBody(t *testing.T, rec *httptest.ResponseRecorder) (configured, authenticated bool, actor string) {
+	t.Helper()
+	if rec.Code != http.StatusOK {
+		t.Fatalf("auth status: code = %d, body %s", rec.Code, rec.Body.String())
+	}
+	var body struct {
+		Configured    bool   `json:"configured"`
+		Authenticated bool   `json:"authenticated"`
+		Actor         string `json:"actor"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode auth status %q: %v", rec.Body.String(), err)
+	}
+	return body.Configured, body.Authenticated, body.Actor
+}
+
+// TestAuthStatusReportsCredentials: the endpoint stays public but verifies
+// what it was given — session cookie, bearer token, app UA — and reports the
+// actor truthfully; anonymous requests get authenticated=false.
+func TestAuthStatusReportsCredentials(t *testing.T) {
+	s, _ := newTestServer(t)
+	ctx := context.Background()
+	if _, err := s.store.CreateToken(ctx, "status-token-1", "ci", s.now()); err != nil {
+		t.Fatal(err)
+	}
+
+	// Anonymous: configured but not authenticated.
+	c, a, actor := authStatusBody(t, doWith(t, s, http.MethodGet, "/api/v1/auth/status", nil, nil, ""))
+	if !c || a || actor != "" {
+		t.Errorf("anonymous: configured=%v authenticated=%v actor=%q", c, a, actor)
+	}
+
+	// A garbage bearer token must not authenticate.
+	c, a, actor = authStatusBody(t, doWith(t, s, http.MethodGet, "/api/v1/auth/status", nil, nil, "nope"))
+	if !c || a || actor != "" {
+		t.Errorf("bad bearer: configured=%v authenticated=%v actor=%q", c, a, actor)
+	}
+
+	// A valid session cookie authenticates as actor=session.
+	cookie := loginAs(t, s, "test-password")
+	c, a, actor = authStatusBody(t, doWith(t, s, http.MethodGet, "/api/v1/auth/status", nil, cookie, ""))
+	if !c || !a || actor != "session" {
+		t.Errorf("session: configured=%v authenticated=%v actor=%q", c, a, actor)
+	}
+
+	// A valid bearer token authenticates as actor=token.
+	c, a, actor = authStatusBody(t, doWith(t, s, http.MethodGet, "/api/v1/auth/status", nil, nil, "status-token-1"))
+	if !c || !a || actor != "token" {
+		t.Errorf("bearer: configured=%v authenticated=%v actor=%q", c, a, actor)
+	}
+
+	// The app's gourl/ UA flips the actor to app.
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/status", nil)
+	req.Header.Set("Authorization", "Bearer status-token-1")
+	req.Header.Set("User-Agent", "gourl/1.2.3 Mozilla/5.0")
+	rec := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rec, req)
+	c, a, actor = authStatusBody(t, rec)
+	if !c || !a || actor != "app" {
+		t.Errorf("app: configured=%v authenticated=%v actor=%q", c, a, actor)
+	}
+}
+
+// TestAuthStatusInSetupMode: with no admin password configured=false and no
+// session can exist, but a bearer token still authenticates (scripted access
+// is unaffected by setup mode).
+func TestAuthStatusInSetupMode(t *testing.T) {
+	s, _ := newTestServer(t)
+	enterSetupMode(t, s)
+
+	c, a, actor := authStatusBody(t, doWith(t, s, http.MethodGet, "/api/v1/auth/status", nil, testSession, ""))
+	if c || a || actor != "" {
+		t.Errorf("setup mode session: configured=%v authenticated=%v actor=%q", c, a, actor)
+	}
+
+	ctx := context.Background()
+	if _, err := s.store.CreateToken(ctx, "setup-status-token", "ci", s.now()); err != nil {
+		t.Fatal(err)
+	}
+	c, a, actor = authStatusBody(t, doWith(t, s, http.MethodGet, "/api/v1/auth/status", nil, nil, "setup-status-token"))
+	if c || !a || actor != "token" {
+		t.Errorf("setup mode bearer: configured=%v authenticated=%v actor=%q", c, a, actor)
+	}
+}
+
 func TestLoginWrongPassword(t *testing.T) {
 	s, _ := newTestServer(t)
 	rec := do(t, s, http.MethodPost, "/api/v1/auth/login", map[string]any{"password": "wrong"})
@@ -302,7 +388,7 @@ func TestSessionTTLChangeOnlyAffectsNewSessions(t *testing.T) {
 	// A new login carries the new TTL in its cookie MaxAge.
 	cookie2 := loginAs(t, s, "test-password")
 	if cookie2.MaxAge != int((5 * time.Minute).Seconds()) {
-		t.Errorf("new session MaxAge = %d, want %d", cookie2.MaxAge, int((5*time.Minute).Seconds()))
+		t.Errorf("new session MaxAge = %d, want %d", cookie2.MaxAge, int((5 * time.Minute).Seconds()))
 	}
 
 	// Bumping the epoch revokes everything, old and new.

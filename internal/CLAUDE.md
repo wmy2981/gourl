@@ -43,7 +43,7 @@ Subdirectory conventions for the Go backend packages. Root-level conventions (co
 - Auth resolves per request via `Server.adminAuth()` — hash/epoch changes apply without a restart; legacy `ADMIN_PASSWORD` migrates once into the config file
 - Sessions are stateless `exp.epoch.nonce.hmac`; TTL applies at issue time only; the `epoch` claim must match `config.session_epoch`; `SESSION_SECRET` unset → ephemeral per-process secret (sessions do not survive a restart)
 - `requireAuth` stamps the request context with `actor` (session|token|app) — bearer requests whose UA starts with `gourl/<version>` become `actor=app`; business-event logs must go through `logInfo`/`logWarn`
-- **`GET /api/v1/config` doubles as the app's connection probe** (polled every 10s + on app foreground) — keep it behind `requireAuth`, never public, or the probe silently reports the wrong state
+- **`GET /api/v1/config` doubles as the app's connection probe** (polled every 10s + on app foreground) — keep it behind `requireAuth`, never public, or the probe silently reports the wrong state. The one-shot connect probe is the public `GET /api/v1/auth/status`: it returns `configured` + a real credential check (`authenticated` + `actor` session|token|app, mirroring requireAuth's order) so bad tokens are rejected before the app saves them
 - The SQL console (`POST /api/v1/db`) runs admin SQL in one transaction, gated on `sql_console_enabled` (default off, togglable only via config file + `gourl reload`)
 - New API endpoints must update `internal/webui/openapi.yaml` too — CI lints the spec with Redocly (`openapi` job), so structural errors fail the build
 

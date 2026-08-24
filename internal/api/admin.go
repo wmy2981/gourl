@@ -248,11 +248,36 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
-// authStatus handles GET /api/v1/auth/status: tells the SPA whether an admin
-// password exists, so it can route to the setup page before login.
+// authStatus handles GET /api/v1/auth/status: a public endpoint that reports
+// both the server state and the caller's credentials. configured tells the SPA
+// whether to route to the setup page; authenticated is the real credential
+// check — session cookie first, then bearer token, mirroring requireAuth's
+// order — so the app's connect flow can reject a bad token before saving it.
 func (s *Server) authStatus(w http.ResponseWriter, r *http.Request) {
-	slog.Debug("auth status", "configured", s.adminAuth().sessionEnabled(), "remote", r.RemoteAddr)
-	writeJSON(w, http.StatusOK, map[string]bool{"configured": s.adminAuth().sessionEnabled()})
+	auth := s.adminAuth()
+	setup := auth.sessionEnabled()
+	authenticated := false
+	actor := ""
+	switch {
+	case auth.validSession(r, s.cfg.Get().SessionEpoch):
+		authenticated, actor = true, "session"
+	default:
+		if _, ok := s.bearerToken(r); ok {
+			authenticated = true
+			if appVersionFromUA(r.UserAgent()) != "" {
+				actor = "app"
+			} else {
+				actor = "token"
+			}
+		}
+	}
+	slog.Debug("auth status", "configured", setup, "authenticated", authenticated,
+		"actor", actor, "remote", r.RemoteAddr)
+	writeJSON(w, http.StatusOK, map[string]any{
+		"configured":    setup,
+		"authenticated": authenticated,
+		"actor":         actor,
+	})
 }
 
 // setupAdmin handles POST /api/v1/auth/setup: the first visitor sets the
