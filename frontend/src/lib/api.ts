@@ -77,17 +77,19 @@ export function assetUrl(path: string): string {
 }
 
 export interface ApiErrorBody {
-  error: { code: string; message: string }
+  error: { code: string; message: string; params?: Record<string, unknown> }
 }
 
 export class ApiError extends Error {
   status: number
   code: string
+  params?: Record<string, unknown>
 
-  constructor(status: number, code: string, message: string) {
+  constructor(status: number, code: string, message: string, params?: Record<string, unknown>) {
     super(message)
     this.status = status
     this.code = code
+    this.params = params
   }
 }
 
@@ -245,14 +247,16 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   if (!res.ok) {
     let code = 'unknown'
     let message = `HTTP ${res.status}`
+    let params: Record<string, unknown> | undefined
     try {
       const body = (await res.json()) as ApiErrorBody
       code = body.error?.code ?? code
       message = body.error?.message ?? message
+      params = body.error?.params
     } catch {
       // non-JSON error body
     }
-    throw new ApiError(res.status, code, message)
+    throw new ApiError(res.status, code, message, params)
   }
   if (res.status === 204) {
     return undefined as T

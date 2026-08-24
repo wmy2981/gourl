@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Check, Copy, KeyRound, PlugZap, Plus, RefreshCw, Trash2, Upload } from 'lucide-react'
 import { api, ApiError, getServerConfig, isApp, setServerConfig, type AppConfig, type TokenInfo } from '../lib/api'
+import { apiErrorMessage } from '../lib/apiError'
 import { noSelectEnabled, setNoSelect } from '../lib/appSettings'
 import { copyText } from '../lib/clipboard'
 import { Button, Card, Dialog, Input, Label, Select, Switch, Textarea, useToast } from '../components/ui'
@@ -40,7 +41,7 @@ export default function Settings() {
       queryClient.invalidateQueries({ queryKey: ['config'] })
     },
     onError: (err: unknown) =>
-      toast(err instanceof ApiError ? err.message : t('settings.saveFailed'), 'error'),
+      toast(err instanceof ApiError ? apiErrorMessage(err, t) : t('settings.saveFailed'), 'error'),
   })
 
   if (!form) {
@@ -102,7 +103,7 @@ export default function Settings() {
       toast(t('settings.saved'))
       queryClient.invalidateQueries({ queryKey: ['config'] })
     } catch (err) {
-      toast(err instanceof ApiError ? err.message : t('settings.saveFailed'), 'error')
+      toast(err instanceof ApiError ? apiErrorMessage(err, t) : t('settings.saveFailed'), 'error')
     }
   }
 
@@ -267,7 +268,7 @@ export default function Settings() {
                   toast(t('settings.saved'))
                   queryClient.invalidateQueries({ queryKey: ['config'] })
                 } catch (err) {
-                  toast(err instanceof ApiError ? err.message : t('settings.saveFailed'), 'error')
+                  toast(err instanceof ApiError ? apiErrorMessage(err, t) : t('settings.saveFailed'), 'error')
                 }
               }}>
                 {t('settings.removeIcon')}
@@ -320,7 +321,7 @@ export default function Settings() {
               queryClient.invalidateQueries({ queryKey: ['tokens'] })
               toast(t('settings.tokenCreated'))
             } catch (err) {
-              toast(err instanceof ApiError ? err.message : t('common.error'), 'error')
+              toast(err instanceof ApiError ? apiErrorMessage(err, t) : t('common.error'), 'error')
             }
           }}
         />
@@ -539,7 +540,7 @@ function TokenSection({
       toast(t('settings.tokenRevoked'))
     },
     onError: (err: unknown) =>
-      toast(err instanceof ApiError ? err.message : t('common.error'), 'error'),
+      toast(err instanceof ApiError ? apiErrorMessage(err, t) : t('common.error'), 'error'),
   })
   // In the app, /docs/ lives on the remote server (not the WebView origin) —
   // link straight to it and hand it to the system browser via _system.
