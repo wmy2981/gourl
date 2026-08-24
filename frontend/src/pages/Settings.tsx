@@ -165,9 +165,9 @@ export default function Settings() {
               <Label htmlFor='cfg-site-title'>{t('settings.siteTitle')}</Label>
               <Input id='cfg-site-title' value={form.site.title} onChange={(e) => setSite('title', e.target.value)} onBlur={() => save()} />
             </div>
-            <div>
+            <div className="sm:col-span-2">
               <Label htmlFor='cfg-description'>{t('settings.description')}</Label>
-              <Input id='cfg-description' value={form.site.description} onChange={(e) => setSite('description', e.target.value)} onBlur={() => save()} />
+              <Textarea id='cfg-description' rows={3} value={form.site.description} onChange={(e) => setSite('description', e.target.value)} onBlur={() => save()} />
             </div>
           </div>
         </Card>
