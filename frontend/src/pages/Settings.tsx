@@ -176,7 +176,8 @@ export default function Settings() {
           </div>
         </Card>
 
-        {/* Security */}
+        {/* Security: password, session lifetime and the login rate limit —
+            everything that gates admin access lives here */}
         <Card className="p-6">
           <h2 className="mb-2 text-sm font-medium text-muted">{t('settings.security')}</h2>
           <p className="mb-3 text-sm text-muted">{t('settings.securityHint')}</p>
@@ -184,6 +185,44 @@ export default function Settings() {
             <KeyRound size={15} />
             {t('settings.changePassword')}
           </Button>
+          <div className="mt-4 grid grid-cols-1 gap-4 border-t border-hairline pt-4 sm:grid-cols-2">
+            <div>
+              <Label htmlFor='cfg-session-ttl'>{t('settings.sessionTTL')}</Label>
+              <Input
+                id='cfg-session-ttl'
+                type="number"
+                min={0}
+                value={form.session_ttl_minutes}
+                onChange={(e) => set('session_ttl_minutes', Number(e.target.value))}
+                onBlur={() => save()}
+              />
+              <p className="mt-1 text-xs text-muted">{t('settings.sessionTTLHint')}</p>
+            </div>
+            <div>
+              <Label htmlFor='cfg-login-attempts'>{t('settings.loginRateAttempts')}</Label>
+              <Input
+                id='cfg-login-attempts'
+                type="number"
+                min={0}
+                value={form.login_rate_max_attempts}
+                onChange={(e) => set('login_rate_max_attempts', Number(e.target.value))}
+                onBlur={() => save()}
+              />
+              <p className="mt-1 text-xs text-muted">{t('settings.loginRateHint')}</p>
+            </div>
+            <div>
+              <Label htmlFor='cfg-login-lock'>{t('settings.loginRateLock')}</Label>
+              <Input
+                id='cfg-login-lock'
+                type="number"
+                min={0}
+                value={form.login_rate_lock_seconds}
+                onChange={(e) => set('login_rate_lock_seconds', Number(e.target.value))}
+                onBlur={() => save()}
+              />
+              <p className="mt-1 text-xs text-muted">{t('settings.loginRateLockHint')}</p>
+            </div>
+          </div>
         </Card>
 
         {/* Behavior */}
@@ -222,42 +261,6 @@ export default function Settings() {
               <Label htmlFor='cfg-reserved'>{t('settings.reservedCodes')}</Label>
               <Textarea id='cfg-reserved' rows={3} value={reservedText} onChange={(e) => setReservedText(e.target.value)} onBlur={() => save()} />
               <p className="mt-1 text-xs text-muted">{t('settings.reservedCodesHint')}</p>
-            </div>
-            <div>
-              <Label htmlFor='cfg-login-attempts'>{t('settings.loginRateAttempts')}</Label>
-              <Input
-                id='cfg-login-attempts'
-                type="number"
-                min={0}
-                value={form.login_rate_max_attempts}
-                onChange={(e) => set('login_rate_max_attempts', Number(e.target.value))}
-                onBlur={() => save()}
-              />
-              <p className="mt-1 text-xs text-muted">{t('settings.loginRateHint')}</p>
-            </div>
-            <div>
-              <Label htmlFor='cfg-login-lock'>{t('settings.loginRateLock')}</Label>
-              <Input
-                id='cfg-login-lock'
-                type="number"
-                min={0}
-                value={form.login_rate_lock_seconds}
-                onChange={(e) => set('login_rate_lock_seconds', Number(e.target.value))}
-                onBlur={() => save()}
-              />
-              <p className="mt-1 text-xs text-muted">{t('settings.loginRateLockHint')}</p>
-            </div>
-            <div>
-              <Label htmlFor='cfg-session-ttl'>{t('settings.sessionTTL')}</Label>
-              <Input
-                id='cfg-session-ttl'
-                type="number"
-                min={0}
-                value={form.session_ttl_minutes}
-                onChange={(e) => set('session_ttl_minutes', Number(e.target.value))}
-                onBlur={() => save()}
-              />
-              <p className="mt-1 text-xs text-muted">{t('settings.sessionTTLHint')}</p>
             </div>
             <div>
               <Label htmlFor='cfg-link-rate'>{t('settings.linkRate')}</Label>
