@@ -252,7 +252,6 @@
     "createToken": "Create token",
     "tokenPreview": "Token",
     "revoke": "Delete token",
-    "save": "Save settings",
     "saved": "Settings saved",
     "saveFailed": "Could not save settings",
     "tokenNeverExpires": "Tokens never expire — delete them manually when no longer needed.",

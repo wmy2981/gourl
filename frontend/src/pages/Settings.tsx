@@ -64,36 +64,70 @@ export default function Settings() {
   const setSite = (key: keyof AppConfig['site'], value: string) =>
     setForm({ ...form, site: { ...form.site, [key]: value } })
 
-  const save = () => {
-    saveMutation.mutate({
-      site: form.site,
-      short_code_length: form.short_code_length,
-      base_url: form.base_url,
-      login_rate_max_attempts: form.login_rate_max_attempts,
-      login_rate_lock_seconds: form.login_rate_lock_seconds,
-      session_ttl_minutes: form.session_ttl_minutes,
-      link_rate_per_second: form.link_rate_per_second,
-      log_level: form.log_level,
-      hard_delete: form.hard_delete,
-      backup_on_edit: form.backup_on_edit,
-      icon: form.icon,
-      extra_base_urls: extraUrlsText
-        .split('\n')
-        .map((s) => s.trim())
-        .filter(Boolean),
-      reserved_codes: reservedText
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean),
-      ua_blocks: uaText
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean),
-      ip_blocks: ipText
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean),
-    })
+  // Autosave: switches/selects save on change; text inputs and textareas
+  // save on blur. While a request is in flight the latest pending save is
+  // coalesced and re-fired when it completes.
+  const savingRef = useRef(false)
+  const pendingRef = useRef(false)
+  const save = (override?: AppConfig) => {
+    if (!form) return
+    if (savingRef.current) {
+      pendingRef.current = true
+      return
+    }
+    savingRef.current = true
+    // `override` carries the not-yet-committed form state for immediate
+    // controls: the setState closure still sees the old values when the
+    // request body is built.
+    const f = override ?? form
+    saveMutation.mutate(
+      {
+        site: f.site,
+        short_code_length: f.short_code_length,
+        base_url: f.base_url,
+        login_rate_max_attempts: f.login_rate_max_attempts,
+        login_rate_lock_seconds: f.login_rate_lock_seconds,
+        session_ttl_minutes: f.session_ttl_minutes,
+        link_rate_per_second: f.link_rate_per_second,
+        log_level: f.log_level,
+        hard_delete: f.hard_delete,
+        backup_on_edit: f.backup_on_edit,
+        icon: f.icon,
+        extra_base_urls: extraUrlsText
+          .split('\n')
+          .map((s) => s.trim())
+          .filter(Boolean),
+        reserved_codes: reservedText
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean),
+        ua_blocks: uaText
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean),
+        ip_blocks: ipText
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean),
+      },
+      {
+        onSettled: () => {
+          savingRef.current = false
+          if (pendingRef.current) {
+            pendingRef.current = false
+            save()
+          }
+        },
+      },
+    )
+  }
+  // Immediate controls (switches, selects): apply then save with the next
+  // state inline — setForm is async, so a plain read here would send the
+  // pre-change values.
+  const setAndSave = <K extends keyof AppConfig>(key: K, value: AppConfig[K]) => {
+    const next = { ...form, [key]: value }
+    setForm(next)
+    save(next)
   }
 
   const iconInput = async (file: File | undefined) => {
@@ -123,19 +157,19 @@ export default function Settings() {
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <Label htmlFor='cfg-site-name'>{t('settings.siteName')}</Label>
-              <Input id='cfg-site-name' value={form.site.name} onChange={(e) => setSite('name', e.target.value)} />
+              <Input id='cfg-site-name' value={form.site.name} onChange={(e) => setSite('name', e.target.value)} onBlur={() => save()} />
             </div>
             <div>
               <Label htmlFor='cfg-site-title'>{t('settings.siteTitle')}</Label>
-              <Input id='cfg-site-title' value={form.site.title} onChange={(e) => setSite('title', e.target.value)} />
+              <Input id='cfg-site-title' value={form.site.title} onChange={(e) => setSite('title', e.target.value)} onBlur={() => save()} />
             </div>
             <div>
               <Label htmlFor='cfg-keywords'>{t('settings.keywords')}</Label>
-              <Input id='cfg-keywords' value={form.site.keywords} onChange={(e) => setSite('keywords', e.target.value)} />
+              <Input id='cfg-keywords' value={form.site.keywords} onChange={(e) => setSite('keywords', e.target.value)} onBlur={() => save()} />
             </div>
             <div>
               <Label htmlFor='cfg-description'>{t('settings.description')}</Label>
-              <Input id='cfg-description' value={form.site.description} onChange={(e) => setSite('description', e.target.value)} />
+              <Input id='cfg-description' value={form.site.description} onChange={(e) => setSite('description', e.target.value)} onBlur={() => save()} />
             </div>
           </div>
         </Card>
@@ -163,11 +197,12 @@ export default function Settings() {
                 max={64}
                 value={form.short_code_length}
                 onChange={(e) => set('short_code_length', Number(e.target.value))}
+                onBlur={() => save()}
               />
             </div>
             <div>
               <Label htmlFor='cfg-base-url'>{t('settings.baseUrl')}</Label>
-              <Input id='cfg-base-url' value={form.base_url} onChange={(e) => set('base_url', e.target.value)} placeholder="https://s.example.com" />
+              <Input id='cfg-base-url' value={form.base_url} onChange={(e) => set('base_url', e.target.value)} onBlur={() => save()} placeholder="https://s.example.com" />
               <p className="mt-1 text-xs text-muted">{t('settings.baseUrlHint')}</p>
             </div>
             <div className="sm:col-span-2">
@@ -177,12 +212,13 @@ export default function Settings() {
                 rows={3}
                 value={extraUrlsText}
                 onChange={(e) => setExtraUrlsText(e.target.value)}
+                onBlur={() => save()}
               />
               <p className="mt-1 text-xs text-muted">{t('settings.extraBaseUrlsHint')}</p>
             </div>
             <div className="sm:col-span-2">
               <Label htmlFor='cfg-reserved'>{t('settings.reservedCodes')}</Label>
-              <Textarea id='cfg-reserved' rows={3} value={reservedText} onChange={(e) => setReservedText(e.target.value)} />
+              <Textarea id='cfg-reserved' rows={3} value={reservedText} onChange={(e) => setReservedText(e.target.value)} onBlur={() => save()} />
               <p className="mt-1 text-xs text-muted">{t('settings.reservedCodesHint')}</p>
             </div>
             <div>
@@ -193,6 +229,7 @@ export default function Settings() {
                 min={0}
                 value={form.login_rate_max_attempts}
                 onChange={(e) => set('login_rate_max_attempts', Number(e.target.value))}
+                onBlur={() => save()}
               />
               <p className="mt-1 text-xs text-muted">{t('settings.loginRateHint')}</p>
             </div>
@@ -204,6 +241,7 @@ export default function Settings() {
                 min={0}
                 value={form.login_rate_lock_seconds}
                 onChange={(e) => set('login_rate_lock_seconds', Number(e.target.value))}
+                onBlur={() => save()}
               />
               <p className="mt-1 text-xs text-muted">{t('settings.loginRateLockHint')}</p>
             </div>
@@ -215,6 +253,7 @@ export default function Settings() {
                 min={0}
                 value={form.session_ttl_minutes}
                 onChange={(e) => set('session_ttl_minutes', Number(e.target.value))}
+                onBlur={() => save()}
               />
               <p className="mt-1 text-xs text-muted">{t('settings.sessionTTLHint')}</p>
             </div>
@@ -226,6 +265,7 @@ export default function Settings() {
                 min={0}
                 value={form.link_rate_per_second}
                 onChange={(e) => set('link_rate_per_second', Number(e.target.value))}
+                onBlur={() => save()}
               />
               <p className="mt-1 text-xs text-muted">{t('settings.linkRateHint')}</p>
             </div>
@@ -233,7 +273,7 @@ export default function Settings() {
               <Label>{t('settings.logLevel')}</Label>
               <Select
                 value={form.log_level}
-                onChange={(v) => set('log_level', v)}
+                onChange={(v) => setAndSave('log_level', v)}
                 ariaLabel={t('settings.logLevel')}
                 options={[
                   { value: 'debug', label: t('settings.logLevelDebug') },
@@ -291,6 +331,7 @@ export default function Settings() {
             rows={3}
             value={uaText}
             onChange={(e) => setUaText(e.target.value)}
+            onBlur={() => save()}
             placeholder={t('settings.uaPlaceholder')}
             aria-label={t('settings.uaPatterns')}
           />
@@ -305,6 +346,7 @@ export default function Settings() {
             rows={3}
             value={ipText}
             onChange={(e) => setIpText(e.target.value)}
+            onBlur={() => save()}
             placeholder={t('settings.ipPlaceholder')}
             aria-label={t('settings.ipPatterns')}
           />
@@ -322,7 +364,7 @@ export default function Settings() {
               </div>
               <Switch
                 checked={form.hard_delete}
-                onChange={(v) => set('hard_delete', v)}
+                onChange={(v) => setAndSave('hard_delete', v)}
                 aria-label={t('settings.hardDelete')}
               />
             </div>
@@ -333,7 +375,7 @@ export default function Settings() {
               </div>
               <Switch
                 checked={form.backup_on_edit}
-                onChange={(v) => set('backup_on_edit', v)}
+                onChange={(v) => setAndSave('backup_on_edit', v)}
                 aria-label={t('settings.backupOnEdit')}
               />
             </div>
@@ -357,12 +399,6 @@ export default function Settings() {
             }
           }}
         />
-
-        <div className="flex justify-end">
-          <Button onClick={save} disabled={saveMutation.isPending} className="px-8">
-            {t('settings.save')}
-          </Button>
-        </div>
       </div>
     </div>
   )

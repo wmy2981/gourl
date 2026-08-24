@@ -252,7 +252,6 @@
     "createToken": "创建 Token",
     "tokenPreview": "Token",
     "revoke": "删除 Token",
-    "save": "保存设置",
     "saved": "设置已保存",
     "saveFailed": "保存失败",
     "tokenNeverExpires": "Token 永不过期——不再需要时请手动删除。",
