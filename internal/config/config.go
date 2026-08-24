@@ -26,7 +26,6 @@ import (
 type Site struct {
 	Name        string `yaml:"name" json:"name"`
 	Title       string `yaml:"title" json:"title"`
-	Keywords    string `yaml:"keywords" json:"keywords"`
 	Description string `yaml:"description" json:"description"`
 }
 

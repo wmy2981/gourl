@@ -12,8 +12,6 @@ site:
   name: gourl
   # Site title (HTML <title> and meta).
   title: gourl - Short Links
-  # meta keywords, comma separated.
-  keywords: short link, url shortener
   # meta description.
   description: Lightweight self-hosted URL shortener
 

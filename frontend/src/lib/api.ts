@@ -144,7 +144,6 @@ export interface TokenInfo {
 export interface SiteInfo {
   name: string
   title: string
-  keywords: string
   description: string
 }
 

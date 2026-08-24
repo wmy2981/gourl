@@ -16,7 +16,6 @@ var pageTmpl = template.Must(template.New("page").Parse(`<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{{.SiteTitle}}</title>
 <meta name="description" content="{{.SiteDescription}}">
-<meta name="keywords" content="{{.SiteKeywords}}">
 <style>
   * { box-sizing: border-box; }
   body { font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
@@ -52,7 +51,6 @@ type pageData struct {
 	Lang            string
 	SiteTitle       string
 	SiteDescription string
-	SiteKeywords    string
 	Heading         string
 	Message         string
 	Detail          string
@@ -96,7 +94,6 @@ func (s *Server) renderNotFound(w http.ResponseWriter, r *http.Request) {
 		Message:         pageText(lang, "notFoundMessage"),
 		SiteTitle:       cfg.Site.Title,
 		SiteDescription: cfg.Site.Description,
-		SiteKeywords:    cfg.Site.Keywords,
 	})
 }
 
@@ -117,7 +114,6 @@ func (s *Server) renderBlocked(w http.ResponseWriter, r *http.Request, kind, det
 		Message:         msg,
 		SiteTitle:       cfg.Site.Title,
 		SiteDescription: cfg.Site.Description,
-		SiteKeywords:    cfg.Site.Keywords,
 	})
 }
 
@@ -138,7 +134,6 @@ func (s *Server) renderPublic(w http.ResponseWriter, r *http.Request) {
 		Icon:            "/favicon.svg",
 		SiteTitle:       cfg.Site.Title,
 		SiteDescription: cfg.Site.Description,
-		SiteKeywords:    cfg.Site.Keywords,
 	})
 }
 

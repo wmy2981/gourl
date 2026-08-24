@@ -166,10 +166,6 @@ export default function Settings() {
               <Input id='cfg-site-title' value={form.site.title} onChange={(e) => setSite('title', e.target.value)} onBlur={() => save()} />
             </div>
             <div>
-              <Label htmlFor='cfg-keywords'>{t('settings.keywords')}</Label>
-              <Input id='cfg-keywords' value={form.site.keywords} onChange={(e) => setSite('keywords', e.target.value)} onBlur={() => save()} />
-            </div>
-            <div>
               <Label htmlFor='cfg-description'>{t('settings.description')}</Label>
               <Input id='cfg-description' value={form.site.description} onChange={(e) => setSite('description', e.target.value)} onBlur={() => save()} />
             </div>
