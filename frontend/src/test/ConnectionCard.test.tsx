@@ -22,6 +22,7 @@ vi.mock('../lib/api', () => {
     getServerConfig: () => ({ url: 'http://server:8080', token: 't' }),
     setServerConfig: vi.fn(),
     api: {
+      authStatus: vi.fn(),
       getConfig: vi.fn(),
       health: vi.fn(),
     },
@@ -31,7 +32,11 @@ vi.mock('../lib/api', () => {
 import { ApiError, api } from '../lib/api'
 
 const probeOk = () => {
-  vi.mocked(api.getConfig).mockResolvedValue({} as never)
+  vi.mocked(api.authStatus).mockResolvedValue({
+    configured: true,
+    authenticated: true,
+    actor: 'token',
+  } as never)
   vi.mocked(api.health).mockResolvedValue({ name: 'gourl', version: '9.9.9' })
 }
 
@@ -40,6 +45,7 @@ const renderCard = () => render(<MemoryRouter><ConnectionCard /></MemoryRouter>)
 
 describe('ConnectionCard', () => {
   beforeEach(() => {
+    vi.mocked(api.authStatus).mockReset()
     vi.mocked(api.getConfig).mockReset()
     vi.mocked(api.health).mockReset()
   })
@@ -60,22 +66,56 @@ describe('ConnectionCard', () => {
     expect(screen.getByRole('button', { name: 'Refresh' })).toBeInTheDocument()
   })
 
-  it('marks the token as rejected on a 401', async () => {
-    vi.mocked(api.getConfig).mockRejectedValue(new ApiError(401, 'unauthorized', 'token invalid'))
+  it('marks the token as rejected when the server answers but rejects it', async () => {
+    // The new auth/status probe reports a dead token through
+    // authenticated:false — a 200, not a 401.
+    vi.mocked(api.authStatus).mockResolvedValue({
+      configured: true,
+      authenticated: false,
+      actor: '',
+    } as never)
     vi.mocked(api.health).mockResolvedValue({ name: 'gourl', version: '9.9.9' })
     renderCard()
     await waitFor(() => expect(screen.getByText('Token rejected')).toBeInTheDocument())
   })
 
+  it('marks the token as rejected on a 401 from the status probe', async () => {
+    vi.mocked(api.authStatus).mockRejectedValue(new ApiError(401, 'unauthorized', 'token invalid'))
+    vi.mocked(api.health).mockResolvedValue({ name: 'gourl', version: '9.9.9' })
+    renderCard()
+    await waitFor(() => expect(screen.getByText('Token rejected')).toBeInTheDocument())
+  })
+
+  it('falls back to the config probe against a legacy server without the authenticated field', async () => {
+    // Pre-auth/status servers omit authenticated; the card re-judges via
+    // GET /config's 401-based logic.
+    vi.mocked(api.authStatus).mockResolvedValue({ configured: true } as never)
+    vi.mocked(api.getConfig).mockResolvedValue({} as never)
+    vi.mocked(api.health).mockResolvedValue({ name: 'gourl', version: '9.9.9' })
+    renderCard()
+    await waitFor(() => expect(screen.getByText('Connected')).toBeInTheDocument())
+    expect(vi.mocked(api.getConfig)).toHaveBeenCalled()
+
+    // And a 401 there still means the token is dead.
+    vi.mocked(api.authStatus).mockReset()
+    vi.mocked(api.getConfig).mockReset()
+    vi.mocked(api.authStatus).mockResolvedValue({ configured: true } as never)
+    vi.mocked(api.getConfig).mockRejectedValue(new ApiError(401, 'unauthorized', 'token invalid'))
+    await act(async () => {
+      await userEvent.click(screen.getByRole('button', { name: 'Refresh' }))
+    })
+    await waitFor(() => expect(screen.getByText('Token rejected')).toBeInTheDocument())
+  })
+
   it('marks the server unreachable on a network error', async () => {
-    vi.mocked(api.getConfig).mockRejectedValue(new TypeError('fetch failed'))
+    vi.mocked(api.authStatus).mockRejectedValue(new TypeError('fetch failed'))
     vi.mocked(api.health).mockResolvedValue({ name: 'gourl', version: '9.9.9' })
     renderCard()
     await waitFor(() => expect(screen.getByText('Cannot reach the server')).toBeInTheDocument())
   })
 
   it('shows a dash for the server version when health is unavailable', async () => {
-    vi.mocked(api.getConfig).mockResolvedValue({} as never)
+    probeOk()
     vi.mocked(api.health).mockRejectedValue(new Error('boom'))
     renderCard()
     await waitFor(() => expect(screen.getByText('Connected')).toBeInTheDocument())
@@ -87,7 +127,7 @@ describe('ConnectionCard', () => {
     vi.useFakeTimers()
     vi.mocked(api.health).mockResolvedValue({ name: 'gourl', version: '9.9.9' })
     // A probe that never settles: only the abort signal can end it.
-    vi.mocked(api.getConfig).mockImplementation(
+    vi.mocked(api.authStatus).mockImplementation(
       (init?: RequestInit) =>
         new Promise((_, reject) => {
           init?.signal?.addEventListener('abort', () => reject(init.signal?.reason ?? new Error('aborted')))
@@ -108,9 +148,9 @@ describe('ConnectionCard', () => {
     const user = userEvent.setup()
     renderCard()
     await waitFor(() => expect(screen.getByText('Connected')).toBeInTheDocument())
-    const before = vi.mocked(api.getConfig).mock.calls.length
+    const before = vi.mocked(api.authStatus).mock.calls.length
     await user.click(screen.getByRole('button', { name: 'Refresh' }))
-    await waitFor(() => expect(vi.mocked(api.getConfig).mock.calls.length).toBe(before + 1))
+    await waitFor(() => expect(vi.mocked(api.authStatus).mock.calls.length).toBe(before + 1))
     // The probe feedback loop settles back on connected.
     await waitFor(() => expect(screen.getByText('Connected')).toBeInTheDocument())
   })
@@ -123,10 +163,10 @@ describe('ConnectionCard', () => {
       await vi.advanceTimersByTimeAsync(0)
     })
     expect(screen.getByText('Connected')).toBeInTheDocument()
-    const afterMount = vi.mocked(api.getConfig).mock.calls.length
+    const afterMount = vi.mocked(api.authStatus).mock.calls.length
     await act(async () => {
       await vi.advanceTimersByTimeAsync(10_000)
     })
-    expect(vi.mocked(api.getConfig).mock.calls.length).toBe(afterMount + 1)
+    expect(vi.mocked(api.authStatus).mock.calls.length).toBe(afterMount + 1)
   })
 })

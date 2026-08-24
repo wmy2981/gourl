@@ -429,21 +429,37 @@ export function ConnectionCard() {
   // without restarting the mount effect's lifecycle.
   const aliveRef = useRef(true)
 
-  // Probe the remote server through the authenticated config endpoint: only
-  // a valid bearer token passes requireAuth, so a 401 means the stored token
-  // is dead and a network error means the server is unreachable. Both probes
-  // give up after 5s. The public health endpoint rides along for the server
-  // version; any failure leaves it unset (shown as "—").
+  // Probe the remote server through the auth/status endpoint: its
+  // authenticated field is the real credential check, so connected vs
+  // unauthorized comes from the body rather than a 401. Network errors and
+  // timeouts still mean unreachable (5s abort, same as before). Older
+  // servers without the authenticated field fall back to the config
+  // endpoint's 401-based judgment. The public health endpoint rides along
+  // for the server version; any failure leaves it unset (shown as "—").
   const check = useCallback(async () => {
-    const [cfg, h] = await Promise.allSettled([
-      api.getConfig({ signal: AbortSignal.timeout(PROBE_TIMEOUT_MS) }),
+    const [st, h] = await Promise.allSettled([
+      api.authStatus({ signal: AbortSignal.timeout(PROBE_TIMEOUT_MS) }),
       api.health({ signal: AbortSignal.timeout(PROBE_TIMEOUT_MS) }),
     ])
     if (!aliveRef.current) return
-    if (cfg.status === 'fulfilled') {
-      setStatus('connected')
+    if (st.status === 'fulfilled') {
+      const authed = (st.value as { authenticated?: boolean }).authenticated
+      if (authed === undefined) {
+        // Legacy server: re-judge through the config probe.
+        try {
+          await api.getConfig({ signal: AbortSignal.timeout(PROBE_TIMEOUT_MS) })
+          setStatus('connected')
+        } catch (err) {
+          setStatus(err instanceof ApiError && err.status === 401 ? 'unauthorized' : 'unreachable')
+        }
+      } else {
+        setStatus(authed ? 'connected' : 'unauthorized')
+      }
     } else {
-      setStatus(cfg.reason instanceof ApiError && cfg.reason.status === 401 ? 'unauthorized' : 'unreachable')
+      // A rejected probe: a 401 means the server answered and refused the
+      // token, anything else (network error, 5s abort) means unreachable.
+      const err = st.reason
+      setStatus(err instanceof ApiError && err.status === 401 ? 'unauthorized' : 'unreachable')
     }
     setServerVersion(h.status === 'fulfilled' ? h.value.version : null)
   }, [])

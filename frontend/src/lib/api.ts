@@ -283,7 +283,13 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ code, password }),
     }),
-  authStatus: () => request<{ configured: boolean; authenticated: boolean; actor: 'session' | 'token' | 'app' | '' }>('/api/v1/auth/status'),
+  // init passes through (e.g. { signal }) so callers can bound the probe;
+  // authenticated may be undefined against pre-auth-status servers.
+  authStatus: (init?: RequestInit) =>
+    request<{ configured: boolean; authenticated: boolean; actor: 'session' | 'token' | 'app' | '' }>(
+      '/api/v1/auth/status',
+      init,
+    ),
   health: (init?: RequestInit) => request<{ name: string; version: string }>('/api/v1/health', init),
 
   listLinks: (params: Record<string, string | number | undefined>) => {
