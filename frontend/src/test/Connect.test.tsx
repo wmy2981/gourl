@@ -120,7 +120,7 @@ describe('Connect', () => {
     renderConnect()
     await fillAndSubmit('https://gourl.example.com')
 
-    expect(await screen.findByText(/token invalid or expired/i)).toBeInTheDocument()
+    expect(await screen.findByText(/token invalid/i)).toBeInTheDocument()
     expect(localStorage.getItem('gourl-server')).toBeNull()
     expect(screen.queryByText('admin-dashboard')).not.toBeInTheDocument()
   })

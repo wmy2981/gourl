@@ -293,6 +293,7 @@
     "invalidSessionTtl": "会话有效期必须为 0（永不过期）或至少 5 分钟（当前为 {{got}}）",
     "invalidLogLevel": "日志级别必须是 debug、info、warning 或 error（当前为 {{got}}）",
     "tokenTaken": "该 token 已存在",
-    "patternTaken": "该 User-Agent 屏蔽规则已存在"
+    "patternTaken": "该 User-Agent 屏蔽规则已存在",
+    "tokenInvalid": "Token 无效"
   }
 }

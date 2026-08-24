@@ -6,6 +6,8 @@
 // cookie. Web console mode is unaffected — no stored config means relative
 // URLs + cookies, exactly as before.
 
+import i18n from './i18n'
+
 /** Remote server connection for the mobile app (localStorage `gourl-server`). */
 export interface ServerConfig {
   url: string
@@ -106,9 +108,11 @@ export interface Link {
 }
 
 // linkUrls assembles every complete short URL for a code from the config
-// (mirroring the old backend fullURLs): the base URL — or the current
-// location when unset — plus every extra base URL, deduplicated, trailing
-// slashes trimmed. The bare "/" code addresses the site root itself, so no
+// (mirroring the old backend fullURLs): the base URL — or the connected
+// server / current location when unset — plus every extra base URL,
+// deduplicated, trailing slashes trimmed. In app mode the WebView origin is
+// https://localhost, so the fallback must be the stored server URL, never
+// location. The bare "/" code addresses the site root itself, so no
 // separator is appended (a plain join would produce a double slash).
 export function linkUrls(code: string, cfg: AppConfig): string[] {
   const bases: string[] = []
@@ -116,7 +120,7 @@ export function linkUrls(code: string, cfg: AppConfig): string[] {
     const trimmed = base.trim().replace(/\/+$/, '')
     if (trimmed && !bases.includes(trimmed)) bases.push(trimmed)
   }
-  push(cfg.base_url || `${location.protocol}//${location.host}`)
+  push(cfg.base_url || getServerConfig()?.url || `${location.protocol}//${location.host}`)
   for (const extra of cfg.extra_base_urls) push(extra)
   return code === '/' ? bases : bases.map((b) => `${b}/${code}`)
 }
@@ -237,7 +241,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     if (server) {
       // Token mode: never bounce to the login/setup pages — the connect
       // screen owns re-authentication (bad token, revoked token, …).
-      throw new ApiError(401, 'unauthorized', 'token invalid or expired')
+      throw new ApiError(401, 'unauthorized', i18n.t('errors.tokenInvalid'))
     }
     // Not authenticated (or session expired): back to login.
     if (window.location.pathname !== '/admin/login') {

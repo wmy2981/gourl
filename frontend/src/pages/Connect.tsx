@@ -34,7 +34,7 @@ export default function Connect() {
     try {
       const status = await api.authStatus()
       if (!status.authenticated) {
-        throw new ApiError(401, 'unauthorized', 'token invalid or expired')
+        throw new ApiError(401, 'unauthorized', t('errors.tokenInvalid'))
       }
     } catch (err) {
       setServerConfig(null)

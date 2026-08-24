@@ -293,6 +293,7 @@
     "invalidSessionTtl": "Session expiry must be 0 (never expire) or at least 5 minutes (got {{got}})",
     "invalidLogLevel": "Log level must be debug, info, warning or error (got {{got}})",
     "tokenTaken": "This token already exists",
-    "patternTaken": "This user-agent pattern already exists"
+    "patternTaken": "This user-agent pattern already exists",
+    "tokenInvalid": "Token invalid"
   }
 }

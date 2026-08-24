@@ -35,4 +35,11 @@ describe('linkUrls', () => {
       'https://e.example.com',
     ])
   })
+
+  it('falls back to the connected server URL when base_url is unset (app mode)', () => {
+    setServerConfig({ url: 'http://192.168.1.10:8080/', token: 'x' })
+    expect(linkUrls('abc', { base_url: '', extra_base_urls: [] } as never)).toEqual([
+      'http://192.168.1.10:8080/abc',
+    ])
+  })
 })
