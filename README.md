@@ -1,30 +1,33 @@
 # gourl
 
-> [中文文档](README.zh-CN.md) | English
+<p align="left">
+  <img src="https://img.shields.io/badge/Go-1.26-00ADD8?logo=go&logoColor=white" alt="Go 1.26" />
+  <img src="https://img.shields.io/badge/SQLite-003B57?logo=sqlite&logoColor=white" alt="SQLite" />
+  <img src="https://img.shields.io/badge/Redis-DC382D?logo=redis&logoColor=white" alt="Redis" />
+  <img src="https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black" alt="React 19" />
+  <img src="https://img.shields.io/badge/Vite-646CFF?logo=vite&logoColor=white" alt="Vite" />
+  <img src="https://img.shields.io/badge/Tailwind_CSS-4-06B6D4?logo=tailwindcss&logoColor=white" alt="Tailwind CSS 4" />
+  <img src="https://img.shields.io/badge/Docker-single_container-2496ED?logo=docker&logoColor=white" alt="Docker" />
+</p>
+
+> [简体中文](README.zh-CN.md) | English
 
 <p align="left">
   <img src="assets/favicon.svg" width="72" height="72" alt="gourl" />
 </p>
 
-Lightweight self-hosted URL shortener. A single Go binary (frontend embedded)
-plus Redis — that's all it takes to run your own short links.
+Lightweight self-hosted URL shortener. Get started quickly with Docker and run your own short link service.
 
 ## Features
 
-- **Short links** — auto-generated or custom codes, multi-level paths, simplified Chinese supported; per-link expiry and QR-code download
-- **Admin console** — responsive, glassmorphism UI with light/dark/system themes and English/Chinese; REST API with bearer tokens and Swagger UI at `/docs/`
+- **Short links** — auto-generated or custom codes, multi-level paths, simplified Chinese supported; per-link expiry, QR code display
+- **Admin console** — responsive frosted-glass UI with light/dark/system themes and English/Chinese; REST API + Swagger docs
 - **Click stats** — buffered in Redis and flushed to SQLite every 30s; history survives link deletion (soft deletes only)
-- **Auto titles** — async `title`/`description` fetching for any reachable host, internal networks included
+- **Auto titles** — async `title`/`description` fetching without blocking requests
 - **Security** — setup requires a one-time bootstrap code from the server log; bcrypt admin password, configurable session expiry, per-IP login lockout, UA/IP blocking, self-link guard
-- **Batch & import/export** — bulk create/delete, clear-expired, lenient CSV/JSON import with conflict policies, full JSON export
-- **Edit snapshots** — every edit appends an immutable backup (`b-1, b-2, …`)
-- **Container CLI** — `gourl reset …`, `gourl db export`, `gourl status`, `gourl webui on|off`, `gourl restart` and more, inside the container
-- **Structured logging** — slog with 4 levels, mirrored to a rotating file, live log page via SSE
-
-## Stack
-
-Go (stdlib `net/http`, `log/slog`) · SQLite ([modernc](https://modernc.org/sqlite), no CGO) ·
-Redis · React 19 + Vite + Tailwind CSS 4 + shadcn-style components
+- **Batch & import/export** — bulk create/delete, clear-expired, CSV/JSON import, full short-link JSON export
+- **Edit snapshots** — every edit automatically appends an immutable backup to the database
+- **Container CLI** — management commands for the gourl instance
 
 ## Quick start (Docker)
 
@@ -32,7 +35,7 @@ Single container — the image embeds a Redis instance, so one `compose up`
 is the whole deployment.
 
 ```bash
-# 1. Optional: copy config.yaml.example to config/config.yaml and adjust.
+# 1. Optional: copy config.example.yaml to config/config.yaml and adjust.
 # 2. Create .env next to docker-compose.yml:
 echo "SESSION_SECRET=$(openssl rand -hex 32)" > .env
 
@@ -60,13 +63,12 @@ with `docker compose exec app gourl <command>`.
 | `LOG_DIR` | `./data/log` | Rotating log mirror |
 
 Business settings (site info, base URLs, reserved codes, rate limits, log
-level, …) live in `config.yaml` — see `config.yaml.example`.
+level, …) live in `config.yaml` — see [Example](config.example.yaml).
 
 ## API documentation
 
-Open `/docs/` on the running instance for the interactive Swagger UI.
-API base path is `/api/v1`; admin endpoints accept a session cookie or
-`Authorization: Bearer <token>` (tokens are created in Settings).
+Open `/docs/` on the running instance for the interactive Swagger UI,
+or browse the [Swagger UI docs](https://wmy2981.github.io/gourl/docs/) hosted on GitHub Pages.
 
 ## Development
 
@@ -82,7 +84,7 @@ cd frontend && npm run e2e
 
 # Build the full binary (builds frontend, embeds it)
 powershell -File scripts/build-frontend.ps1 && go build ./cmd/gourl
-# POSIX shells: ./scripts/build-frontend.sh && go build ./cmd/gourl
+./scripts/build-frontend.sh && go build ./cmd/gourl
 ```
 
 ## License

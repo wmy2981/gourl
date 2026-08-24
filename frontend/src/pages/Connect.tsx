@@ -27,10 +27,15 @@ export default function Connect() {
   const connect = async (origin: string, tok: string) => {
     setBusy(true)
     // Probe the server with the token before persisting anything; a bad
-    // token or unreachable host rolls the config back.
+    // token or unreachable host rolls the config back. The probe must
+    // confirm real authentication — a 200 with authenticated:false means
+    // the server answered but rejected the token.
     setServerConfig({ url: origin, token: tok })
     try {
-      await api.authStatus()
+      const status = await api.authStatus()
+      if (!status.authenticated) {
+        throw new ApiError(401, 'unauthorized', t('errors.tokenInvalid'))
+      }
     } catch (err) {
       setServerConfig(null)
       toast(err instanceof ApiError ? err.message : t('connect.failed'), 'error')
@@ -72,7 +77,15 @@ export default function Connect() {
   const openServer = () => {
     // In the Capacitor app '_system' hands the URL to the default browser;
     // on the web it is a plain new tab.
-    window.open(url.trim() || 'https://github.com/wmy2981/gourl', '_system')
+    let parsed: URL
+    try {
+      parsed = new URL(url.trim())
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') throw new Error()
+    } catch {
+      toast(t('connect.invalidUrl'), 'error')
+      return
+    }
+    window.open(`${parsed.origin}/admin/settings`, '_system')
   }
 
   return (

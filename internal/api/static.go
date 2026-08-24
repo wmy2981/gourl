@@ -61,16 +61,13 @@ func (s *Server) spaIndex(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(seoMeta(s.cfg.Get(), data))
 }
 
-// seoMeta returns the SPA shell with the site description/keywords meta tags
-// injected before <title>. Empty values are skipped; values are escaped for
-// the HTML attribute context.
+// seoMeta returns the SPA shell with the site description meta tag injected
+// before <title>. Empty values are skipped; values are escaped for the HTML
+// attribute context.
 func seoMeta(cfg *config.Config, page []byte) []byte {
 	var b strings.Builder
 	if cfg.Site.Description != "" {
 		fmt.Fprintf(&b, `<meta name="description" content="%s">`+"\n", html.EscapeString(cfg.Site.Description))
-	}
-	if cfg.Site.Keywords != "" {
-		fmt.Fprintf(&b, `<meta name="keywords" content="%s">`+"\n", html.EscapeString(cfg.Site.Keywords))
 	}
 	if b.Len() == 0 {
 		return page

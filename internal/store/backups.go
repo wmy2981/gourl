@@ -53,3 +53,18 @@ func (s *Store) CountBackups(ctx context.Context) (int64, error) {
 	}
 	return n, nil
 }
+
+// ClearBackups deletes every snapshot. b_id numbering restarts from 1
+// afterwards (accepted: the table holds disposable history).
+func (s *Store) ClearBackups(ctx context.Context) (int64, error) {
+	res, err := s.db.ExecContext(ctx, `DELETE FROM backups`)
+	if err != nil {
+		return 0, fmt.Errorf("clear backups: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("clear backups: %w", err)
+	}
+	slog.Debug("store: backups cleared", "deleted", n)
+	return n, nil
+}

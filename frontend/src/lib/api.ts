@@ -6,6 +6,8 @@
 // cookie. Web console mode is unaffected — no stored config means relative
 // URLs + cookies, exactly as before.
 
+import i18n from './i18n'
+
 /** Remote server connection for the mobile app (localStorage `gourl-server`). */
 export interface ServerConfig {
   url: string
@@ -77,17 +79,19 @@ export function assetUrl(path: string): string {
 }
 
 export interface ApiErrorBody {
-  error: { code: string; message: string }
+  error: { code: string; message: string; params?: Record<string, unknown> }
 }
 
 export class ApiError extends Error {
   status: number
   code: string
+  params?: Record<string, unknown>
 
-  constructor(status: number, code: string, message: string) {
+  constructor(status: number, code: string, message: string, params?: Record<string, unknown>) {
     super(message)
     this.status = status
     this.code = code
+    this.params = params
   }
 }
 
@@ -104,18 +108,21 @@ export interface Link {
 }
 
 // linkUrls assembles every complete short URL for a code from the config
-// (mirroring the old backend fullURLs): the base URL — or the current
-// location when unset — plus every extra base URL, deduplicated, trailing
-// slashes trimmed.
+// (mirroring the old backend fullURLs): the base URL — or the connected
+// server / current location when unset — plus every extra base URL,
+// deduplicated, trailing slashes trimmed. In app mode the WebView origin is
+// https://localhost, so the fallback must be the stored server URL, never
+// location. The bare "/" code addresses the site root itself, so no
+// separator is appended (a plain join would produce a double slash).
 export function linkUrls(code: string, cfg: AppConfig): string[] {
   const bases: string[] = []
   const push = (base: string) => {
     const trimmed = base.trim().replace(/\/+$/, '')
     if (trimmed && !bases.includes(trimmed)) bases.push(trimmed)
   }
-  push(cfg.base_url || `${location.protocol}//${location.host}`)
+  push(cfg.base_url || getServerConfig()?.url || `${location.protocol}//${location.host}`)
   for (const extra of cfg.extra_base_urls) push(extra)
-  return bases.map((b) => `${b}/${code}`)
+  return code === '/' ? bases : bases.map((b) => `${b}/${code}`)
 }
 
 export interface LinkListResponse {
@@ -141,7 +148,6 @@ export interface TokenInfo {
 export interface SiteInfo {
   name: string
   title: string
-  keywords: string
   description: string
 }
 
@@ -158,6 +164,8 @@ export interface AppConfig {
   session_ttl_minutes: number
   link_rate_per_second: number
   log_level: string
+  hard_delete: boolean
+  backup_on_edit: boolean
   icon: string
 }
 
@@ -233,7 +241,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     if (server) {
       // Token mode: never bounce to the login/setup pages — the connect
       // screen owns re-authentication (bad token, revoked token, …).
-      throw new ApiError(401, 'unauthorized', 'token invalid or expired')
+      throw new ApiError(401, 'unauthorized', i18n.t('errors.tokenInvalid'))
     }
     // Not authenticated (or session expired): back to login.
     if (window.location.pathname !== '/admin/login') {
@@ -244,14 +252,16 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   if (!res.ok) {
     let code = 'unknown'
     let message = `HTTP ${res.status}`
+    let params: Record<string, unknown> | undefined
     try {
       const body = (await res.json()) as ApiErrorBody
       code = body.error?.code ?? code
       message = body.error?.message ?? message
+      params = body.error?.params
     } catch {
       // non-JSON error body
     }
-    throw new ApiError(res.status, code, message)
+    throw new ApiError(res.status, code, message, params)
   }
   if (res.status === 204) {
     return undefined as T
@@ -277,7 +287,13 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ code, password }),
     }),
-  authStatus: () => request<{ configured: boolean }>('/api/v1/auth/status'),
+  // init passes through (e.g. { signal }) so callers can bound the probe;
+  // authenticated may be undefined against pre-auth-status servers.
+  authStatus: (init?: RequestInit) =>
+    request<{ configured: boolean; authenticated: boolean; actor: 'session' | 'token' | 'app' | '' }>(
+      '/api/v1/auth/status',
+      init,
+    ),
   health: (init?: RequestInit) => request<{ name: string; version: string }>('/api/v1/health', init),
 
   listLinks: (params: Record<string, string | number | undefined>) => {
@@ -295,14 +311,14 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ conflict, items }),
     }),
-  getLink: (code: string) => request<Link>(`/api/v1/links/${encodePath(code)}`),
+  getLink: (code: string) => request<Link>(`/api/v1/links/${linkAddress(code)}`),
   updateLink: (code: string, body: Record<string, unknown>) =>
-    request<Link>(`/api/v1/links/${encodePath(code)}`, {
+    request<Link>(`/api/v1/links/${linkAddress(code)}`, {
       method: 'PATCH',
       body: JSON.stringify(body),
     }),
   deleteLink: (code: string) =>
-    request<void>(`/api/v1/links/${encodePath(code)}`, { method: 'DELETE' }),
+    request<void>(`/api/v1/links/${linkAddress(code)}`, { method: 'DELETE' }),
   deleteLinks: (codes: string[]) =>
     request<{ deleted: number }>('/api/v1/links', {
       method: 'DELETE',
@@ -342,7 +358,15 @@ export const api = {
   },
   logHistory: (limit = 200, offset = 0) =>
     request<LogHistoryResponse>(`/api/v1/logs?limit=${limit}&offset=${offset}`),
-  logStream: (onLog: (rec: LogRecord) => void, onError?: () => void) => {
+  // Live log stream. Both modes reconnect forever; onOpen fires after every
+  // successful (re)connection so the UI can flip the status back to "live",
+  // onError when a connection drops. The web EventSource retries on its own;
+  // the app's fetch loop retries itself with a short backoff.
+  logStream: (
+    onLog: (rec: LogRecord) => void,
+    onError?: () => void,
+    onOpen?: () => void,
+  ) => {
     const server = getServerConfig()
     const url = server
       ? `${server.url.replace(/\/+$/, '')}/api/v1/logs/stream`
@@ -351,43 +375,69 @@ export const api = {
       // Token mode: EventSource cannot send an Authorization header, so parse
       // the SSE stream over fetch. Frames are `event: log\ndata: {...}\n\n`.
       const abort = new AbortController()
-      fetch(url, { headers: { Authorization: `Bearer ${server.token}` }, signal: abort.signal })
-        .then((res) => {
-          if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`)
-          const reader = res.body.getReader()
-          const decoder = new TextDecoder()
-          let buf = ''
-          const pump = (): Promise<void> =>
-            reader
-              .read()
-              .then(({ done, value }) => {
-                if (done) {
-                  onError?.()
-                  return
-                }
-                buf += decoder.decode(value, { stream: true })
-                let idx: number
-                while ((idx = buf.indexOf('\n\n')) >= 0) {
-                  const dataLine = buf
-                    .slice(0, idx)
-                    .split('\n')
-                    .find((l) => l.startsWith('data:'))
-                  buf = buf.slice(idx + 2)
-                  if (dataLine) {
-                    try {
-                      onLog(JSON.parse(dataLine.slice(5).trim()) as LogRecord)
-                    } catch {
-                      // malformed frame: ignore
+      const connect = () => {
+        if (abort.signal.aborted) return
+        fetch(url, { headers: { Authorization: `Bearer ${server.token}` }, signal: abort.signal })
+          .then((res) => {
+            if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`)
+            onOpen?.()
+            const reader = res.body.getReader()
+            const decoder = new TextDecoder()
+            let buf = ''
+            const pump = (): Promise<void> =>
+              reader
+                .read()
+                .then(({ done, value }) => {
+                  if (done) {
+                    onError?.()
+                    scheduleRetry()
+                    return
+                  }
+                  buf += decoder.decode(value, { stream: true })
+                  let idx: number
+                  while ((idx = buf.indexOf('\n\n')) >= 0) {
+                    const dataLine = buf
+                      .slice(0, idx)
+                      .split('\n')
+                      .find((l) => l.startsWith('data:'))
+                    buf = buf.slice(idx + 2)
+                    if (dataLine) {
+                      try {
+                        onLog(JSON.parse(dataLine.slice(5).trim()) as LogRecord)
+                      } catch {
+                        // malformed frame: ignore
+                      }
                     }
                   }
-                }
-                return pump()
-              })
-              .catch(() => onError?.())
-          return pump()
-        })
-        .catch(() => onError?.())
-      return { close: () => abort.abort() }
+                  return pump()
+                })
+                .catch(() => {
+                  onError?.()
+                  scheduleRetry()
+                })
+            return pump()
+          })
+          .catch(() => {
+            onError?.()
+            scheduleRetry()
+          })
+      }
+      // Backoff between attempts so a down server isn't hammered.
+      let retryTimer: ReturnType<typeof setTimeout> | null = null
+      const scheduleRetry = () => {
+        if (abort.signal.aborted || retryTimer) return
+        retryTimer = setTimeout(() => {
+          retryTimer = null
+          connect()
+        }, 2000)
+      }
+      connect()
+      return {
+        close: () => {
+          abort.abort()
+          if (retryTimer) clearTimeout(retryTimer)
+        },
+      }
     }
     const es = new EventSource(url)
     es.addEventListener('log', (e) => {
@@ -397,6 +447,7 @@ export const api = {
         // malformed frame: ignore
       }
     })
+    es.onopen = () => onOpen?.()
     es.onerror = () => onError?.()
     return es
   },
@@ -439,10 +490,18 @@ export const api = {
 }
 
 // encodePath preserves '/' inside multi-level codes (link1/link2) while
-// encoding everything else safely.
+// encoding everything else safely. The bare "/" code can never travel in a
+// path (the server mux decodes %2F into "/"), so callers append ?code=/
+// instead — see addressedCode in the backend.
 function encodePath(code: string): string {
   return code
     .split('/')
     .map((seg) => encodeURIComponent(seg))
     .join('/')
+}
+
+// linkAddress renders the path (plus optional query) that addresses a code
+// in GET/PATCH/DELETE /api/v1/links/{...}.
+function linkAddress(code: string): string {
+  return code === '/' ? '_?code=%2F' : encodePath(code)
 }

@@ -1,36 +1,40 @@
 # gourl
 
+<p align="left">
+  <img src="https://img.shields.io/badge/Go-1.26-00ADD8?logo=go&logoColor=white" alt="Go 1.26" />
+  <img src="https://img.shields.io/badge/SQLite-003B57?logo=sqlite&logoColor=white" alt="SQLite" />
+  <img src="https://img.shields.io/badge/Redis-DC382D?logo=redis&logoColor=white" alt="Redis" />
+  <img src="https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black" alt="React 19" />
+  <img src="https://img.shields.io/badge/Vite-646CFF?logo=vite&logoColor=white" alt="Vite" />
+  <img src="https://img.shields.io/badge/Tailwind_CSS-4-06B6D4?logo=tailwindcss&logoColor=white" alt="Tailwind CSS 4" />
+  <img src="https://img.shields.io/badge/Docker-single_container-2496ED?logo=docker&logoColor=white" alt="Docker" />
+</p>
+
 > 简体中文 | [English](README.md)
 
 <p align="left">
   <img src="assets/favicon.svg" width="72" height="72" alt="gourl" />
 </p>
 
-轻量自托管短链接服务。单个 Go 二进制（内嵌前端）+ Redis，即可运行你自己的短链接。
+轻量自托管短链接服务。使用Docker快速开始，即可运行你自己的短链接服务。
 
 ## 功能
 
-- **短链接生成** — 自定义短码或自动生成，支持多级路径与简体中文，可设有效期，下载二维码
-- **管理后台** — 响应式玻璃拟态界面，浅色/深色/跟随系统三种主题，中英双语；REST API + `/docs/` Swagger 文档
+- **短链接生成** — 自定义短码或自动生成，支持多级路径与简体中文，可设有效期，支持显示二维码
+- **管理后台** — 响应式高斯模糊界面，浅色/深色/跟随系统三种主题，中英双语；REST API + Swagger 文档
 - **点击统计** — 先入 Redis 缓冲、每 30s 批量归并 SQLite；软删除后历史统计依然保留
-- **自动获取标题** — 后台异步抓取 title/description（不阻塞请求），支持任意可达主机，内网全覆盖
+- **自动获取标题** — 后台异步抓取 title/description（不阻塞请求）
 - **安全防护** — Setup 需输入服务器日志中的一次性校验码；bcrypt 密码、可配置会话有效期、登录按 IP 限流、UA/IP 屏蔽、自链防护
-- **批量与导入导出** — 批量创建/删除、一键清空过期、宽松 CSV/JSON 导入（冲突可选报错/跳过/更新）、完整 JSON 导出
-- **编辑快照** — 每次修改自动追加不可变备份（`b-1, b-2, …`）
-- **容器内 CLI** — `gourl reset …`、`gourl db export`、`gourl status`、`gourl webui on|off`、`gourl restart` 等管理命令
-- **结构化日志** — slog 4 级，镜像到轮转文件，日志页 SSE 实时查看
-
-## 技术栈
-
-Go（标准库 `net/http` + `log/slog`）· SQLite（[modernc](https://modernc.org/sqlite)，无 CGO）·
-Redis · React 19 + Vite + Tailwind CSS 4 + shadcn 风格组件
+- **批量与导入导出** — 批量创建/删除、一键清空过期、CSV/JSON 导入、完整短链项 JSON 导出
+- **编辑快照** — 每次修改后数据库自动追加不可变备份到数据库
+- **容器内 CLI** — gourl实例管理命令
 
 ## 快速开始（Docker）
 
 单容器部署——镜像内置 Redis 实例，一次 `compose up` 即完成整套部署。
 
 ```bash
-# 1. 可选：将 config.yaml.example 复制为 config/config.yaml 并按需调整。
+# 1. 可选：将 config.example.yaml 复制为 config/config.yaml 并按需调整。
 # 2. 在 docker-compose.yml 同级创建 .env：
 echo "SESSION_SECRET=$(openssl rand -hex 32)" > .env
 
@@ -57,13 +61,12 @@ docker compose up -d
 | `LOG_DIR` | `./data/log` | 日志镜像轮转文件目录 |
 
 业务配置（站点信息、基址、保留字、限流、日志等级等）在 `config.yaml` 中，
-见 `config.yaml.example`。
+示例见 [Example](config.example.yaml)
 
 ## API 文档
 
 在运行中的实例打开 `/docs/` —— 覆盖全部端点的交互式 Swagger UI。
-API 基础路径 `/api/v1`；管理端点接受会话 Cookie 或
-`Authorization: Bearer <token>`（Token 在设置页创建）。
+或查看Github Pages托管的[Swagger UI 文档](https://wmy2981.github.io/gourl/docs/)
 
 ## 开发
 
@@ -79,7 +82,7 @@ cd frontend && npm run e2e
 
 # 构建完整二进制（先构建前端并内嵌）
 powershell -File scripts/build-frontend.ps1 && go build ./cmd/gourl
-# POSIX 环境：./scripts/build-frontend.sh && go build ./cmd/gourl
+./scripts/build-frontend.sh && go build ./cmd/gourl
 ```
 
 ## 许可证

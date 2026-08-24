@@ -100,6 +100,39 @@ func hostPort(u *url.URL) string {
 	return net.JoinHostPort(h, p)
 }
 
+// selfRootTarget reports whether the target points at this instance's own
+// root (host matches a base URL, empty path). A "/" code with such a target
+// would redirect the site root to itself — an infinite loop.
+func selfRootTarget(cfg *config.Config, r *http.Request, target string) bool {
+	u, err := url.Parse(target)
+	if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
+		return false
+	}
+	bases := make([]string, 0, 1+len(cfg.ExtraBaseURLs))
+	if cfg.BaseURL != "" {
+		bases = append(bases, cfg.BaseURL)
+	} else {
+		bases = append(bases, inferredBaseURL(r))
+	}
+	bases = append(bases, cfg.ExtraBaseURLs...)
+	for _, b := range bases {
+		bu, err := url.Parse(b)
+		if err != nil || bu.Host == "" {
+			continue
+		}
+		if hostPort(bu) == hostPort(u) && (u.Path == "" || u.Path == "/") && u.Fragment == "" {
+			return true
+		}
+	}
+	return false
+}
+
+// checkSelfRoot rejects a "/" code whose target is this instance's own root.
+// The error carries a stable code so the frontend can map it.
+func writeSelfRootError(w http.ResponseWriter) {
+	writeError(w, http.StatusBadRequest, "self_root_target", "the root short code cannot point at this instance's own root")
+}
+
 // inferredBaseURL derives the site's base URL from the request when the
 // config's base_url is unset: X-Forwarded-Proto (reverse proxy) or the TLS
 // state decides the scheme, r.Host the authority.
@@ -218,6 +251,10 @@ func (s *Server) createLink(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	code := req.Code
+	if code == "/" && selfRootTarget(cfg, r, req.URL) {
+		writeSelfRootError(w)
+		return
+	}
 	if code == "" {
 		generated, err := shortcode.Random(cfg.ShortCodeLength)
 		if err != nil {
@@ -265,7 +302,7 @@ func (s *Server) createLink(w http.ResponseWriter, r *http.Request) {
 
 // getLink handles GET /api/v1/links/{code}.
 func (s *Server) getLink(w http.ResponseWriter, r *http.Request) {
-	link, err := s.store.GetLink(r.Context(), pathCode(r.PathValue("code")))
+	link, err := s.store.GetLink(r.Context(), addressedCode(r))
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "not_found", "link not found")
@@ -295,7 +332,7 @@ func (s *Server) updateLink(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_request", "invalid JSON body")
 		return
 	}
-	oldCode := pathCode(r.PathValue("code"))
+	oldCode := addressedCode(r)
 	link, err := s.store.GetLink(r.Context(), oldCode)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
@@ -308,10 +345,11 @@ func (s *Server) updateLink(w http.ResponseWriter, r *http.Request) {
 	cfg := s.cfg.Get()
 
 	// Any mutation first snapshots the pre-edit state (old code, old fields,
-	// current click count) into the append-only backups table.
+	// current click count) into the append-only backups table — unless
+	// backup_on_edit is off.
 	mutating := req.URL != nil || req.Title != nil || req.Description != nil ||
 		req.ExpiresAt != nil || (req.Code != nil && *req.Code != oldCode)
-	if mutating {
+	if mutating && cfg.BackupOnEditEnabled() {
 		if _, err := s.store.BackupLink(r.Context(), link, s.now()); err != nil {
 			writeError(w, http.StatusInternalServerError, "internal_error", "failed to backup link")
 			return
@@ -363,6 +401,10 @@ func (s *Server) updateLink(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "reserved_code", "code is a reserved system path")
 			return
 		}
+		if newCode == "/" && selfRootTarget(cfg, r, link.URL) {
+			writeSelfRootError(w)
+			return
+		}
 		if err := s.store.RenameLink(r.Context(), oldCode, newCode, link.UpdatedAt); err != nil {
 			if errors.Is(err, store.ErrTaken) {
 				writeError(w, http.StatusConflict, "code_taken", "code is already in use")
@@ -372,6 +414,9 @@ func (s *Server) updateLink(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		link.Code = newCode
+	} else if oldCode == "/" && req.URL != nil && selfRootTarget(cfg, r, *req.URL) {
+		writeSelfRootError(w)
+		return
 	}
 
 	if err := s.store.UpdateLink(r.Context(), link); err != nil {
@@ -391,7 +436,7 @@ func (s *Server) updateLink(w http.ResponseWriter, r *http.Request) {
 
 // deleteLink handles DELETE /api/v1/links/{code}.
 func (s *Server) deleteLink(w http.ResponseWriter, r *http.Request) {
-	code := pathCode(r.PathValue("code"))
+	code := addressedCode(r)
 	// Resolve the link first so the business log can record its id.
 	link, err := s.store.GetLink(r.Context(), code)
 	if err != nil {
@@ -402,7 +447,7 @@ func (s *Server) deleteLink(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "internal_error", "failed to get link")
 		return
 	}
-	if err := s.store.DeleteLink(r.Context(), code); err != nil {
+	if err := s.store.DeleteLink(r.Context(), code, s.cfg.Get().HardDelete); err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "not_found", "link not found")
 			return
@@ -410,10 +455,20 @@ func (s *Server) deleteLink(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "internal_error", "failed to delete link")
 		return
 	}
-	logInfo(r, "link deleted", "code", code, "id", link.ID)
+	logInfo(r, "link deleted", "code", code, "id", link.ID, "hard", s.cfg.Get().HardDelete)
 	w.WriteHeader(http.StatusNoContent)
 }
 
 // pathCode normalizes a multi-level code captured by {code...}: the wildcard
 // preserves leading slashes, strip them for DB lookups.
 func pathCode(code string) string { return strings.TrimPrefix(code, "/") }
+
+// addressedCode resolves the link a request addresses. Go's mux decodes %2F
+// into "/" before routing, so a bare-"/" short code can never survive in the
+// path — ?code=/ is the escape hatch (it wins over the path segment).
+func addressedCode(r *http.Request) string {
+	if q := r.URL.Query().Get("code"); q != "" {
+		return q
+	}
+	return pathCode(r.PathValue("code"))
+}

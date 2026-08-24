@@ -130,6 +130,89 @@ func TestRedirectNotFound(t *testing.T) {
 	}
 }
 
+func TestRootRedirectCode(t *testing.T) {
+	s, mr := newTestServer(t)
+
+	// Without the "/" code the root falls back to the public landing page.
+	rec := get(t, s, "/", nil)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "This is a short link service") {
+		t.Errorf("root without code: status %d, want 200 landing page, body: %s", rec.Code, rec.Body.String())
+	}
+
+	createLink(t, s, "/", "https://example.com/root-target")
+
+	rec = get(t, s, "/", nil)
+	if rec.Code != http.StatusFound {
+		t.Fatalf("root with code status = %d, want 302", rec.Code)
+	}
+	if loc := rec.Header().Get("Location"); loc != "https://example.com/root-target" {
+		t.Errorf("Location = %q", loc)
+	}
+
+	total, daily := counter.Keys("/", counter.Date(time.Unix(s.now(), 0)))
+	if got, err := mr.Get(total); err != nil || got != "1" {
+		t.Errorf("root total counter = %q (err %v), want 1", got, err)
+	}
+	if got, _ := mr.Get(daily); got != "1" {
+		t.Errorf("root daily counter = %q, want 1", got)
+	}
+
+	// The API reads it back through the ?code= escape hatch (the mux decodes
+	// %2F into "/" so the path form can never address a bare slash).
+	listRec := do(t, s, http.MethodGet, "/api/v1/links/_?code=%2F", nil)
+	if listRec.Code != http.StatusOK || !strings.Contains(listRec.Body.String(), "root-target") {
+		t.Errorf("GET /api/v1/links?code=/ status = %d, body %s", listRec.Code, listRec.Body.String())
+	}
+}
+
+func TestRootRedirectExpiredFallsToNotFound(t *testing.T) {
+	s, _ := newTestServer(t)
+	createLink(t, s, "/", "https://example.com/root-target")
+	rec := do(t, s, http.MethodPatch, "/api/v1/links/_?code=%2F", map[string]any{"expires_at": s.now() - 1})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("set expiry: %d", rec.Code)
+	}
+	// An expired root code is indistinguishable from a missing one — but the
+	// root keeps answering (landing page fallback only covers ErrNotFound).
+	rec = get(t, s, "/", nil)
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("expired root status = %d, want 404", rec.Code)
+	}
+}
+
+// TestRootCodeSelfTargetRejected: a "/" code pointing at this instance's own
+// root would redirect / to itself forever — creation and renames refuse it.
+func TestRootCodeSelfTargetRejected(t *testing.T) {
+	s, _ := newTestServer(t)
+
+	rec := do(t, s, http.MethodPost, "/api/v1/links", map[string]any{"url": "http://example.com/", "code": "/"})
+	if rec.Code != http.StatusBadRequest || decodeError(t, rec) != "self_root_target" {
+		t.Fatalf("self-root create status = %d code %q body %s", rec.Code, decodeError(t, rec), rec.Body.String())
+	}
+
+	// A root code pointing somewhere else is fine.
+	createLink(t, s, "/", "https://example.org/root-target")
+
+	// Renaming another link to "/" with a self-root target is refused too.
+	createLink(t, s, "abc", "https://example.org/other")
+	rec = do(t, s, http.MethodPatch, "/api/v1/links/abc", map[string]any{"code": "/", "url": "http://example.com/"})
+	if rec.Code != http.StatusBadRequest || decodeError(t, rec) != "self_root_target" {
+		t.Fatalf("self-root rename status = %d code %q", rec.Code, decodeError(t, rec))
+	}
+
+	// Pointing the existing "/" code at its own root later is refused as well.
+	rec = do(t, s, http.MethodPatch, "/api/v1/links/_?code=%2F", map[string]any{"url": "http://example.com"})
+	if rec.Code != http.StatusBadRequest || decodeError(t, rec) != "self_root_target" {
+		t.Fatalf("self-root url swap status = %d code %q", rec.Code, decodeError(t, rec))
+	}
+
+	// …while a normal external URL update still works.
+	rec = do(t, s, http.MethodPatch, "/api/v1/links/_?code=%2F", map[string]any{"url": "https://other.example/x"})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("external url swap status = %d body %s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestRedirectReservedPrefixWins(t *testing.T) {
 	s, _ := newTestServer(t)
 	for _, path := range []string{"/api/anything", "/expired", "/health"} {
@@ -145,11 +228,11 @@ func TestRedirectReservedPrefixWins(t *testing.T) {
 	}
 }
 
-func TestRootServesPublicPage(t *testing.T) {
+func TestPublicPageServedAtReservedPath(t *testing.T) {
 	s, _ := newTestServer(t)
-	rec := get(t, s, "/", nil)
+	rec := get(t, s, "/gourl-public-page", nil)
 	if rec.Code != http.StatusOK {
-		t.Fatalf("root status = %d, want 200", rec.Code)
+		t.Fatalf("public page status = %d, want 200", rec.Code)
 	}
 	body := rec.Body.String()
 	if !strings.Contains(body, "<h1>gourl</h1>") ||
@@ -158,7 +241,7 @@ func TestRootServesPublicPage(t *testing.T) {
 		t.Errorf("public page missing name/notice/icon: %s", body)
 	}
 
-	rec = get(t, s, "/?lang=zh", nil)
+	rec = get(t, s, "/gourl-public-page?lang=zh", nil)
 	if !strings.Contains(rec.Body.String(), "短链接服务") {
 		t.Errorf("zh public page missing notice: %s", rec.Body.String())
 	}
@@ -171,9 +254,9 @@ func TestRootHiddenWhenWebuiDisabled(t *testing.T) {
 	if err := s.cfg.Update(cfg); err != nil {
 		t.Fatalf("disable webui: %v", err)
 	}
-	rec := get(t, s, "/", nil)
+	rec := get(t, s, "/gourl-public-page", nil)
 	if rec.Code != http.StatusNotFound {
-		t.Fatalf("root status = %d, want 404 with webui off", rec.Code)
+		t.Fatalf("public page status = %d, want 404 with webui off", rec.Code)
 	}
 }
 

@@ -78,6 +78,9 @@ func (s *Server) batchCreate(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		code, verr := s.resolveCode(item, cfg, r)
+		if verr == nil && code == "/" && selfRootTarget(cfg, r, item.URL) {
+			verr = &codeError{"self_root_target", "the root short code cannot point at this instance's own root"}
+		}
 		if verr != nil {
 			failed++
 			failedCodes = append(failedCodes, item.Code)
@@ -392,14 +395,17 @@ func asExpiry(v any) (expiryValue, error) {
 }
 
 // applyConflictUpdate merges an imported item into the existing link. The
-// pre-edit snapshot is backed up first, like a manual edit.
+// pre-edit snapshot is backed up first, like a manual edit — unless
+// backup_on_edit is off.
 func (s *Server) applyConflictUpdate(r *http.Request, item createLinkRequest, code string) error {
 	link, err := s.store.GetLink(r.Context(), code)
 	if err != nil {
 		return err
 	}
-	if _, err := s.store.BackupLink(r.Context(), link, s.now()); err != nil {
-		return err
+	if s.cfg.Get().BackupOnEditEnabled() {
+		if _, err := s.store.BackupLink(r.Context(), link, s.now()); err != nil {
+			return err
+		}
 	}
 	link.URL = item.URL
 	if item.Title != "" {

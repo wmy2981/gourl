@@ -5,7 +5,9 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
+	"syscall"
 	"time"
 
 	"github.com/wmy2981/gourl/internal/api"
@@ -60,6 +62,27 @@ func runServer() {
 	}
 	logx.SetLevel(logx.ParseLevel(cfg.Get().LogLevel))
 	slog.Info("log level applied", "level", cfg.Get().LogLevel)
+
+	// SIGHUP (sent by CLI config commands via `gourl reload` semantics)
+	// re-reads the config file so edits made in another process apply
+	// without a restart. A broken file keeps the previous config.
+	reloadCfg := func() {
+		if err := cfg.Reload(); err != nil {
+			slog.Warn("config reload failed; keeping the previous config", "path", cfgPath, "error", err)
+			return
+		}
+		level := cfg.Get().LogLevel
+		logx.SetLevel(logx.ParseLevel(level))
+		slog.Info("config reloaded", "path", cfgPath, "level", level)
+	}
+	sigHup := make(chan os.Signal, 1)
+	signal.Notify(sigHup, syscall.SIGHUP)
+	defer signal.Stop(sigHup)
+	go func() {
+		for range sigHup {
+			reloadCfg()
+		}
+	}()
 
 	dbPath := envOr("DB_PATH", "./data/gourl.db")
 	if dir := filepath.Dir(dbPath); dir != "" && dir != "." {

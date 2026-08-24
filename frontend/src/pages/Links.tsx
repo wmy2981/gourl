@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import {
+  ArrowRight,
   Check,
   ChevronDown,
   ChevronLeft,
@@ -406,7 +407,7 @@ export default function Links() {
                   </td>
                   <td className="max-w-[280px] px-5 py-3">
                     <div className="route-line mb-1.5" />
-                    <a href={link.url} target="_blank" rel="noreferrer" className="block truncate text-muted transition-colors hover:text-accent-deep dark:hover:text-accent">
+                    <a href={link.url} target="_blank" rel="noreferrer" title={link.url} className="block truncate text-muted transition-colors hover:text-accent-deep dark:hover:text-accent">
                       {link.url}
                     </a>
                     {link.title && <div className="mt-0.5 max-w-[240px] truncate text-xs text-muted/80">{link.title}</div>}
@@ -494,7 +495,21 @@ export default function Links() {
       <Dialog open={deleting !== null} onClose={() => setDeleting(null)} title={t('links.delete')}>
         <p className="text-sm text-muted">{t('links.deleteConfirm')}</p>
         {deleting && (
-          <p className="short-code mt-2 text-sm font-medium">{deleting.code}</p>
+          <div className="mt-3 flex items-center gap-2 rounded-xl border border-hairline bg-black/[0.02] px-3 py-2.5 dark:bg-white/[0.04]">
+            <span
+              className="short-code min-w-0 max-w-[40%] flex-1 overflow-x-auto whitespace-nowrap text-center text-sm font-medium"
+              title={deleting.code}
+            >
+              {deleting.code}
+            </span>
+            <ArrowRight size={14} className="shrink-0 text-accent" aria-hidden="true" />
+            <span
+              className="min-w-0 max-w-[60%] flex-1 overflow-x-auto whitespace-nowrap text-center text-sm text-muted"
+              title={deleting.url}
+            >
+              {deleting.url}
+            </span>
+          </div>
         )}
         <div className="mt-5 flex justify-end gap-2">
           <Button variant="ghost" onClick={() => setDeleting(null)}>

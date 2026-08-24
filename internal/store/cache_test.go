@@ -86,7 +86,7 @@ func TestWritesInvalidateCache(t *testing.T) {
 	}
 
 	// DeleteLink.
-	if err := s.DeleteLink(ctx, "def"); err != nil {
+	if err := s.DeleteLink(ctx, "def", false); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.GetLink(ctx, "def"); !errors.Is(err, ErrNotFound) {
@@ -107,7 +107,7 @@ func TestDeleteExpiredClearsCache(t *testing.T) {
 	if _, err := s.GetLink(ctx, "abc"); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := s.DeleteExpired(ctx, 1_000_001); err != nil {
+	if _, _, err := s.DeleteExpired(ctx, 1_000_001, false); err != nil {
 		t.Fatal(err)
 	}
 	// The row is gone from the DB; a stale cache hit would resurrect it.

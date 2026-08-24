@@ -27,13 +27,14 @@ func (s *Server) updateConfig(w http.ResponseWriter, r *http.Request) {
 	}
 	// Fields excluded from the JSON contract (json:"-") must be carried over
 	// so a plain PUT never wipes or resets them: the password hash, the
-	// session epoch and the webui switch.
+	// session epoch, the webui switch and the SQL console switch.
 	cur := s.cfg.Get()
 	cfg.PasswordHash = cur.PasswordHash
 	cfg.SessionEpoch = cur.SessionEpoch
 	cfg.WebUIEnabled = cur.WebUIEnabled
+	cfg.SQLConsoleEnabled = cur.SQLConsoleEnabled
 	if err := s.cfg.Update(&cfg); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_config", err.Error())
+		writeConfigError(w, err)
 		return
 	}
 	// The log level is part of the business config now: apply it immediately.

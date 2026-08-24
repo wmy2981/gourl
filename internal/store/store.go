@@ -88,6 +88,16 @@ func (s *Store) Close() error { return s.db.Close() }
 // Ping verifies database connectivity.
 func (s *Store) Ping(ctx context.Context) error { return s.db.PingContext(ctx) }
 
+// SQL exposes the raw *sql.DB for the /api/v1/db SQL console. The handler
+// owns statement validation, transactions and logging; the store stays out
+// of interpreting what runs through it.
+func (s *Store) SQL() *sql.DB { return s.db }
+
+// InvalidateCache drops every cached link. The SQL console bypasses the
+// write paths, so after a batch containing writes nothing can be trusted —
+// same contract as DeleteExpired's sweep.
+func (s *Store) InvalidateCache() { s.cache.clear() }
+
 // migrations is an ordered list of schema migrations; index i applies after
 // version i.
 var migrations = []string{
@@ -107,11 +117,6 @@ var migrations = []string{
 		date  TEXT NOT NULL,
 		count INTEGER NOT NULL DEFAULT 0,
 		PRIMARY KEY (code, date)
-	);
-	CREATE TABLE ua_blocks (
-		id         INTEGER PRIMARY KEY AUTOINCREMENT,
-		pattern    TEXT NOT NULL UNIQUE,
-		created_at INTEGER NOT NULL
 	);
 	CREATE TABLE api_tokens (
 		id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -185,6 +190,10 @@ var migrations = []string{
 	// v6: api tokens are stored as bcrypt hashes; the plaintext prefix keeps
 	// the UI preview readable (MigrateTokenHashes fills it for legacy rows).
 	`ALTER TABLE api_tokens ADD COLUMN token_prefix TEXT NOT NULL DEFAULT '';`,
+	// v7: drop the legacy ua_blocks table — UA blocks moved to config.yaml
+	// long ago (the settings page and /api/v1/ua-blocks both read the
+	// config), leaving this table dead since then.
+	`DROP TABLE IF EXISTS ua_blocks;`,
 }
 
 // migrate applies pending migrations inside a transaction each, recording the
@@ -392,14 +401,23 @@ func (s *Store) RenameLink(ctx context.Context, oldCode, newCode string, now int
 	return nil
 }
 
-// DeleteLink soft-deletes a link (deleted = 1): the row, its id and its daily
+// DeleteLink removes a link: soft-delete (deleted = 1) by default, a
+// physical DELETE when hard is set. Soft-deleted rows, their ids and daily
 // click records are kept — the dashboard totals and trend count history even
 // for links that no longer exist — but the code is freed for reuse (the
-// partial unique index only covers non-deleted rows). Returns ErrNotFound if
-// the code was absent (or already deleted).
-func (s *Store) DeleteLink(ctx context.Context, code string) error {
-	res, err := s.db.ExecContext(ctx,
-		`UPDATE links SET deleted = 1 WHERE code = ? AND deleted = 0`, code)
+// partial unique index only covers non-deleted rows). Hard deletion also
+// keeps the daily click rows. Returns ErrNotFound if the code was absent (or
+// already deleted).
+func (s *Store) DeleteLink(ctx context.Context, code string, hard bool) error {
+	var res sql.Result
+	var err error
+	if hard {
+		res, err = s.db.ExecContext(ctx,
+			`DELETE FROM links WHERE code = ? AND deleted = 0`, code)
+	} else {
+		res, err = s.db.ExecContext(ctx,
+			`UPDATE links SET deleted = 1 WHERE code = ? AND deleted = 0`, code)
+	}
 	if err != nil {
 		return fmt.Errorf("delete link: %w", err)
 	}
@@ -412,14 +430,15 @@ func (s *Store) DeleteLink(ctx context.Context, code string) error {
 		return ErrNotFound
 	}
 	s.cache.del(code)
-	slog.Debug("store: link deleted", "code", code)
+	slog.Debug("store: link deleted", "code", code, "hard", hard)
 	return nil
 }
 
-// DeleteLinks soft-deletes many links in one transaction, returning how many
-// rows were actually deleted (absent or already-deleted codes are skipped)
-// plus the first link actually deleted (in request order) for logging.
-func (s *Store) DeleteLinks(ctx context.Context, codes []string) (int64, *Link, error) {
+// DeleteLinks removes many links in one transaction (soft by default, a
+// physical DELETE per row when hard is set), returning how many rows were
+// actually deleted (absent or already-deleted codes are skipped) plus the
+// first link actually deleted (in request order) for logging.
+func (s *Store) DeleteLinks(ctx context.Context, codes []string, hard bool) (int64, *Link, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return 0, nil, err
@@ -437,9 +456,16 @@ func (s *Store) DeleteLinks(ctx context.Context, codes []string) (int64, *Link, 
 		if err != nil {
 			return 0, nil, fmt.Errorf("delete links: %w", err)
 		}
-		if _, err := tx.ExecContext(ctx,
-			`UPDATE links SET deleted = 1 WHERE code = ? AND deleted = 0`, code); err != nil {
-			return 0, nil, fmt.Errorf("delete links: %w", err)
+		if hard {
+			if _, err := tx.ExecContext(ctx,
+				`DELETE FROM links WHERE code = ? AND deleted = 0`, code); err != nil {
+				return 0, nil, fmt.Errorf("delete links: %w", err)
+			}
+		} else {
+			if _, err := tx.ExecContext(ctx,
+				`UPDATE links SET deleted = 1 WHERE code = ? AND deleted = 0`, code); err != nil {
+				return 0, nil, fmt.Errorf("delete links: %w", err)
+			}
 		}
 		deleted++
 		if first == nil {
@@ -468,10 +494,10 @@ func (s *Store) CountExpired(ctx context.Context, now int64) (int64, error) {
 	return n, nil
 }
 
-// DeleteExpired soft-deletes every expired link in one transaction and
-// returns how many were deleted plus the first deleted link (earliest
-// expiry) for logging.
-func (s *Store) DeleteExpired(ctx context.Context, now int64) (int64, *Link, error) {
+// DeleteExpired removes every expired link in one transaction (soft by
+// default, a physical DELETE when hard is set) and returns how many were
+// deleted plus the first deleted link (earliest expiry) for logging.
+func (s *Store) DeleteExpired(ctx context.Context, now int64, hard bool) (int64, *Link, error) {
 	var first *Link
 	var id int64
 	var code string
@@ -483,8 +509,14 @@ func (s *Store) DeleteExpired(ctx context.Context, now int64) (int64, *Link, err
 	if err == nil {
 		first = &Link{ID: id, Code: code}
 	}
-	res, err := s.db.ExecContext(ctx,
-		`UPDATE links SET deleted = 1 WHERE deleted = 0 AND expires_at > 0 AND expires_at < ?`, now)
+	var res sql.Result
+	if hard {
+		res, err = s.db.ExecContext(ctx,
+			`DELETE FROM links WHERE deleted = 0 AND expires_at > 0 AND expires_at < ?`, now)
+	} else {
+		res, err = s.db.ExecContext(ctx,
+			`UPDATE links SET deleted = 1 WHERE deleted = 0 AND expires_at > 0 AND expires_at < ?`, now)
+	}
 	if err != nil {
 		return 0, nil, fmt.Errorf("delete expired: %w", err)
 	}

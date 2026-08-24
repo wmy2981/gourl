@@ -5,10 +5,13 @@ test.beforeEach(async ({ page }) => {
   await login(page)
 })
 
+// The settings form autosaves: text fields save on blur, switches and the
+// log-level select save on change. There is no save button — commit an edit
+// by blurring the field (Tab away or click elsewhere).
 test('saves site info and the change takes effect immediately', async ({ page, request }) => {
   await page.goto('/admin/settings')
   await page.getByLabel('Service name').fill('E2E Shortener')
-  await page.getByRole('button', { name: /save settings/i }).click()
+  await page.getByLabel('Service name').blur()
   await expect(page.getByText('Settings saved')).toBeVisible()
 
   // Hot effect: the health endpoint reports the new name without restart.
@@ -18,13 +21,13 @@ test('saves site info and the change takes effect immediately', async ({ page, r
 
   // Restore for other tests in this run.
   await page.getByLabel('Service name').fill('gourl')
-  await page.getByRole('button', { name: /save settings/i }).click()
+  await page.getByLabel('Service name').blur()
 })
 
 test('saves a blocked user agent from the settings form', async ({ page, request }) => {
   await page.goto('/admin/settings')
   await page.getByPlaceholder('curl, Googlebot').fill('E2ESpyBot')
-  await page.getByRole('button', { name: /save settings/i }).click()
+  await page.getByPlaceholder('curl, Googlebot').blur()
   await expect(page.getByText('Settings saved')).toBeVisible()
 
   // The block list is config-driven now; verify it landed (page fetch so the
@@ -34,7 +37,7 @@ test('saves a blocked user agent from the settings form', async ({ page, request
 
   // Restore for the rest of the run.
   await page.getByPlaceholder('curl, Googlebot').fill('')
-  await page.getByRole('button', { name: /save settings/i }).click()
+  await page.getByPlaceholder('curl, Googlebot').blur()
 })
 
 test('creates an api token and the full value is shown once', async ({ page }) => {
@@ -49,7 +52,7 @@ test('creates an api token and the full value is shown once', async ({ page }) =
 test('short code length setting is honored by new random codes', async ({ page, request }) => {
   await page.goto('/admin/settings')
   await page.getByLabel('Random code length').fill('10')
-  await page.getByRole('button', { name: /save settings/i }).click()
+  await page.getByLabel('Random code length').blur()
   await expect(page.getByText('Settings saved')).toBeVisible()
 
   await page.goto('/admin/links')
@@ -62,5 +65,5 @@ test('short code length setting is honored by new random codes', async ({ page, 
   // Restore.
   await page.goto('/admin/settings')
   await page.getByLabel('Random code length').fill('6')
-  await page.getByRole('button', { name: /save settings/i }).click()
+  await page.getByLabel('Random code length').blur()
 })

@@ -19,13 +19,28 @@ function renderConnect() {
   )
 }
 
-// The connect flow probes GET /api/v1/auth/status before persisting.
+// The connect flow probes GET /api/v1/auth/status before persisting and
+// requires authenticated:true — a 200 that rejects the token must fail.
 function mockAuthOk() {
   vi.stubGlobal(
     'fetch',
     vi.fn(
       async () =>
-        new Response(JSON.stringify({ configured: true }), {
+        new Response(JSON.stringify({ configured: true, authenticated: true, actor: 'token' }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+    ),
+  )
+}
+
+// A reachable server that answers the probe but does not accept the token.
+function mockAuthRejected() {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(
+      async () =>
+        new Response(JSON.stringify({ configured: true, authenticated: false, actor: '' }), {
           status: 200,
           headers: { 'Content-Type': 'application/json' },
         }),
@@ -98,5 +113,15 @@ describe('Connect', () => {
 
     expect(screen.queryByText('Insecure connection')).not.toBeInTheDocument()
     expect(await screen.findByText('admin-dashboard')).toBeInTheDocument()
+  })
+
+  it('rejects a server that answers but does not accept the token', async () => {
+    mockAuthRejected()
+    renderConnect()
+    await fillAndSubmit('https://gourl.example.com')
+
+    expect(await screen.findByText(/token invalid/i)).toBeInTheDocument()
+    expect(localStorage.getItem('gourl-server')).toBeNull()
+    expect(screen.queryByText('admin-dashboard')).not.toBeInTheDocument()
   })
 })

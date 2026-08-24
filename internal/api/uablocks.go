@@ -46,7 +46,7 @@ func (s *Server) createUABlock(w http.ResponseWriter, r *http.Request) {
 	}
 	cfg.UABlocks = append(cfg.UABlocks, pattern)
 	if err := s.cfg.Update(cfg); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_config", err.Error())
+		writeConfigError(w, err)
 		return
 	}
 	logInfo(r, "ua block added", "pattern", pattern)
@@ -67,7 +67,7 @@ func (s *Server) deleteUABlock(w http.ResponseWriter, r *http.Request) {
 	}
 	cfg.UABlocks = append(cfg.UABlocks[:id-1], cfg.UABlocks[id:]...)
 	if err := s.cfg.Update(cfg); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_config", err.Error())
+		writeConfigError(w, err)
 		return
 	}
 	logInfo(r, "ua block removed", "id", id)

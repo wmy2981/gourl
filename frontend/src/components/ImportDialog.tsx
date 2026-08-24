@@ -115,7 +115,6 @@ export default function ImportDialog({
         className="h-60"
         value={text}
         onChange={setText}
-        placeholder='[{"url": "https://example.com/1"}, {"url": "https://example.com/2", "code": "two"}]'
         ariaLabel={t('form.importHint')}
         extensions={[json(), jsonHighlight]}
       />

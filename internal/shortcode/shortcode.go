@@ -25,7 +25,8 @@ const MaxLength = 64
 var builtinReserved = []string{
 	"api", "admin", "expired", "health", "assets", "favicon",
 	"export", "login", "logout", "config", "icon", "dashboard",
-	"links", "tokens", "ua-blocks", "settings", "static", "docs",
+	"links", "tokens", "ua-blocks", "settings", "static", "docs", "db",
+	"gourl-public-page",
 }
 
 var errNotEnoughEntropy = errors.New("crypto/rand failure")
@@ -51,8 +52,12 @@ func Random(n int) (string, error) {
 // the api route would shadow it). Extra entries behave like the codes they
 // protect: single-segment entries match the first segment, while
 // multi-segment entries match the full code by prefix, so "foo/bar" reserves
-// "foo/bar" and every code below it.
+// "foo/bar" and every code below it. The bare "/" is never reserved — it is
+// a legitimate (root-redirect) short code.
 func IsReserved(code string, extra []string) bool {
+	if code == "/" {
+		return false
+	}
 	seg := code
 	if i := strings.IndexByte(code, '/'); i >= 0 {
 		seg = code[:i]
@@ -79,8 +84,12 @@ func IsReserved(code string, extra []string) bool {
 // Validate checks a custom code: non-empty, url-safe characters (ASCII
 // alphanumerics, - _ and CJK unified ideographs — simplified Chinese), at
 // most MaxSegments levels, each segment non-empty, total length <= MaxLength
-// (counted in runes, so a 64-character Chinese code is fine).
+// (counted in runes, so a 64-character Chinese code is fine). The bare "/"
+// is the one exception: it is the root-redirect code handled by GET /.
 func Validate(code string) error {
+	if code == "/" {
+		return nil
+	}
 	if code == "" {
 		return errors.New("code must not be empty")
 	}

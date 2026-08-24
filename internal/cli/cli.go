@@ -18,6 +18,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 
 	_ "modernc.org/sqlite" // driver name "sqlite", shared with internal/store
 	"gopkg.in/yaml.v3"
@@ -66,6 +67,8 @@ func Main(args []string) int {
 		return cmdReset(args[1:])
 	case "webui":
 		return cmdWebUI(args[1:])
+	case "reload":
+		return cmdReload(args[1:])
 	case "restart":
 		return cmdRestart(args[1:])
 	default:
@@ -144,6 +147,37 @@ func restartGourl() error {
 // restartGourlFn is indirection over restartGourl so tests can observe the
 // restart without a container.
 var restartGourlFn = restartGourl
+
+// reloadGourl signals the running gourl process to re-read the config file.
+// Same container constraint as restartGourl: gourl is PID 1 there. On
+// failure the caller should warn — the config change is already on disk and
+// `gourl reload` retries it manually.
+func reloadGourl() error {
+	cmdline, err := os.ReadFile("/proc/1/cmdline")
+	if err != nil {
+		return fmt.Errorf("cannot reach the running server (outside the container?) — run `docker exec <container> gourl reload` or restart it")
+	}
+	if !strings.Contains(strings.TrimRight(string(cmdline), "\x00"), "gourl") {
+		return errors.New("PID 1 is not gourl — restart the service manually")
+	}
+	p, err := os.FindProcess(1)
+	if err != nil {
+		return err
+	}
+	return p.Signal(syscall.SIGHUP)
+}
+
+// reloadGourlFn is indirection over reloadGourl so tests can observe the
+// signal without a container.
+var reloadGourlFn = reloadGourl
+
+// notifyReload sends SIGHUP after a config-file change; a failed signal is
+// only a warning because the edit is already persisted.
+func notifyReload() {
+	if err := reloadGourlFn(); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: the change is saved but not applied to the running server: %v\n", err)
+	}
+}
 
 func loadConfig() (*config.Manager, error) {
 	return config.NewManager(cfgPath())
@@ -335,8 +369,15 @@ type exportBackup struct {
 }
 
 func cmdDb(args []string) int {
-	if len(args) == 0 || args[0] != "export" {
-		fmt.Fprintln(os.Stderr, "usage: gourl db export [out-dir]")
+	if len(args) == 0 {
+		fmt.Fprintln(os.Stderr, "usage: gourl db export [out-dir] | db console on|off [-y]")
+		return 2
+	}
+	if args[0] == "console" {
+		return cmdDbConsole(args[1:])
+	}
+	if args[0] != "export" {
+		fmt.Fprintln(os.Stderr, "usage: gourl db export [out-dir] | db console on|off [-y]")
 		return 2
 	}
 	outDir := "."
@@ -501,6 +542,8 @@ func cmdReset(args []string) int {
 		return resetConfigFile(yes)
 	case "api":
 		return resetTokens(yes)
+	case "backups":
+		return resetBackups(yes)
 	case "db":
 		return resetDB(yes)
 	case "redis":
@@ -513,8 +556,8 @@ func cmdReset(args []string) int {
 	}
 }
 
-// resetConfigField mutates the live config after confirmation; the running
-// server picks the change up without a restart.
+// resetConfigField mutates the config file after confirmation, then signals
+// the running server to reload it — the change applies without a restart.
 func resetConfigField(yes bool, prompt string, mutate func(*config.Config)) int {
 	if err := confirm(yes, prompt); err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -531,6 +574,7 @@ func resetConfigField(yes bool, prompt string, mutate func(*config.Config)) int 
 		fmt.Fprintf(os.Stderr, "update config: %v\n", err)
 		return 1
 	}
+	notifyReload()
 	fmt.Println("done")
 	return 0
 }
@@ -602,6 +646,33 @@ func resetTokens(yes bool) int {
 	return 0
 }
 
+// resetBackups clears the backups table in place (the running server keeps
+// serving — the store is only read by exports afterwards). b_id numbering
+// restarts from 1.
+func resetBackups(yes bool) int {
+	if err := confirm(yes, "delete every edit snapshot from the backups table? this cannot be undone"); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	if _, err := os.Stat(dbPath()); err != nil {
+		fmt.Fprintln(os.Stderr, "no database, nothing to clear")
+		return 1
+	}
+	st, err := store.Open(dbPath())
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "open store: %v\n", err)
+		return 1
+	}
+	defer st.Close()
+	n, err := st.ClearBackups(context.Background())
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "clear backups: %v\n", err)
+		return 1
+	}
+	fmt.Printf("deleted %d backup snapshot(s)\n", n)
+	return 0
+}
+
 func resetDB(yes bool) int {
 	if err := confirm(yes, "delete the database and restart the service? click history is deleted with it"); err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -670,6 +741,35 @@ func resetAll(yes bool) int {
 
 /* ---------- webui / restart ---------- */
 
+// cmdDbConsole toggles config.sql_console_enabled (the POST /api/v1/db SQL
+// console). File-only field like webui_enabled: edit + SIGHUP, no restart.
+func cmdDbConsole(args []string) int {
+	yes, rest := splitYes(args)
+	if len(rest) != 1 || (rest[0] != "on" && rest[0] != "off") {
+		fmt.Fprintln(os.Stderr, "usage: gourl db console on|off [-y]")
+		return 2
+	}
+	enable := rest[0] == "on"
+	if err := confirm(yes, fmt.Sprintf("turn the SQL console (POST /api/v1/db) %s?", rest[0])); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	m, err := loadConfig()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "load config: %v\n", err)
+		return 1
+	}
+	cur := m.Get()
+	cur.SQLConsoleEnabled = enable
+	if err := m.Update(cur); err != nil {
+		fmt.Fprintf(os.Stderr, "update config: %v\n", err)
+		return 1
+	}
+	notifyReload()
+	fmt.Printf("sql console %s (applied to the running server)\n", rest[0])
+	return 0
+}
+
 func cmdWebUI(args []string) int {
 	yes, rest := splitYes(args)
 	if len(rest) != 1 || (rest[0] != "on" && rest[0] != "off") {
@@ -692,7 +792,25 @@ func cmdWebUI(args []string) int {
 		fmt.Fprintf(os.Stderr, "update config: %v\n", err)
 		return 1
 	}
-	fmt.Printf("admin console %s (takes effect immediately)\n", rest[0])
+	notifyReload()
+	fmt.Printf("admin console %s (applied to the running server)\n", rest[0])
+	return 0
+}
+
+/* ---------- reload ---------- */
+
+// cmdReload signals the running server to re-read the config file. It is the
+// manual fallback when a CLI config command could not deliver SIGHUP itself.
+func cmdReload(args []string) int {
+	if len(args) != 0 {
+		fmt.Fprintln(os.Stderr, "usage: gourl reload")
+		return 2
+	}
+	if err := reloadGourlFn(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	fmt.Println("reload signal sent")
 	return 0
 }
 

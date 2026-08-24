@@ -74,7 +74,8 @@ export default function Layout() {
   const [dragX, setDragX] = useState<number | null>(null)
   const [settleTo, setSettleTo] = useState<number | null>(null)
   // Gesture state lives in refs so rapid touchmove bursts never read stale
-  // state before a re-render lands.
+  // state before a re-render lands. touchstart writes ONLY refs — see
+  // onDrawerTouchStart for why.
   const dragActiveRef = useRef(false)
   const gestureCommittedRef = useRef(false)
   const dragOriginRef = useRef({ x: 0, y: 0 })
@@ -101,19 +102,14 @@ export default function Layout() {
       touch.clientX < window.innerWidth * 0.7
     )
       return
-    // Abort any running close animation so the gesture starts settled (also
-    // stops its timer from flashing the backdrop back open/closed later).
-    if (settleTimerRef.current) {
-      clearTimeout(settleTimerRef.current)
-      settleTimerRef.current = null
-    }
+    // Refs only — never setState here. A synchronous state write on
+    // touchstart re-renders (and restyles the drawer) inside the browser's
+    // tap-recognition window, which cancels the synthetic click: the first
+    // tap after opening the drawer landed nowhere. The gesture takes over
+    // the DOM only once it commits as a real drag in onTouchMove.
     dragOriginRef.current = { x: touch.clientX, y: touch.clientY }
-    dragBaseRef.current = mobileOpen ? 0 : DRAWER_W
     dragActiveRef.current = true
     gestureCommittedRef.current = false
-    setMobileClosing(false)
-    setSettleTo(null)
-    setDragX(dragBaseRef.current)
   }
 
   const onDrawerTouchMove = (e: React.TouchEvent) => {
@@ -126,6 +122,19 @@ export default function Layout() {
     if (!gestureCommittedRef.current) {
       if (Math.abs(dx) < 8 || Math.abs(dy) > Math.abs(dx)) return
       gestureCommittedRef.current = true
+      // The drag now owns the drawer: abort any running close animation so
+      // the transform follows the finger from a settled position (also stops
+      // its timer from flashing the backdrop later). This runs on first move,
+      // not on touchstart — a state write inside the tap-recognition window
+      // cancels the synthetic click of a plain tap.
+      if (settleTimerRef.current) {
+        clearTimeout(settleTimerRef.current)
+        settleTimerRef.current = null
+      }
+      dragBaseRef.current =
+        mobileClosing || settleTo !== null ? DRAWER_W : mobileOpen ? 0 : DRAWER_W
+      setMobileClosing(false)
+      setSettleTo(null)
       // Mount the drawer now so the swipe has something to follow — it used
       // to mount only on release, so a swipe that never passed the halfway
       // mark visibly opened nothing.
@@ -141,10 +150,9 @@ export default function Layout() {
     if (!dragActiveRef.current) return
     dragActiveRef.current = false
     if (!gestureCommittedRef.current) {
-      // Tap or vertical scroll on the edge: restore the pre-gesture state
-      // without mounting or unmounting the drawer.
-      setDragX(null)
-      setSettleTo(null)
+      // Tap or vertical scroll on the edge: nothing was mounted or restyled
+      // (touchstart only wrote refs), so there is nothing to undo — the tap's
+      // synthetic click lands normally.
       return
     }
     gestureCommittedRef.current = false
@@ -181,6 +189,7 @@ export default function Layout() {
       clearTimeout(settleTimerRef.current)
       settleTimerRef.current = null
     }
+    dragActiveRef.current = false
     setMobileClosing(false)
     setMobileOpen(true)
     setSettleTo(DRAWER_W)
@@ -192,6 +201,7 @@ export default function Layout() {
   // Close slides the drawer out (transform target) before unmounting it.
   const closeMobile = () => {
     if (mobileClosing) return
+    dragActiveRef.current = false
     setMobileClosing(true)
     setSettleTo(DRAWER_W)
     settleTimerRef.current = setTimeout(() => {

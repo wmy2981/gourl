@@ -107,7 +107,7 @@ func TestUpdateConfigSetsUABlocks(t *testing.T) {
 
 	rec := do(t, s, http.MethodPut, "/api/v1/config", map[string]any{
 		"site": map[string]any{
-			"name": "UA Test", "title": "T", "keywords": "", "description": "",
+			"name": "UA Test", "title": "T", "description": "",
 		},
 		"short_code_length": 4,
 		"ua_blocks":         []string{"Googlebot", "Bingbot"},
@@ -124,7 +124,7 @@ func TestUpdateConfigSetsUABlocks(t *testing.T) {
 	// A second PUT without ua_blocks clears the list (full-replace semantics).
 	rec = do(t, s, http.MethodPut, "/api/v1/config", map[string]any{
 		"site": map[string]any{
-			"name": "UA Test", "title": "T", "keywords": "", "description": "",
+			"name": "UA Test", "title": "T", "description": "",
 		},
 		"short_code_length": 4,
 	})
@@ -148,7 +148,7 @@ func TestConfigGetAndUpdate(t *testing.T) {
 	// Valid update: hot-swaps and persists to the YAML file.
 	rec = do(t, s, http.MethodPut, "/api/v1/config", map[string]any{
 		"site": map[string]any{
-			"name": "Renamed", "title": "T", "keywords": "", "description": "",
+			"name": "Renamed", "title": "T", "description": "",
 		},
 		"short_code_length": 8,
 		"base_url":          "https://s.example.com",

@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -52,8 +53,8 @@ func TestValidateRejectsBadConfigs(t *testing.T) {
 		name string
 		mut  func(*Config)
 	}{
-		{"short code length too small", func(c *Config) { c.ShortCodeLength = 3 }},
-		{"short code length too large", func(c *Config) { c.ShortCodeLength = 33 }},
+		{"short code length too small", func(c *Config) { c.ShortCodeLength = 1 }},
+		{"short code length too large", func(c *Config) { c.ShortCodeLength = 65 }},
 		{"base url not absolute", func(c *Config) { c.BaseURL = "s.example.com" }},
 		{"base url wrong scheme", func(c *Config) { c.BaseURL = "ftp://s.example.com" }},
 		{"extra base url invalid", func(c *Config) { c.ExtraBaseURLs = []string{"not-a-url"} }},
@@ -68,6 +69,71 @@ func TestValidateRejectsBadConfigs(t *testing.T) {
 			tc.mut(c)
 			if err := c.Validate(); err == nil {
 				t.Fatal("expected validation error, got nil")
+			}
+		})
+	}
+}
+
+// TestValidateErrorCodes: every validation rule reports its stable
+// machine-readable code (and interpolation params where applicable).
+func TestValidateErrorCodes(t *testing.T) {
+	cases := []struct {
+		name   string
+		mut    func(*Config)
+		code   string
+		params map[string]any
+	}{
+		{"short code length too small", func(c *Config) { c.ShortCodeLength = 1 },
+			"short_code_length_range", map[string]any{"min": 2, "max": 64, "got": 1}},
+		{"short code length too large", func(c *Config) { c.ShortCodeLength = 65 },
+			"short_code_length_range", map[string]any{"min": 2, "max": 64, "got": 65}},
+		{"base url not absolute", func(c *Config) { c.BaseURL = "s.example.com" }, "invalid_base_url", nil},
+		{"extra base url invalid", func(c *Config) { c.ExtraBaseURLs = []string{"not-a-url"} },
+			"invalid_extra_base_url", map[string]any{"url": "not-a-url"}},
+		{"reserved code invalid char", func(c *Config) { c.ReservedCodes = []string{"a b"} },
+			"invalid_reserved_code", map[string]any{"entry": "a b"}},
+		{"reserved code empty", func(c *Config) { c.ReservedCodes = []string{""} },
+			"invalid_reserved_code", map[string]any{"entry": ""}},
+		{"ip block invalid", func(c *Config) { c.IPBlocks = []string{"not-an-ip"} },
+			"invalid_ip_block", map[string]any{"entry": "not-an-ip"}},
+		{"ip block empty", func(c *Config) { c.IPBlocks = []string{""} },
+			"invalid_ip_block", map[string]any{"entry": ""}},
+		{"login rate negative", func(c *Config) { c.LoginRateMaxAttempts = -1 },
+			"negative_login_rate", nil},
+		{"login rate lock negative", func(c *Config) { c.LoginRateLockSeconds = -1 },
+			"negative_login_rate", nil},
+		{"link rate negative", func(c *Config) { c.LinkRatePerSecond = -1 },
+			"negative_link_rate", nil},
+		{"session ttl below minimum", func(c *Config) { c.SessionTTLMinutes = 3 },
+			"invalid_session_ttl", map[string]any{"got": 3}},
+		{"log level unknown", func(c *Config) { c.LogLevel = "verbose" },
+			"invalid_log_level", map[string]any{"got": "verbose"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			c := Default()
+			tc.mut(c)
+			err := c.Validate()
+			var ve *ValidationError
+			if !errors.As(err, &ve) {
+				t.Fatalf("Validate error = %v, want *ValidationError", err)
+			}
+			if ve.Code != tc.code {
+				t.Errorf("code = %q, want %q", ve.Code, tc.code)
+			}
+			if tc.params == nil {
+				if len(ve.Params) != 0 {
+					t.Errorf("params = %v, want none", ve.Params)
+				}
+			} else {
+				for k, want := range tc.params {
+					if got := ve.Params[k]; got != want {
+						t.Errorf("params[%q] = %v, want %v", k, got, want)
+					}
+				}
+			}
+			if ve.Message == "" {
+				t.Error("Message must stay non-empty for unknown-code fallbacks")
 			}
 		})
 	}
@@ -219,5 +285,41 @@ func TestManagerUpdateRejectsInvalidAndKeepsOld(t *testing.T) {
 	}
 	if m.Get().BaseURL != "" {
 		t.Errorf("config changed after rejected update: %+v", m.Get())
+	}
+}
+
+// TestManagerReloadPicksUpExternalEdits: another process (the CLI) edits the
+// file behind the manager's back; Reload hot-swaps it in. A broken edit
+// keeps the previous config.
+func TestManagerReloadPicksUpExternalEdits(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	m, err := NewManager(path)
+	if err != nil {
+		t.Fatalf("NewManager: %v", err)
+	}
+	if m.Get().Site.Name == "Renamed" {
+		t.Fatal("test precondition: default name must differ from Renamed")
+	}
+
+	if err := os.WriteFile(path, []byte("site:\n  name: Renamed\nwebui_enabled: false\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.Reload(); err != nil {
+		t.Fatalf("Reload: %v", err)
+	}
+	cfg := m.Get()
+	if cfg.Site.Name != "Renamed" || cfg.WebUIEnabled {
+		t.Errorf("reloaded config = name %q webui %v, want Renamed/false", cfg.Site.Name, cfg.WebUIEnabled)
+	}
+
+	if err := os.WriteFile(path, []byte("site:\n  name: Broken\nshort_code_length: 1\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.Reload(); err == nil {
+		t.Error("expected error reloading an invalid config file")
+	}
+	cfg = m.Get()
+	if cfg.Site.Name != "Renamed" || cfg.WebUIEnabled {
+		t.Errorf("failed reload changed the config: name %q webui %v", cfg.Site.Name, cfg.WebUIEnabled)
 	}
 }

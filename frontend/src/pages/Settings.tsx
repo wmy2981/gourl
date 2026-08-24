@@ -2,8 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { KeyRound, PlugZap, Plus, RefreshCw, Trash2, Upload } from 'lucide-react'
+import { Check, Copy, KeyRound, PlugZap, Plus, RefreshCw, Trash2, Upload } from 'lucide-react'
 import { api, ApiError, getServerConfig, isApp, setServerConfig, type AppConfig, type TokenInfo } from '../lib/api'
+import { apiErrorMessage } from '../lib/apiError'
 import { noSelectEnabled, setNoSelect } from '../lib/appSettings'
 import { copyText } from '../lib/clipboard'
 import { Button, Card, Dialog, Input, Label, Select, Switch, Textarea, useToast } from '../components/ui'
@@ -22,6 +23,10 @@ export default function Settings() {
   const [ipText, setIpText] = useState('')
   const [tokenNote, setTokenNote] = useState('')
   const [newToken, setNewToken] = useState('')
+  // Autosave in-flight bookkeeping. Must live above the early return below:
+  // hooks cannot be conditional (React #310).
+  const savingRef = useRef(false)
+  const pendingRef = useRef(false)
 
   useEffect(() => {
     if (cfg && !form) {
@@ -40,7 +45,7 @@ export default function Settings() {
       queryClient.invalidateQueries({ queryKey: ['config'] })
     },
     onError: (err: unknown) =>
-      toast(err instanceof ApiError ? err.message : t('settings.saveFailed'), 'error'),
+      toast(err instanceof ApiError ? apiErrorMessage(err, t) : t('settings.saveFailed'), 'error'),
   })
 
   if (!form) {
@@ -63,34 +68,68 @@ export default function Settings() {
   const setSite = (key: keyof AppConfig['site'], value: string) =>
     setForm({ ...form, site: { ...form.site, [key]: value } })
 
-  const save = () => {
-    saveMutation.mutate({
-      site: form.site,
-      short_code_length: form.short_code_length,
-      base_url: form.base_url,
-      login_rate_max_attempts: form.login_rate_max_attempts,
-      login_rate_lock_seconds: form.login_rate_lock_seconds,
-      session_ttl_minutes: form.session_ttl_minutes,
-      link_rate_per_second: form.link_rate_per_second,
-      log_level: form.log_level,
-      icon: form.icon,
-      extra_base_urls: extraUrlsText
-        .split('\n')
-        .map((s) => s.trim())
-        .filter(Boolean),
-      reserved_codes: reservedText
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean),
-      ua_blocks: uaText
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean),
-      ip_blocks: ipText
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean),
-    })
+  // Autosave: switches/selects save on change; text inputs and textareas
+  // save on blur. While a request is in flight the latest pending save is
+  // coalesced and re-fired when it completes.
+  const save = (override?: AppConfig) => {
+    if (!form) return
+    if (savingRef.current) {
+      pendingRef.current = true
+      return
+    }
+    savingRef.current = true
+    // `override` carries the not-yet-committed form state for immediate
+    // controls: the setState closure still sees the old values when the
+    // request body is built.
+    const f = override ?? form
+    saveMutation.mutate(
+      {
+        site: f.site,
+        short_code_length: f.short_code_length,
+        base_url: f.base_url,
+        login_rate_max_attempts: f.login_rate_max_attempts,
+        login_rate_lock_seconds: f.login_rate_lock_seconds,
+        session_ttl_minutes: f.session_ttl_minutes,
+        link_rate_per_second: f.link_rate_per_second,
+        log_level: f.log_level,
+        hard_delete: f.hard_delete,
+        backup_on_edit: f.backup_on_edit,
+        icon: f.icon,
+        extra_base_urls: extraUrlsText
+          .split('\n')
+          .map((s) => s.trim())
+          .filter(Boolean),
+        reserved_codes: reservedText
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean),
+        ua_blocks: uaText
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean),
+        ip_blocks: ipText
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean),
+      },
+      {
+        onSettled: () => {
+          savingRef.current = false
+          if (pendingRef.current) {
+            pendingRef.current = false
+            save()
+          }
+        },
+      },
+    )
+  }
+  // Immediate controls (switches, selects): apply then save with the next
+  // state inline — setForm is async, so a plain read here would send the
+  // pre-change values.
+  const setAndSave = <K extends keyof AppConfig>(key: K, value: AppConfig[K]) => {
+    const next = { ...form, [key]: value }
+    setForm(next)
+    save(next)
   }
 
   const iconInput = async (file: File | undefined) => {
@@ -102,7 +141,7 @@ export default function Settings() {
       toast(t('settings.saved'))
       queryClient.invalidateQueries({ queryKey: ['config'] })
     } catch (err) {
-      toast(err instanceof ApiError ? err.message : t('settings.saveFailed'), 'error')
+      toast(err instanceof ApiError ? apiErrorMessage(err, t) : t('settings.saveFailed'), 'error')
     }
   }
 
@@ -120,24 +159,21 @@ export default function Settings() {
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <Label htmlFor='cfg-site-name'>{t('settings.siteName')}</Label>
-              <Input id='cfg-site-name' value={form.site.name} onChange={(e) => setSite('name', e.target.value)} />
+              <Input id='cfg-site-name' value={form.site.name} onChange={(e) => setSite('name', e.target.value)} onBlur={() => save()} />
             </div>
             <div>
               <Label htmlFor='cfg-site-title'>{t('settings.siteTitle')}</Label>
-              <Input id='cfg-site-title' value={form.site.title} onChange={(e) => setSite('title', e.target.value)} />
+              <Input id='cfg-site-title' value={form.site.title} onChange={(e) => setSite('title', e.target.value)} onBlur={() => save()} />
             </div>
-            <div>
-              <Label htmlFor='cfg-keywords'>{t('settings.keywords')}</Label>
-              <Input id='cfg-keywords' value={form.site.keywords} onChange={(e) => setSite('keywords', e.target.value)} />
-            </div>
-            <div>
+            <div className="sm:col-span-2">
               <Label htmlFor='cfg-description'>{t('settings.description')}</Label>
-              <Input id='cfg-description' value={form.site.description} onChange={(e) => setSite('description', e.target.value)} />
+              <Textarea id='cfg-description' rows={3} value={form.site.description} onChange={(e) => setSite('description', e.target.value)} onBlur={() => save()} />
             </div>
           </div>
         </Card>
 
-        {/* Security */}
+        {/* Security: password, session lifetime and the login rate limit —
+            everything that gates admin access lives here */}
         <Card className="p-6">
           <h2 className="mb-2 text-sm font-medium text-muted">{t('settings.security')}</h2>
           <p className="mb-3 text-sm text-muted">{t('settings.securityHint')}</p>
@@ -145,42 +181,18 @@ export default function Settings() {
             <KeyRound size={15} />
             {t('settings.changePassword')}
           </Button>
-        </Card>
-
-        {/* Behavior */}
-        <Card className="p-6">
-          <h2 className="mb-4 text-sm font-medium text-muted">{t('settings.behavior')}</h2>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="mt-4 grid grid-cols-1 gap-4 border-t border-hairline pt-4 sm:grid-cols-2">
             <div>
-              <Label htmlFor='cfg-code-length'>{t('settings.shortCodeLength')}</Label>
+              <Label htmlFor='cfg-session-ttl'>{t('settings.sessionTTL')}</Label>
               <Input
-                id='cfg-code-length'
+                id='cfg-session-ttl'
                 type="number"
-                min={4}
-                max={32}
-                value={form.short_code_length}
-                onChange={(e) => set('short_code_length', Number(e.target.value))}
+                min={0}
+                value={form.session_ttl_minutes}
+                onChange={(e) => set('session_ttl_minutes', Number(e.target.value))}
+                onBlur={() => save()}
               />
-            </div>
-            <div>
-              <Label htmlFor='cfg-base-url'>{t('settings.baseUrl')}</Label>
-              <Input id='cfg-base-url' value={form.base_url} onChange={(e) => set('base_url', e.target.value)} placeholder="https://s.example.com" />
-              <p className="mt-1 text-xs text-muted">{t('settings.baseUrlHint')}</p>
-            </div>
-            <div className="sm:col-span-2">
-              <Label htmlFor="cfg-extra-urls">{t('settings.extraBaseUrls')}</Label>
-              <Textarea
-                id="cfg-extra-urls"
-                rows={3}
-                value={extraUrlsText}
-                onChange={(e) => setExtraUrlsText(e.target.value)}
-              />
-              <p className="mt-1 text-xs text-muted">{t('settings.extraBaseUrlsHint')}</p>
-            </div>
-            <div className="sm:col-span-2">
-              <Label htmlFor='cfg-reserved'>{t('settings.reservedCodes')}</Label>
-              <Textarea id='cfg-reserved' rows={3} value={reservedText} onChange={(e) => setReservedText(e.target.value)} />
-              <p className="mt-1 text-xs text-muted">{t('settings.reservedCodesHint')}</p>
+              <p className="mt-1 text-xs text-muted">{t('settings.sessionTTLHint')}</p>
             </div>
             <div>
               <Label htmlFor='cfg-login-attempts'>{t('settings.loginRateAttempts')}</Label>
@@ -190,6 +202,7 @@ export default function Settings() {
                 min={0}
                 value={form.login_rate_max_attempts}
                 onChange={(e) => set('login_rate_max_attempts', Number(e.target.value))}
+                onBlur={() => save()}
               />
               <p className="mt-1 text-xs text-muted">{t('settings.loginRateHint')}</p>
             </div>
@@ -201,19 +214,49 @@ export default function Settings() {
                 min={0}
                 value={form.login_rate_lock_seconds}
                 onChange={(e) => set('login_rate_lock_seconds', Number(e.target.value))}
+                onBlur={() => save()}
               />
               <p className="mt-1 text-xs text-muted">{t('settings.loginRateLockHint')}</p>
             </div>
+          </div>
+        </Card>
+
+        {/* Behavior */}
+        <Card className="p-6">
+          <h2 className="mb-4 text-sm font-medium text-muted">{t('settings.behavior')}</h2>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
-              <Label htmlFor='cfg-session-ttl'>{t('settings.sessionTTL')}</Label>
+              <Label htmlFor='cfg-code-length'>{t('settings.shortCodeLength')}</Label>
               <Input
-                id='cfg-session-ttl'
+                id='cfg-code-length'
                 type="number"
-                min={0}
-                value={form.session_ttl_minutes}
-                onChange={(e) => set('session_ttl_minutes', Number(e.target.value))}
+                min={2}
+                max={64}
+                value={form.short_code_length}
+                onChange={(e) => set('short_code_length', Number(e.target.value))}
+                onBlur={() => save()}
               />
-              <p className="mt-1 text-xs text-muted">{t('settings.sessionTTLHint')}</p>
+            </div>
+            <div>
+              <Label htmlFor='cfg-base-url'>{t('settings.baseUrl')}</Label>
+              <Input id='cfg-base-url' value={form.base_url} onChange={(e) => set('base_url', e.target.value)} onBlur={() => save()} placeholder="https://s.example.com" />
+              <p className="mt-1 text-xs text-muted">{t('settings.baseUrlHint')}</p>
+            </div>
+            <div className="sm:col-span-2">
+              <Label htmlFor="cfg-extra-urls">{t('settings.extraBaseUrls')}</Label>
+              <Textarea
+                id="cfg-extra-urls"
+                rows={3}
+                value={extraUrlsText}
+                onChange={(e) => setExtraUrlsText(e.target.value)}
+                onBlur={() => save()}
+              />
+              <p className="mt-1 text-xs text-muted">{t('settings.extraBaseUrlsHint')}</p>
+            </div>
+            <div className="sm:col-span-2">
+              <Label htmlFor='cfg-reserved'>{t('settings.reservedCodes')}</Label>
+              <Textarea id='cfg-reserved' rows={3} value={reservedText} onChange={(e) => setReservedText(e.target.value)} onBlur={() => save()} />
+              <p className="mt-1 text-xs text-muted">{t('settings.reservedCodesHint')}</p>
             </div>
             <div>
               <Label htmlFor='cfg-link-rate'>{t('settings.linkRate')}</Label>
@@ -223,6 +266,7 @@ export default function Settings() {
                 min={0}
                 value={form.link_rate_per_second}
                 onChange={(e) => set('link_rate_per_second', Number(e.target.value))}
+                onBlur={() => save()}
               />
               <p className="mt-1 text-xs text-muted">{t('settings.linkRateHint')}</p>
             </div>
@@ -230,7 +274,7 @@ export default function Settings() {
               <Label>{t('settings.logLevel')}</Label>
               <Select
                 value={form.log_level}
-                onChange={(v) => set('log_level', v)}
+                onChange={(v) => setAndSave('log_level', v)}
                 ariaLabel={t('settings.logLevel')}
                 options={[
                   { value: 'debug', label: t('settings.logLevelDebug') },
@@ -267,7 +311,7 @@ export default function Settings() {
                   toast(t('settings.saved'))
                   queryClient.invalidateQueries({ queryKey: ['config'] })
                 } catch (err) {
-                  toast(err instanceof ApiError ? err.message : t('settings.saveFailed'), 'error')
+                  toast(err instanceof ApiError ? apiErrorMessage(err, t) : t('settings.saveFailed'), 'error')
                 }
               }}>
                 {t('settings.removeIcon')}
@@ -288,6 +332,7 @@ export default function Settings() {
             rows={3}
             value={uaText}
             onChange={(e) => setUaText(e.target.value)}
+            onBlur={() => save()}
             placeholder={t('settings.uaPlaceholder')}
             aria-label={t('settings.uaPatterns')}
           />
@@ -302,9 +347,40 @@ export default function Settings() {
             rows={3}
             value={ipText}
             onChange={(e) => setIpText(e.target.value)}
+            onBlur={() => save()}
             placeholder={t('settings.ipPlaceholder')}
             aria-label={t('settings.ipPatterns')}
           />
+        </Card>
+
+        {/* Data management: deletion mode and edit snapshots, both applied by
+            the save button like every other config field */}
+        <Card className="p-6">
+          <h2 className="mb-4 text-sm font-medium text-muted">{t('settings.dataManagement')}</h2>
+          <div className="flex flex-col gap-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-sm">{t('settings.hardDelete')}</p>
+                <p className="mt-0.5 text-xs text-muted">{t('settings.hardDeleteHint')}</p>
+              </div>
+              <Switch
+                checked={form.hard_delete}
+                onChange={(v) => setAndSave('hard_delete', v)}
+                aria-label={t('settings.hardDelete')}
+              />
+            </div>
+            <div className="flex items-start justify-between gap-3 border-t border-hairline pt-4">
+              <div>
+                <p className="text-sm">{t('settings.backupOnEdit')}</p>
+                <p className="mt-0.5 text-xs text-muted">{t('settings.backupOnEditHint')}</p>
+              </div>
+              <Switch
+                checked={form.backup_on_edit}
+                onChange={(v) => setAndSave('backup_on_edit', v)}
+                aria-label={t('settings.backupOnEdit')}
+              />
+            </div>
+          </div>
         </Card>
 
         {/* API tokens */}
@@ -320,16 +396,10 @@ export default function Settings() {
               queryClient.invalidateQueries({ queryKey: ['tokens'] })
               toast(t('settings.tokenCreated'))
             } catch (err) {
-              toast(err instanceof ApiError ? err.message : t('common.error'), 'error')
+              toast(err instanceof ApiError ? apiErrorMessage(err, t) : t('common.error'), 'error')
             }
           }}
         />
-
-        <div className="flex justify-end">
-          <Button onClick={save} disabled={saveMutation.isPending} className="px-8">
-            {t('settings.save')}
-          </Button>
-        </div>
       </div>
     </div>
   )
@@ -359,21 +429,37 @@ export function ConnectionCard() {
   // without restarting the mount effect's lifecycle.
   const aliveRef = useRef(true)
 
-  // Probe the remote server through the authenticated config endpoint: only
-  // a valid bearer token passes requireAuth, so a 401 means the stored token
-  // is dead and a network error means the server is unreachable. Both probes
-  // give up after 5s. The public health endpoint rides along for the server
-  // version; any failure leaves it unset (shown as "—").
+  // Probe the remote server through the auth/status endpoint: its
+  // authenticated field is the real credential check, so connected vs
+  // unauthorized comes from the body rather than a 401. Network errors and
+  // timeouts still mean unreachable (5s abort, same as before). Older
+  // servers without the authenticated field fall back to the config
+  // endpoint's 401-based judgment. The public health endpoint rides along
+  // for the server version; any failure leaves it unset (shown as "—").
   const check = useCallback(async () => {
-    const [cfg, h] = await Promise.allSettled([
-      api.getConfig({ signal: AbortSignal.timeout(PROBE_TIMEOUT_MS) }),
+    const [st, h] = await Promise.allSettled([
+      api.authStatus({ signal: AbortSignal.timeout(PROBE_TIMEOUT_MS) }),
       api.health({ signal: AbortSignal.timeout(PROBE_TIMEOUT_MS) }),
     ])
     if (!aliveRef.current) return
-    if (cfg.status === 'fulfilled') {
-      setStatus('connected')
+    if (st.status === 'fulfilled') {
+      const authed = (st.value as { authenticated?: boolean }).authenticated
+      if (authed === undefined) {
+        // Legacy server: re-judge through the config probe.
+        try {
+          await api.getConfig({ signal: AbortSignal.timeout(PROBE_TIMEOUT_MS) })
+          setStatus('connected')
+        } catch (err) {
+          setStatus(err instanceof ApiError && err.status === 401 ? 'unauthorized' : 'unreachable')
+        }
+      } else {
+        setStatus(authed ? 'connected' : 'unauthorized')
+      }
     } else {
-      setStatus(cfg.reason instanceof ApiError && cfg.reason.status === 401 ? 'unauthorized' : 'unreachable')
+      // A rejected probe: a 401 means the server answered and refused the
+      // token, anything else (network error, 5s abort) means unreachable.
+      const err = st.reason
+      setStatus(err instanceof ApiError && err.status === 401 ? 'unauthorized' : 'unreachable')
     }
     setServerVersion(h.status === 'fulfilled' ? h.value.version : null)
   }, [])
@@ -514,7 +600,9 @@ export function ConnectionCard() {
   )
 }
 
-function TokenSection({
+/** The API tokens card: list, create and delete. Exported for the component
+ *  test — the parent only wires the token-note state. */
+export function TokenSection({
   tokenNote,
   setTokenNote,
   newToken,
@@ -530,6 +618,7 @@ function TokenSection({
   const queryClient = useQueryClient()
   const { data } = useQuery({ queryKey: ['tokens'], queryFn: api.tokens })
   const [revoking, setRevoking] = useState<TokenInfo | null>(null)
+  const [tokenCopied, setTokenCopied] = useState(false)
   const revokeMutation = useMutation({
     mutationFn: (id: number) => api.deleteToken(id),
     onSuccess: () => {
@@ -538,7 +627,7 @@ function TokenSection({
       toast(t('settings.tokenRevoked'))
     },
     onError: (err: unknown) =>
-      toast(err instanceof ApiError ? err.message : t('common.error'), 'error'),
+      toast(err instanceof ApiError ? apiErrorMessage(err, t) : t('common.error'), 'error'),
   })
   // In the app, /docs/ lives on the remote server (not the WebView origin) —
   // link straight to it and hand it to the system browser via _system.
@@ -564,22 +653,33 @@ function TokenSection({
         </a>
       </p>
       {newToken && (
-        <div className="mb-4 rounded-xl border border-accent/40 bg-accent-soft p-3">
+        <div className="mb-4 flex items-center justify-between gap-2 rounded-xl border border-accent/40 bg-accent-soft p-3">
           <p className="short-code break-all text-sm">{newToken}</p>
-          <Button variant="ghost" className="mt-1 !p-1 text-xs" onClick={async () => {
-            // Same multi-tier fallback chain as the link-row copy button.
-            const ok = await copyText(newToken)
-            toast(ok ? t('links.copied') : t('links.copyFailed'), ok ? 'success' : 'error')
-          }}>
-            {t('links.copy')}
-          </Button>
+          {/* Same icon treatment as the link-row copy button. */}
+          <button
+            onClick={async () => {
+              // Same multi-tier fallback chain as the link-row copy button.
+              const ok = await copyText(newToken)
+              if (ok) {
+                setTokenCopied(true)
+                setTimeout(() => setTokenCopied(false), 1500)
+              }
+              toast(ok ? t('links.copied') : t('links.copyFailed'), ok ? 'success' : 'error')
+            }}
+            title={t('links.copy')}
+            className="shrink-0 rounded-md p-1 text-muted transition-colors hover:bg-accent-soft hover:text-accent-deep dark:hover:text-accent"
+          >
+            {tokenCopied ? <Check size={15} className="text-success" /> : <Copy size={15} />}
+          </button>
         </div>
       )}
       <div className="flex flex-col gap-2">
         {data?.tokens.map((tok) => (
           <div key={tok.id} className="flex items-center justify-between rounded-xl border border-hairline px-3.5 py-2">
             <div className="min-w-0">
-              <span className="short-code text-sm">{tok.token}</span>
+              {/* The API only ever returns the 8-char prefix; render it as a
+                  truncated preview, never as if it were the full token. */}
+              <span className="short-code text-sm">{tok.token}…</span>
               {tok.note && <span className="ml-2 text-xs text-muted">{tok.note}</span>}
             </div>
             <Button variant="ghost" className="!p-1.5" onClick={() => setRevoking(tok)} aria-label={t('settings.revoke')}>
@@ -610,7 +710,12 @@ function TokenSection({
       title={t('settings.revoke')}
     >
       <p className="text-sm text-muted">{t('settings.tokenRevokeConfirm')}</p>
-      {revoking && <p className="short-code mt-2 text-sm font-medium">{revoking.token}</p>}
+      {revoking && (
+        <div className="mt-2">
+          <p className="short-code text-sm font-medium">{revoking.token}…</p>
+          {revoking.note && <p className="mt-1 text-xs text-muted">{revoking.note}</p>}
+        </div>
+      )}
       <div className="mt-5 flex justify-end gap-2">
         <Button variant="ghost" onClick={() => setRevoking(null)}>
           {t('common.cancel')}

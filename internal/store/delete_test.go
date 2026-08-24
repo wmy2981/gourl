@@ -6,9 +6,9 @@ import (
 	"testing"
 )
 
-// TestSoftDeleteHidesAndFreesCode: a deleted link vanishes from every read
+// TestDeleteHidesAndFreesCode: a deleted link vanishes from every read
 // path, keeps its row (id preserved), and its code becomes reusable.
-func TestSoftDeleteHidesAndFreesCode(t *testing.T) {
+func TestDeleteHidesAndFreesCode(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
 	l := sampleLink("abc")
@@ -20,7 +20,7 @@ func TestSoftDeleteHidesAndFreesCode(t *testing.T) {
 		t.Fatal("expected a positive id")
 	}
 
-	if err := s.DeleteLink(ctx, "abc"); err != nil {
+	if err := s.DeleteLink(ctx, "abc", false); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.GetLink(ctx, "abc"); !errors.Is(err, ErrNotFound) {
@@ -36,7 +36,7 @@ func TestSoftDeleteHidesAndFreesCode(t *testing.T) {
 		t.Fatalf("CountExpired after delete = %d (%v), want 0", n, err)
 	}
 	// Re-deleting the same code is a not-found, not a double delete.
-	if err := s.DeleteLink(ctx, "abc"); !errors.Is(err, ErrNotFound) {
+	if err := s.DeleteLink(ctx, "abc", false); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("second delete = %v, want ErrNotFound", err)
 	}
 
@@ -50,10 +50,10 @@ func TestSoftDeleteHidesAndFreesCode(t *testing.T) {
 	}
 }
 
-// TestSoftDeleteCountsFromZero: clicking a reused code after deletion counts
+// TestDeleteCountsFromZero: clicking a reused code after deletion counts
 // for the new link only; the old rows keep the old id and still feed the
 // global totals (permanent history).
-func TestSoftDeleteCountsFromZero(t *testing.T) {
+func TestDeleteCountsFromZero(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
 	old := sampleLink("abc")
@@ -64,7 +64,7 @@ func TestSoftDeleteCountsFromZero(t *testing.T) {
 		[]DailyCount{{Code: "abc", Date: "2026-08-15", Count: 100}}, 1); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.DeleteLink(ctx, "abc"); err != nil {
+	if err := s.DeleteLink(ctx, "abc", false); err != nil {
 		t.Fatal(err)
 	}
 
@@ -111,7 +111,7 @@ func TestBatchDeleteReportsFirst(t *testing.T) {
 		}
 	}
 	// "nope" is absent: skipped, not the first.
-	deleted, first, err := s.DeleteLinks(ctx, []string{"nope", "b", "a"})
+	deleted, first, err := s.DeleteLinks(ctx, []string{"nope", "b", "a"}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -131,7 +131,7 @@ func TestBatchDeleteReportsFirst(t *testing.T) {
 	if err := s.UpdateLink(ctx, c); err != nil {
 		t.Fatal(err)
 	}
-	n, first, err := s.DeleteExpired(ctx, 2000)
+	n, first, err := s.DeleteExpired(ctx, 2000, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -143,9 +143,9 @@ func TestBatchDeleteReportsFirst(t *testing.T) {
 	}
 }
 
-// TestSoftDeleteToken: revoked tokens disappear from reads and auth, the row
+// TestDeleteToken: revoked tokens disappear from reads and auth, the row
 // stays, and the key stays permanently taken.
-func TestSoftDeleteToken(t *testing.T) {
+func TestDeleteToken(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
 	id, err := s.CreateToken(ctx, "tok-1", "note", 1)
@@ -163,5 +163,73 @@ func TestSoftDeleteToken(t *testing.T) {
 	}
 	if _, err := s.CreateToken(ctx, "tok-1", "reuse", 2); !errors.Is(err, ErrTaken) {
 		t.Fatal("reusing a deleted token key must fail (permanently taken)")
+	}
+}
+
+// TestHardDeleteRemovesRows: with hard=true every deletion path physically
+// removes the link row while daily click history survives (permanent totals).
+func TestHardDeleteRemovesRows(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	for _, c := range []string{"a", "b", "c"} {
+		if err := s.CreateLink(ctx, sampleLink(c)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := s.ApplyCounts(ctx, map[string]int64{"a": 7},
+		[]DailyCount{{Code: "a", Date: "2026-08-15", Count: 7}}, 1); err != nil {
+		t.Fatal(err)
+	}
+
+	// Single hard delete: the row is gone entirely.
+	if err := s.DeleteLink(ctx, "a", true); err != nil {
+		t.Fatal(err)
+	}
+	var rows int
+	if err := s.db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM links WHERE code = 'a'`).Scan(&rows); err != nil {
+		t.Fatal(err)
+	}
+	if rows != 0 {
+		t.Fatalf("hard-deleted row still present: %d rows", rows)
+	}
+	// Daily clicks survive a hard delete.
+	var n int
+	if err := s.db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM daily_clicks WHERE code = 'a'`).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != 1 {
+		t.Errorf("daily clicks lost on hard delete: %d rows, want 1", n)
+	}
+	// Global totals keep the orphaned history.
+	_, total, _, err := s.StatsOverview(ctx, "2026-08-01")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if total != 7 {
+		t.Errorf("global total after hard delete = %d, want 7", total)
+	}
+
+	// Batch + expired sweeps honor hard too.
+	deleted, first, err := s.DeleteLinks(ctx, []string{"b"}, true)
+	if err != nil || deleted != 1 || first == nil || first.Code != "b" {
+		t.Fatalf("hard batch delete = %d, %+v, %v", deleted, first, err)
+	}
+	c := sampleLink("c")
+	c.ExpiresAt = 1000
+	if err := s.UpdateLink(ctx, c); err != nil {
+		t.Fatal(err)
+	}
+	nExpired, _, err := s.DeleteExpired(ctx, 2000, true)
+	if err != nil || nExpired != 1 {
+		t.Fatalf("hard expired sweep = %d, %v", nExpired, err)
+	}
+	if err := s.db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM links`).Scan(&rows); err != nil {
+		t.Fatal(err)
+	}
+	if rows != 0 {
+		t.Errorf("links remaining after full hard sweep: %d, want 0", rows)
 	}
 }

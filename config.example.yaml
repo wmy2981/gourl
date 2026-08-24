@@ -12,12 +12,10 @@ site:
   name: gourl
   # Site title (HTML <title> and meta).
   title: gourl - Short Links
-  # meta keywords, comma separated.
-  keywords: short link, url shortener
   # meta description.
   description: Lightweight self-hosted URL shortener
 
-# Length of randomly generated short codes (4-32).
+# Length of randomly generated short codes (2-64).
 short_code_length: 6
 
 # Primary base URL for building full short URLs (empty = infer from request Host).
@@ -57,5 +55,35 @@ link_rate_per_second: 100
 # page, applied immediately on save.
 log_level: info
 
+# Hard-delete links instead of soft-deleting them: every deletion path
+# (single, batch, clear expired) physically removes the row. Daily click
+# history is always kept; API tokens are unaffected. Default false.
+hard_delete: false
+
+# Snapshot the previous version into the backups table before each edit
+# (manual edits and batch import conflict=update). Turning it off stops new
+# snapshots; existing ones are kept (`gourl reset backups` clears them).
+# Default true.
+backup_on_edit: true
+
 # Custom icon file name inside the assets data directory (empty = built-in default).
 icon: ""
+
+# Bcrypt hash of the admin password. Written by the /admin/setup flow and
+# change-password (or migrated once from the legacy ADMIN_PASSWORD env var);
+# never exposed via the API. Never edit it by hand — empty = not set up yet.
+password_hash: ""
+
+# Session revocation counter. Bumping it instantly invalidates every issued
+# admin session. Managed automatically (password change, `gourl reset
+# sessions`) — do not edit.
+session_epoch: 0
+
+# Gates the admin console (/admin). Toggle with `gourl webui on|off`;
+# Swagger /docs stays up either way.
+webui_enabled: true
+
+# Gates POST /api/v1/db, the raw SQL console (admin-only, single transaction,
+# schema changes refused). Default off. File-only switch like webui_enabled:
+# flip it here, then run `gourl reload` — no restart needed.
+sql_console_enabled: false
