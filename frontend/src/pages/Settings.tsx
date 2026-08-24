@@ -23,6 +23,10 @@ export default function Settings() {
   const [ipText, setIpText] = useState('')
   const [tokenNote, setTokenNote] = useState('')
   const [newToken, setNewToken] = useState('')
+  // Autosave in-flight bookkeeping. Must live above the early return below:
+  // hooks cannot be conditional (React #310).
+  const savingRef = useRef(false)
+  const pendingRef = useRef(false)
 
   useEffect(() => {
     if (cfg && !form) {
@@ -67,8 +71,6 @@ export default function Settings() {
   // Autosave: switches/selects save on change; text inputs and textareas
   // save on blur. While a request is in flight the latest pending save is
   // coalesced and re-fired when it completes.
-  const savingRef = useRef(false)
-  const pendingRef = useRef(false)
   const save = (override?: AppConfig) => {
     if (!form) return
     if (savingRef.current) {
