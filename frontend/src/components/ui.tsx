@@ -455,7 +455,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
               return (
                 <motion.div
                   key={toast.id}
-                  layout
+                  layout="position"
                   ref={(el) => {
                     // Cards are content-sized; record the rendered height so
                     // the pile overlap tracks it (fires once per card).
@@ -466,8 +466,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                   }}
                   initial={{ opacity: 0, y: 28, scale: 0.95 }}
                   animate={{ opacity: 1, y: 0, scale: 1, marginBottom }}
-                  exit={{ opacity: 0, y: -14, scale: 0.95 }}
+                  exit={{ opacity: 0, marginBottom }}
                   transition={{ type: 'spring', stiffness: 380, damping: 32 }}
+                  style={{ zIndex: i + 1 }}
                   className={`flex w-fit max-w-80 items-start gap-2.5 rounded-lg border px-3.5 py-3 text-sm font-medium shadow-[0_8px_30px_rgba(0,0,0,0.12)] ${
                     toast.kind === 'error'
                       ? 'border-danger/20 bg-[#fff7f6] text-danger dark:bg-[#2a1a1a] dark:text-red-300'
