@@ -418,3 +418,46 @@ func TestResetApiRevokesTokens(t *testing.T) {
 		t.Errorf("token after reset api = %v, want ErrNotFound", err)
 	}
 }
+
+// TestResetBackupsClearsTable: a real sqlite file seeded with backup rows is
+// emptied by `reset backups` while the links table stays untouched.
+func TestResetBackupsClearsTable(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "gourl.db")
+	t.Setenv("DB_PATH", path)
+
+	st, err := store.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	l := &store.Link{Code: "abc", URL: "https://example.com/a", CreatedAt: 1, UpdatedAt: 1}
+	if err := st.CreateLink(context.Background(), l); err != nil {
+		st.Close()
+		t.Fatal(err)
+	}
+	if _, err := st.BackupLink(context.Background(), l, 2); err != nil {
+		st.Close()
+		t.Fatal(err)
+	}
+	if n, _ := st.CountBackups(context.Background()); n != 1 {
+		st.Close()
+		t.Fatalf("seeded backups = %d, want 1", n)
+	}
+	st.Close()
+
+	if code := cmdReset([]string{"-y", "backups"}); code != 0 {
+		t.Fatalf("reset backups exit = %d", code)
+	}
+
+	st2, err := store.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st2.Close()
+	if n, _ := st2.CountBackups(context.Background()); n != 0 {
+		t.Errorf("backups after reset = %d, want 0", n)
+	}
+	if _, err := st2.GetLink(context.Background(), "abc"); err != nil {
+		t.Errorf("link after reset backups = %v, want intact", err)
+	}
+}

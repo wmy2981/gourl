@@ -39,6 +39,7 @@ RESET TARGETS
   config         delete the config file and restart the service (defaults)
   sessions       revoke every admin session (session epoch bump)
   api            revoke every API token (soft delete, like the API)
+  backups        delete every edit snapshot from the backups table
   db             delete the SQLite database and restart the service
   redis          wipe the Redis click buffer and restart the service
   --all          delete the data and config directories and restart the service
@@ -72,6 +73,7 @@ RESET TARGETS
   config         delete the config file and restart the service (defaults)
   sessions       revoke every admin session (session epoch bump)
   api            revoke every API token (soft delete, like the API)
+  backups        delete every edit snapshot from the backups table
   db             delete the SQLite database and restart the service
   redis          wipe the Redis click buffer and restart the service
   --all          delete the data and config directories and restart the service

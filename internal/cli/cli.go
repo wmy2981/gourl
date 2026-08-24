@@ -542,6 +542,8 @@ func cmdReset(args []string) int {
 		return resetConfigFile(yes)
 	case "api":
 		return resetTokens(yes)
+	case "backups":
+		return resetBackups(yes)
 	case "db":
 		return resetDB(yes)
 	case "redis":
@@ -641,6 +643,33 @@ func resetTokens(yes bool) int {
 		return 1
 	}
 	fmt.Printf("revoked %d token(s)\n", n)
+	return 0
+}
+
+// resetBackups clears the backups table in place (the running server keeps
+// serving — the store is only read by exports afterwards). b_id numbering
+// restarts from 1.
+func resetBackups(yes bool) int {
+	if err := confirm(yes, "delete every edit snapshot from the backups table? this cannot be undone"); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	if _, err := os.Stat(dbPath()); err != nil {
+		fmt.Fprintln(os.Stderr, "no database, nothing to clear")
+		return 1
+	}
+	st, err := store.Open(dbPath())
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "open store: %v\n", err)
+		return 1
+	}
+	defer st.Close()
+	n, err := st.ClearBackups(context.Background())
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "clear backups: %v\n", err)
+		return 1
+	}
+	fmt.Printf("deleted %d backup snapshot(s)\n", n)
 	return 0
 }
 
