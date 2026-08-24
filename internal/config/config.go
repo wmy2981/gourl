@@ -106,47 +106,84 @@ func Load(path string) (*Config, error) {
 	return cfg, nil
 }
 
+// ValidationError is the typed validation failure: a stable machine-readable
+// Code (surfaced to API clients for i18n mapping), a human-readable English
+// Message, and optional Params interpolated into translated texts.
+type ValidationError struct {
+	Code    string
+	Message string
+	Params  map[string]any
+}
+
+func (e *ValidationError) Error() string { return e.Message }
+
 // Validate checks constraints. An empty name falls back to "gourl".
+// Failures come back as *ValidationError with one stable code per rule so
+// clients can translate them.
 func (c *Config) Validate() error {
 	if c.ShortCodeLength < 2 || c.ShortCodeLength > 64 {
-		return fmt.Errorf("short_code_length must be between 2 and 64, got %d", c.ShortCodeLength)
+		return &ValidationError{Code: "short_code_length_range",
+			Message: fmt.Sprintf("short_code_length must be between 2 and 64, got %d", c.ShortCodeLength),
+			Params:  map[string]any{"min": 2, "max": 64, "got": c.ShortCodeLength},
+		}
 	}
 	if c.Site.Name == "" {
 		c.Site.Name = "gourl"
 	}
 	if c.BaseURL != "" && !isAbsoluteHTTPURL(c.BaseURL) {
-		return fmt.Errorf("base_url must be an absolute http(s) URL")
+		return &ValidationError{Code: "invalid_base_url",
+			Message: "base_url must be an absolute http(s) URL",
+		}
 	}
 	for _, u := range c.ExtraBaseURLs {
 		if !isAbsoluteHTTPURL(u) {
-			return fmt.Errorf("extra_base_url %q must be an absolute http(s) URL", u)
+			return &ValidationError{Code: "invalid_extra_base_url",
+				Message: fmt.Sprintf("extra_base_url %q must be an absolute http(s) URL", u),
+				Params:  map[string]any{"url": u},
+			}
 		}
 	}
 	for _, r := range c.ReservedCodes {
 		if err := validReservedCode(r); err != nil {
-			return err
+			return &ValidationError{Code: "invalid_reserved_code",
+				Message: err.Error(),
+				Params:  map[string]any{"entry": r},
+			}
 		}
 	}
 	for _, b := range c.IPBlocks {
 		if err := validIPBlock(b); err != nil {
-			return err
+			return &ValidationError{Code: "invalid_ip_block",
+				Message: err.Error(),
+				Params:  map[string]any{"entry": b},
+			}
 		}
 	}
 	if c.LoginRateMaxAttempts < 0 || c.LoginRateLockSeconds < 0 {
-		return fmt.Errorf("login rate limits must not be negative (0 disables)")
+		return &ValidationError{Code: "negative_login_rate",
+			Message: "login rate limits must not be negative (0 disables)",
+		}
 	}
 	if c.SessionTTLMinutes != 0 && c.SessionTTLMinutes < 5 {
-		return fmt.Errorf("session_ttl_minutes must be 0 (never expire) or at least 5, got %d", c.SessionTTLMinutes)
+		return &ValidationError{Code: "invalid_session_ttl",
+			Message: fmt.Sprintf("session_ttl_minutes must be 0 (never expire) or at least 5, got %d", c.SessionTTLMinutes),
+			Params:  map[string]any{"got": c.SessionTTLMinutes},
+		}
 	}
 	if c.LinkRatePerSecond < 0 {
-		return fmt.Errorf("link_rate_per_second must not be negative (0 disables)")
+		return &ValidationError{Code: "negative_link_rate",
+			Message: "link_rate_per_second must not be negative (0 disables)",
+		}
 	}
 	switch c.LogLevel {
 	case "":
 		c.LogLevel = "info"
 	case "debug", "info", "warning", "warn", "error":
 	default:
-		return fmt.Errorf("log_level must be debug, info, warning or error, got %q", c.LogLevel)
+		return &ValidationError{Code: "invalid_log_level",
+			Message: fmt.Sprintf("log_level must be debug, info, warning or error, got %q", c.LogLevel),
+			Params:  map[string]any{"got": c.LogLevel},
+		}
 	}
 	return nil
 }

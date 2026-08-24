@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -330,12 +331,25 @@ type errorBody struct {
 }
 
 type apiError struct {
-	Code    string `json:"code"`
-	Message string `json:"message"`
+	Code    string         `json:"code"`
+	Message string         `json:"message"`
+	Params  map[string]any `json:"params,omitempty"`
 }
 
 func writeError(w http.ResponseWriter, status int, code, message string) {
 	writeJSON(w, status, errorBody{Error: apiError{Code: code, Message: message}})
+}
+
+// writeConfigError reports a config validation failure with its stable rule
+// code and params so clients can map it to translated text.
+func writeConfigError(w http.ResponseWriter, err error) {
+	var ve *config.ValidationError
+	if errors.As(err, &ve) {
+		writeJSON(w, http.StatusBadRequest,
+			errorBody{Error: apiError{Code: ve.Code, Message: ve.Message, Params: ve.Params}})
+		return
+	}
+	writeError(w, http.StatusBadRequest, "invalid_config", err.Error())
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {

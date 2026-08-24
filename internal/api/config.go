@@ -34,7 +34,7 @@ func (s *Server) updateConfig(w http.ResponseWriter, r *http.Request) {
 	cfg.WebUIEnabled = cur.WebUIEnabled
 	cfg.SQLConsoleEnabled = cur.SQLConsoleEnabled
 	if err := s.cfg.Update(&cfg); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_config", err.Error())
+		writeConfigError(w, err)
 		return
 	}
 	// The log level is part of the business config now: apply it immediately.

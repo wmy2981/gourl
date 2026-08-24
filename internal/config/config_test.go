@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -68,6 +69,71 @@ func TestValidateRejectsBadConfigs(t *testing.T) {
 			tc.mut(c)
 			if err := c.Validate(); err == nil {
 				t.Fatal("expected validation error, got nil")
+			}
+		})
+	}
+}
+
+// TestValidateErrorCodes: every validation rule reports its stable
+// machine-readable code (and interpolation params where applicable).
+func TestValidateErrorCodes(t *testing.T) {
+	cases := []struct {
+		name   string
+		mut    func(*Config)
+		code   string
+		params map[string]any
+	}{
+		{"short code length too small", func(c *Config) { c.ShortCodeLength = 1 },
+			"short_code_length_range", map[string]any{"min": 2, "max": 64, "got": 1}},
+		{"short code length too large", func(c *Config) { c.ShortCodeLength = 65 },
+			"short_code_length_range", map[string]any{"min": 2, "max": 64, "got": 65}},
+		{"base url not absolute", func(c *Config) { c.BaseURL = "s.example.com" }, "invalid_base_url", nil},
+		{"extra base url invalid", func(c *Config) { c.ExtraBaseURLs = []string{"not-a-url"} },
+			"invalid_extra_base_url", map[string]any{"url": "not-a-url"}},
+		{"reserved code invalid char", func(c *Config) { c.ReservedCodes = []string{"a b"} },
+			"invalid_reserved_code", map[string]any{"entry": "a b"}},
+		{"reserved code empty", func(c *Config) { c.ReservedCodes = []string{""} },
+			"invalid_reserved_code", map[string]any{"entry": ""}},
+		{"ip block invalid", func(c *Config) { c.IPBlocks = []string{"not-an-ip"} },
+			"invalid_ip_block", map[string]any{"entry": "not-an-ip"}},
+		{"ip block empty", func(c *Config) { c.IPBlocks = []string{""} },
+			"invalid_ip_block", map[string]any{"entry": ""}},
+		{"login rate negative", func(c *Config) { c.LoginRateMaxAttempts = -1 },
+			"negative_login_rate", nil},
+		{"login rate lock negative", func(c *Config) { c.LoginRateLockSeconds = -1 },
+			"negative_login_rate", nil},
+		{"link rate negative", func(c *Config) { c.LinkRatePerSecond = -1 },
+			"negative_link_rate", nil},
+		{"session ttl below minimum", func(c *Config) { c.SessionTTLMinutes = 3 },
+			"invalid_session_ttl", map[string]any{"got": 3}},
+		{"log level unknown", func(c *Config) { c.LogLevel = "verbose" },
+			"invalid_log_level", map[string]any{"got": "verbose"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			c := Default()
+			tc.mut(c)
+			err := c.Validate()
+			var ve *ValidationError
+			if !errors.As(err, &ve) {
+				t.Fatalf("Validate error = %v, want *ValidationError", err)
+			}
+			if ve.Code != tc.code {
+				t.Errorf("code = %q, want %q", ve.Code, tc.code)
+			}
+			if tc.params == nil {
+				if len(ve.Params) != 0 {
+					t.Errorf("params = %v, want none", ve.Params)
+				}
+			} else {
+				for k, want := range tc.params {
+					if got := ve.Params[k]; got != want {
+						t.Errorf("params[%q] = %v, want %v", k, got, want)
+					}
+				}
+			}
+			if ve.Message == "" {
+				t.Error("Message must stay non-empty for unknown-code fallbacks")
 			}
 		})
 	}

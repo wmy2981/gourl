@@ -376,6 +376,11 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/SetupRequired" }
         "201": { description: Created }
+        "400":
+          description: Config validation failed (the whole config is re-validated on save) — same rule codes as PUT /config
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
         "409": { description: Pattern already exists }
   /ua-blocks/{id}:
     delete:
@@ -446,7 +451,11 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/SetupRequired" }
         "200": { description: Updated config }
-        "400": { description: Invalid config }
+        "400":
+          description: "Validation failed — one stable rule code per constraint, with optional params: short_code_length_range (min/max/got), invalid_base_url, invalid_extra_base_url (url), invalid_reserved_code (entry), invalid_ip_block (entry), negative_login_rate, invalid_session_ttl (got), negative_link_rate, invalid_log_level (got)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
   /icon:
     post:
       tags: [config]
@@ -567,6 +576,21 @@ components:
     SetupRequired:
       description: "setup_required — no admin password configured yet, run the setup flow first (bearer tokens still authenticate)"
   schemas:
+    Error:
+      type: object
+      description: Uniform error envelope. params carries interpolation values for translated messages when the code is a fine-grained validation code.
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              description: Stable English identifier
+            message: { type: string }
+            params:
+              type: object
+              additionalProperties: true
+              description: Optional interpolation values (e.g. got/min/max for range codes)
     Link:
       type: object
       properties:
