@@ -77,7 +77,15 @@ export default function Connect() {
   const openServer = () => {
     // In the Capacitor app '_system' hands the URL to the default browser;
     // on the web it is a plain new tab.
-    window.open(url.trim() || 'https://github.com/wmy2981/gourl', '_system')
+    let parsed: URL
+    try {
+      parsed = new URL(url.trim())
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') throw new Error()
+    } catch {
+      toast(t('connect.invalidUrl'), 'error')
+      return
+    }
+    window.open(`${parsed.origin}/admin/settings`, '_system')
   }
 
   return (
