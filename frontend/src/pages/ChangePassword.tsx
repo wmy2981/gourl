@@ -3,12 +3,13 @@ import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { ArrowLeft, KeyRound } from 'lucide-react'
-import { api, ApiError } from '../lib/api'
+import { api, ApiError, isApp } from '../lib/api'
 import { Button, Input, Label, useToast } from '../components/ui'
 
 // Standalone page navigated to from the settings page: changing the password
 // bumps the session epoch, revoking every session — including this one — so
-// the flow ends on the login page. The back button returns to settings.
+// the web flow ends on the login page. The app authenticates with a bearer
+// token the epoch never touches, so it stays on settings instead.
 export default function ChangePassword() {
   const { t } = useTranslation()
   const { toast } = useToast()
@@ -34,9 +35,16 @@ export default function ChangePassword() {
     setBusy(true)
     try {
       await api.changePassword(oldPassword, newPassword)
-      toast(t('changePassword.success'))
-      // Every session — this one included — was revoked on purpose.
-      navigate('/admin/login', { replace: true })
+      if (isApp()) {
+        // Bearer-token auth is unaffected by the session epoch bump: stay on
+        // settings with a plain success note.
+        toast(t('changePassword.successApp'))
+        navigate('/admin/settings', { replace: true })
+      } else {
+        toast(t('changePassword.success'))
+        // Every session — this one included — was revoked on purpose.
+        navigate('/admin/login', { replace: true })
+      }
     } catch (err) {
       if (err instanceof ApiError && err.code === 'unauthorized') {
         toast(t('changePassword.wrongCurrent'), 'error')

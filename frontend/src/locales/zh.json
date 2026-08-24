@@ -69,6 +69,7 @@
     "confirm": "确认新密码",
     "submit": "修改密码",
     "success": "密码已修改，请重新登录",
+    "successApp": "密码已修改",
     "wrongCurrent": "当前密码不正确",
     "mismatch": "两次输入的密码不一致",
     "tooShort": "密码至少需要 8 个字符",

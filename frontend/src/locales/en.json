@@ -69,6 +69,7 @@
     "confirm": "Confirm new password",
     "submit": "Change password",
     "success": "Password changed, please sign in again",
+    "successApp": "Password changed",
     "wrongCurrent": "Current password is incorrect",
     "mismatch": "The two passwords do not match",
     "tooShort": "Password must be at least 8 characters",
