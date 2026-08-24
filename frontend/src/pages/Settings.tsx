@@ -74,6 +74,8 @@ export default function Settings() {
       session_ttl_minutes: form.session_ttl_minutes,
       link_rate_per_second: form.link_rate_per_second,
       log_level: form.log_level,
+      hard_delete: form.hard_delete,
+      backup_on_edit: form.backup_on_edit,
       icon: form.icon,
       extra_base_urls: extraUrlsText
         .split('\n')
@@ -306,6 +308,36 @@ export default function Settings() {
             placeholder={t('settings.ipPlaceholder')}
             aria-label={t('settings.ipPatterns')}
           />
+        </Card>
+
+        {/* Data management: deletion mode and edit snapshots, both applied by
+            the save button like every other config field */}
+        <Card className="p-6">
+          <h2 className="mb-4 text-sm font-medium text-muted">{t('settings.dataManagement')}</h2>
+          <div className="flex flex-col gap-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-sm">{t('settings.hardDelete')}</p>
+                <p className="mt-0.5 text-xs text-muted">{t('settings.hardDeleteHint')}</p>
+              </div>
+              <Switch
+                checked={form.hard_delete}
+                onChange={(v) => set('hard_delete', v)}
+                aria-label={t('settings.hardDelete')}
+              />
+            </div>
+            <div className="flex items-start justify-between gap-3 border-t border-hairline pt-4">
+              <div>
+                <p className="text-sm">{t('settings.backupOnEdit')}</p>
+                <p className="mt-0.5 text-xs text-muted">{t('settings.backupOnEditHint')}</p>
+              </div>
+              <Switch
+                checked={form.backup_on_edit}
+                onChange={(v) => set('backup_on_edit', v)}
+                aria-label={t('settings.backupOnEdit')}
+              />
+            </div>
+          </div>
         </Card>
 
         {/* API tokens */}

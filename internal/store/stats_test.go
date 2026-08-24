@@ -39,7 +39,7 @@ func TestStatsOverviewKeepsClicksAfterDelete(t *testing.T) {
 	}
 
 	// Delete the link; the historical totals must survive.
-	if err := s.DeleteLink(ctx, "abc"); err != nil {
+	if err := s.DeleteLink(ctx, "abc", false); err != nil {
 		t.Fatal(err)
 	}
 	links, total, daily, err = s.StatsOverview(ctx, "2026-08-03")

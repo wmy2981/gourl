@@ -345,10 +345,11 @@ func (s *Server) updateLink(w http.ResponseWriter, r *http.Request) {
 	cfg := s.cfg.Get()
 
 	// Any mutation first snapshots the pre-edit state (old code, old fields,
-	// current click count) into the append-only backups table.
+	// current click count) into the append-only backups table — unless
+	// backup_on_edit is off.
 	mutating := req.URL != nil || req.Title != nil || req.Description != nil ||
 		req.ExpiresAt != nil || (req.Code != nil && *req.Code != oldCode)
-	if mutating {
+	if mutating && cfg.BackupOnEditEnabled() {
 		if _, err := s.store.BackupLink(r.Context(), link, s.now()); err != nil {
 			writeError(w, http.StatusInternalServerError, "internal_error", "failed to backup link")
 			return
@@ -446,7 +447,7 @@ func (s *Server) deleteLink(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "internal_error", "failed to get link")
 		return
 	}
-	if err := s.store.DeleteLink(r.Context(), code); err != nil {
+	if err := s.store.DeleteLink(r.Context(), code, s.cfg.Get().HardDelete); err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "not_found", "link not found")
 			return
@@ -454,7 +455,7 @@ func (s *Server) deleteLink(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "internal_error", "failed to delete link")
 		return
 	}
-	logInfo(r, "link deleted", "code", code, "id", link.ID)
+	logInfo(r, "link deleted", "code", code, "id", link.ID, "hard", s.cfg.Get().HardDelete)
 	w.WriteHeader(http.StatusNoContent)
 }
 

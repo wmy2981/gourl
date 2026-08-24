@@ -161,6 +161,8 @@ export interface AppConfig {
   session_ttl_minutes: number
   link_rate_per_second: number
   log_level: string
+  hard_delete: boolean
+  backup_on_edit: boolean
   icon: string
 }
 

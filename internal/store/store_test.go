@@ -137,7 +137,7 @@ func TestDeleteLinkKeepsDailyClicks(t *testing.T) {
 	if _, err := s.db.ExecContext(ctx, `INSERT INTO daily_clicks (code, date, count) VALUES ('abc', '2026-08-15', 5)`); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.DeleteLink(ctx, "abc"); err != nil {
+	if err := s.DeleteLink(ctx, "abc", false); err != nil {
 		t.Fatalf("DeleteLink: %v", err)
 	}
 	if _, err := s.GetLink(ctx, "abc"); !errors.Is(err, ErrNotFound) {
@@ -154,7 +154,7 @@ func TestDeleteLinkKeepsDailyClicks(t *testing.T) {
 
 func TestDeleteLinkNotFound(t *testing.T) {
 	s := newTestStore(t)
-	if err := s.DeleteLink(context.Background(), "nope"); !errors.Is(err, ErrNotFound) {
+	if err := s.DeleteLink(context.Background(), "nope", false); !errors.Is(err, ErrNotFound) {
 		t.Errorf("got %v, want ErrNotFound", err)
 	}
 }

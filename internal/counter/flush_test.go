@@ -85,7 +85,7 @@ func TestFlushOnceSkipsDeletedLinks(t *testing.T) {
 	if err := st.CreateLink(ctx, &store.Link{Code: "abc", URL: "https://e.com/x", CreatedAt: 1, UpdatedAt: 1}); err != nil {
 		t.Fatal(err)
 	}
-	if err := st.DeleteLink(ctx, "abc"); err != nil {
+	if err := st.DeleteLink(ctx, "abc", false); err != nil {
 		t.Fatal(err)
 	}
 

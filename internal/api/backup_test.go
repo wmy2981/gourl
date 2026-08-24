@@ -69,3 +69,51 @@ func TestBackupOnEdits(t *testing.T) {
 		t.Fatalf("backups after batch update = %d, want 3", n)
 	}
 }
+
+// TestBackupOnEditDisabled: with backup_on_edit off, manual edits and batch
+// conflict=update skip the snapshot; existing backup rows are untouched.
+func TestBackupOnEditDisabled(t *testing.T) {
+	s, _ := newTestServer(t)
+	ctx := context.Background()
+
+	rec := do(t, s, http.MethodPost, "/api/v1/links", map[string]any{
+		"url": "https://example.com/a", "code": "abc",
+	})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create status = %d body %s", rec.Code, rec.Body.String())
+	}
+
+	// Flip the switch off through the config manager (as PUT /config would).
+	upd := s.cfg.Get()
+	off := false
+	upd.BackupOnEdit = &off
+	if err := s.cfg.Update(upd); err != nil {
+		t.Fatal(err)
+	}
+	if s.cfg.Get().BackupOnEditEnabled() {
+		t.Fatal("backup_on_edit should read as disabled")
+	}
+
+	rec = do(t, s, http.MethodPatch, "/api/v1/links/abc", map[string]any{
+		"url": "https://example.com/b",
+	})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("edit status = %d body %s", rec.Code, rec.Body.String())
+	}
+	if n, _ := s.store.CountBackups(ctx); n != 0 {
+		t.Fatalf("backups after edit with switch off = %d, want 0", n)
+	}
+
+	rec = do(t, s, http.MethodPost, "/api/v1/links/batch", map[string]any{
+		"conflict": "update",
+		"items": []map[string]any{
+			{"url": "https://example.com/c", "code": "abc"},
+		},
+	})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("batch status = %d body %s", rec.Code, rec.Body.String())
+	}
+	if n, _ := s.store.CountBackups(ctx); n != 0 {
+		t.Fatalf("backups after batch update with switch off = %d, want 0", n)
+	}
+}

@@ -71,6 +71,14 @@ type Config struct {
 	// LogLevel is the process-wide log verbosity (debug/info/warning/error),
 	// applied at startup and hot-applied on every config save.
 	LogLevel string `yaml:"log_level" json:"log_level"`
+	// HardDelete makes every link deletion physically remove the row instead
+	// of soft-deleting it. Daily click history is always kept; API tokens are
+	// unaffected (their keys stay permanently taken).
+	HardDelete bool `yaml:"hard_delete" json:"hard_delete"`
+	// BackupOnEdit controls whether edits snapshot the pre-edit state into
+	// the backups table (manual edits and batch conflict=update). Default
+	// true; turning it off stops new snapshots but keeps existing ones.
+	BackupOnEdit *bool `yaml:"backup_on_edit" json:"backup_on_edit"`
 }
 
 // Default returns a usable default configuration.
@@ -85,6 +93,12 @@ func Default() *Config {
 		WebUIEnabled:         true,
 		LogLevel:             "info",
 	}
+}
+
+// BackupOnEditEnabled reports the effective backup_on_edit value: backups
+// are on unless explicitly turned off (a missing YAML key keeps them on).
+func (c *Config) BackupOnEditEnabled() bool {
+	return c.BackupOnEdit == nil || *c.BackupOnEdit
 }
 
 // Load reads the YAML file at path; a missing file yields the defaults.
@@ -295,7 +309,13 @@ func (m *Manager) Reload() error {
 
 // Update validates the new config, writes it back atomically to disk, and
 // hot-swaps it into memory. On write failure the in-memory config is unchanged.
+// A nil BackupOnEdit (key absent from the YAML/JSON) is normalized to an
+// explicit true so a partial PUT cannot silently disable backups.
 func (m *Manager) Update(c *Config) error {
+	if c.BackupOnEdit == nil {
+		on := true
+		c.BackupOnEdit = &on
+	}
 	if err := c.Validate(); err != nil {
 		return err
 	}

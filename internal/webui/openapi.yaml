@@ -688,5 +688,11 @@ components:
           type: string
           enum: [debug, info, warning, error]
           description: Server log verbosity, hot-applied on save. Default info.
+        hard_delete:
+          type: boolean
+          description: "When true, every link deletion (single, batch, clear-expired) physically removes the row instead of soft-deleting it. Daily click history is always kept; API tokens are unaffected. Default false."
+        backup_on_edit:
+          type: boolean
+          description: "When false, edits no longer snapshot the pre-edit state into the backups table (manual edits and batch conflict=update); existing snapshots are kept. Default true."
 security:
   - bearerAuth: []
