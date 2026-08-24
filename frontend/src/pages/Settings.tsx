@@ -547,7 +547,9 @@ export function ConnectionCard() {
   )
 }
 
-function TokenSection({
+/** The API tokens card: list, create and delete. Exported for the component
+ *  test — the parent only wires the token-note state. */
+export function TokenSection({
   tokenNote,
   setTokenNote,
   newToken,
@@ -622,7 +624,9 @@ function TokenSection({
         {data?.tokens.map((tok) => (
           <div key={tok.id} className="flex items-center justify-between rounded-xl border border-hairline px-3.5 py-2">
             <div className="min-w-0">
-              <span className="short-code text-sm">{tok.token}</span>
+              {/* The API only ever returns the 8-char prefix; render it as a
+                  truncated preview, never as if it were the full token. */}
+              <span className="short-code text-sm">{tok.token}…</span>
               {tok.note && <span className="ml-2 text-xs text-muted">{tok.note}</span>}
             </div>
             <Button variant="ghost" className="!p-1.5" onClick={() => setRevoking(tok)} aria-label={t('settings.revoke')}>
@@ -653,7 +657,16 @@ function TokenSection({
       title={t('settings.revoke')}
     >
       <p className="text-sm text-muted">{t('settings.tokenRevokeConfirm')}</p>
-      {revoking && <p className="short-code mt-2 text-sm font-medium">{revoking.token}</p>}
+      {revoking && (
+        <div className="mt-2">
+          <p className="short-code text-sm font-medium">{revoking.token}…</p>
+          {revoking.note && (
+            <p className="mt-1 text-xs text-muted">
+              {t('form.note')}: {revoking.note}
+            </p>
+          )}
+        </div>
+      )}
       <div className="mt-5 flex justify-end gap-2">
         <Button variant="ghost" onClick={() => setRevoking(null)}>
           {t('common.cancel')}
