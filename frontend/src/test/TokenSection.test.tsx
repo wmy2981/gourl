@@ -56,6 +56,8 @@ describe('TokenSection', () => {
     await user.click(await screen.findByRole('button', { name: 'Delete token' }))
     const dialog = screen.getByRole('dialog')
     expect(dialog).toHaveTextContent('abc12345…')
+    // The bare note text, no label prefix.
     expect(dialog).toHaveTextContent('ci token')
+    expect(dialog).not.toHaveTextContent('Note:')
   })
 })

@@ -698,11 +698,7 @@ export function TokenSection({
       {revoking && (
         <div className="mt-2">
           <p className="short-code text-sm font-medium">{revoking.token}…</p>
-          {revoking.note && (
-            <p className="mt-1 text-xs text-muted">
-              {t('form.note')}: {revoking.note}
-            </p>
-          )}
+          {revoking.note && <p className="mt-1 text-xs text-muted">{revoking.note}</p>}
         </div>
       )}
       <div className="mt-5 flex justify-end gap-2">
