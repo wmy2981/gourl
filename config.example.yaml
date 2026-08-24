@@ -57,6 +57,17 @@ link_rate_per_second: 100
 # page, applied immediately on save.
 log_level: info
 
+# Hard-delete links instead of soft-deleting them: every deletion path
+# (single, batch, clear expired) physically removes the row. Daily click
+# history is always kept; API tokens are unaffected. Default false.
+hard_delete: false
+
+# Snapshot the previous version into the backups table before each edit
+# (manual edits and batch import conflict=update). Turning it off stops new
+# snapshots; existing ones are kept (`gourl reset backups` clears them).
+# Default true.
+backup_on_edit: true
+
 # Custom icon file name inside the assets data directory (empty = built-in default).
 icon: ""
 
