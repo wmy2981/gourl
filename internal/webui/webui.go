@@ -4,9 +4,12 @@
 package webui
 
 import (
+	"bytes"
 	"embed"
 	"encoding/json"
 	"io/fs"
+
+	"github.com/wmy2981/gourl/internal/version"
 )
 
 //go:embed all:dist
@@ -69,12 +72,19 @@ func Docs() fs.FS {
 	return sub
 }
 
-// OpenAPISpec returns the embedded OpenAPI 3.0 specification (YAML bytes).
+// OpenAPISpec returns the embedded OpenAPI 3.0 specification (YAML bytes),
+// with the info.version placeholder replaced by the build version so the
+// Swagger UI matches /api/v1/health and the footer.
 func OpenAPISpec() []byte {
 	data, err := assets.ReadFile("openapi.yaml")
 	if err != nil {
 		// The embed path is static; failure is a build-time error.
 		panic(err)
 	}
-	return data
+	return bytes.ReplaceAll(data, []byte(VersionPlaceholder), []byte(version.Version))
 }
+
+// VersionPlaceholder marks info.version in openapi.yaml; the server replaces
+// it with the build version on every request and the Pages workflow with the
+// VERSION file at deploy time.
+const VersionPlaceholder = "__GOURL_VERSION__"

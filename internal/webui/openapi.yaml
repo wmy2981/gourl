@@ -11,7 +11,7 @@ info:
     tokens still authenticate) until the setup flow (`POST /api/v1/auth/setup`)
     sets the first password. The redirect route `GET /{code}` is always
     public and never requires auth.
-  version: "0.1.0"
+  version: "__GOURL_VERSION__"
 servers:
   - url: /api/v1
 tags:

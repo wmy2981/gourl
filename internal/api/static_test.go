@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/wmy2981/gourl/internal/version"
 	"github.com/wmy2981/gourl/internal/webui"
 	"gopkg.in/yaml.v3"
 )
@@ -70,6 +71,14 @@ func TestSwaggerUIServed(t *testing.T) {
 	rec = get(t, s, "/docs/openapi.yaml", nil)
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "openapi: 3.0") {
 		t.Fatalf("/docs/openapi.yaml status = %d, want spec", rec.Code)
+	}
+	// The build version must replace the placeholder: the Swagger UI header
+	// has to match /api/v1/health and the footer.
+	if strings.Contains(rec.Body.String(), webui.VersionPlaceholder) {
+		t.Errorf("served spec still contains the version placeholder: %q", rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), `version: "`+version.Version+`"`) {
+		t.Errorf("served spec missing build version %q: %q", version.Version, rec.Body.String())
 	}
 	// The spec must parse as YAML: SwaggerUI refuses to render a definition
 	// with a broken indentation and then complains about the missing version
