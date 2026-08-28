@@ -83,8 +83,8 @@ type Config struct {
 // Default returns a usable default configuration.
 func Default() *Config {
 	return &Config{
-		Site:                 Site{Name: "gourl", Title: "gourl - Short Links"},
-		ShortCodeLength:      6,
+		Site:                 Site{Name: "gourl", Title: "gourl - Short Links", Description: "Lightweight self-hosted URL shortener."},
+		ShortCodeLength:      4,
 		LoginRateMaxAttempts: 10,
 		LoginRateLockSeconds: 300,
 		SessionTTLMinutes:    10080, // 7 days, matching the pre-config default

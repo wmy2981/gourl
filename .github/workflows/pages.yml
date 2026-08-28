@@ -43,7 +43,10 @@ jobs:
         run: |
           mkdir -p public/docs
           tar -xzf swagger-ui-5.32.14.tgz -C public/docs --strip-components=2 package/dist
-          cp internal/webui/openapi.yaml public/docs/
+          # Stamp the spec's info.version from the VERSION file so the hosted
+          # docs match the running instance (same placeholder the server
+          # replaces at request time).
+          sed "s/__GOURL_VERSION__/$(cat VERSION)/" internal/webui/openapi.yaml > public/docs/openapi.yaml
           cat > public/docs/index.html <<'EOF'
           <!doctype html>
           <html lang="en">

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/wmy2981/gourl/internal/version"
 	"github.com/wmy2981/gourl/internal/webui"
 	"gopkg.in/yaml.v3"
 )
@@ -71,6 +72,14 @@ func TestSwaggerUIServed(t *testing.T) {
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "openapi: 3.0") {
 		t.Fatalf("/docs/openapi.yaml status = %d, want spec", rec.Code)
 	}
+	// The build version must replace the placeholder: the Swagger UI header
+	// has to match /api/v1/health and the footer.
+	if strings.Contains(rec.Body.String(), webui.VersionPlaceholder) {
+		t.Errorf("served spec still contains the version placeholder: %q", rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), `version: "`+version.Version+`"`) {
+		t.Errorf("served spec missing build version %q: %q", version.Version, rec.Body.String())
+	}
 	// The spec must parse as YAML: SwaggerUI refuses to render a definition
 	// with a broken indentation and then complains about the missing version
 	// field, so verify both in one shot.
@@ -107,6 +116,13 @@ func TestSPAIndexCarriesSiteMeta(t *testing.T) {
 // TestSPAIndexSkipsEmptyMeta: an unset description produces no meta tag.
 func TestSPAIndexSkipsEmptyMeta(t *testing.T) {
 	s, _ := newTestServer(t)
+	// The default description is non-empty now — force an empty one to
+	// exercise the skip branch.
+	cfg := s.cfg.Get()
+	cfg.Site.Description = ""
+	if err := s.cfg.Update(cfg); err != nil {
+		t.Fatal(err)
+	}
 	rec := get(t, s, "/admin", nil)
 	body := rec.Body.String()
 	if strings.Contains(body, `name="description"`) {

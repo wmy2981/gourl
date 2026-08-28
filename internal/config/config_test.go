@@ -12,11 +12,14 @@ func TestLoadMissingFileReturnsDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if cfg.ShortCodeLength != 6 {
-		t.Errorf("default short_code_length = %d, want 6", cfg.ShortCodeLength)
+	if cfg.ShortCodeLength != 4 {
+		t.Errorf("default short_code_length = %d, want 4", cfg.ShortCodeLength)
 	}
 	if cfg.Site.Name != "gourl" {
 		t.Errorf("default site name = %q, want gourl", cfg.Site.Name)
+	}
+	if cfg.Site.Description != "Lightweight self-hosted URL shortener." {
+		t.Errorf("default site description = %q, want %q", cfg.Site.Description, "Lightweight self-hosted URL shortener.")
 	}
 }
 

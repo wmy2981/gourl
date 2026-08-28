@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { applyNoSelect, noSelectEnabled, setNoSelect } from '../lib/appSettings'
+import { applyNoSelect, hapticsEnabled, noSelectEnabled, setHapticsEnabled, setNoSelect } from '../lib/appSettings'
 
 afterEach(() => {
   localStorage.removeItem('gourl-no-select')
+  localStorage.removeItem('gourl-haptics')
   document.documentElement.classList.remove('no-select')
 })
 
@@ -25,5 +26,18 @@ describe('noSelect app setting', () => {
     localStorage.setItem('gourl-no-select', '1')
     applyNoSelect()
     expect(document.documentElement).toHaveClass('no-select')
+  })
+})
+
+describe('haptics app setting', () => {
+  it('defaults to on', () => {
+    expect(hapticsEnabled()).toBe(true)
+  })
+
+  it('disables and re-enables haptics', () => {
+    setHapticsEnabled(false)
+    expect(hapticsEnabled()).toBe(false)
+    setHapticsEnabled(true)
+    expect(hapticsEnabled()).toBe(true)
   })
 })

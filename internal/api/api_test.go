@@ -155,8 +155,8 @@ func TestCreateWithRandomCode(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &l); err != nil {
 		t.Fatal(err)
 	}
-	if len(l.Code) != 6 {
-		t.Errorf("random code length = %d, want 6", len(l.Code))
+	if len(l.Code) != 4 {
+		t.Errorf("random code length = %d, want 4", len(l.Code))
 	}
 }
 
