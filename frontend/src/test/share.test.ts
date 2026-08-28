@@ -33,3 +33,35 @@ describe('shareUrl', () => {
     expect(share).toHaveBeenCalledWith({ url: 'https://host/abc' })
   })
 })
+
+describe('shareUrl in app mode', () => {
+  function setAppMode(on: boolean) {
+    if (on) {
+      ;(window as unknown as Record<string, unknown>).Capacitor = { isNativePlatform: () => true }
+    } else {
+      delete (window as unknown as Record<string, unknown>).Capacitor
+    }
+  }
+
+  it('routes through the native bridge and reports shared', async () => {
+    setAppMode(true)
+    const bridgeShare = vi.fn().mockReturnValue(true)
+    ;(window as unknown as Record<string, unknown>).GourlBridge = { share: bridgeShare }
+    try {
+      expect(await shareUrl('https://host/abc')).toBe('shared')
+      expect(bridgeShare).toHaveBeenCalledWith('https://host/abc')
+    } finally {
+      setAppMode(false)
+      delete (window as unknown as Record<string, unknown>).GourlBridge
+    }
+  })
+
+  it('reports unsupported when the APK predates the share bridge', async () => {
+    setAppMode(true)
+    try {
+      expect(await shareUrl('https://host/abc')).toBe('unsupported')
+    } finally {
+      setAppMode(false)
+    }
+  })
+})

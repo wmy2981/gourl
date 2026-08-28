@@ -1,6 +1,7 @@
 package com.wmy2981.gourl;
 
 import android.content.ContentValues;
+import android.content.Intent;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -59,6 +60,12 @@ public class MainActivity extends BridgeActivity {
      * (KEYBOARD_TAP, a soft virtual-key press) for button presses; it also
      * respects the user's haptic-feedback setting. KEYBOARD_TAP exists
      * since API 5, so no version branch is needed.
+     *
+     * share — opens the system share sheet (ACTION_SEND chooser) with the
+     * short URL as EXTRA_TEXT. The WebView never exposes the Web Share API
+     * (navigator.share), even on the secure https://localhost origin, so the
+     * bridge is the app's only route to system sharing. A plain chooser has
+     * no result callback: dismissing it is indistinguishable from success.
      */
     public class GourlBridge {
         @JavascriptInterface
@@ -108,6 +115,20 @@ public class MainActivity extends BridgeActivity {
         public void buttonHaptic() {
             runOnUiThread(() ->
                 getBridge().getWebView().performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP));
+        }
+
+        @JavascriptInterface
+        public boolean share(String url) {
+            try {
+                Intent send = new Intent(Intent.ACTION_SEND);
+                send.setType("text/plain");
+                send.putExtra(Intent.EXTRA_TEXT, url);
+                Intent chooser = Intent.createChooser(send, null);
+                getBridge().getActivity().startActivity(chooser);
+                return true;
+            } catch (Exception e) {
+                return false;
+            }
         }
     }
 }
