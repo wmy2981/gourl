@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { api, getServerConfig, isApp } from './lib/api'
 import { applyNoSelect } from './lib/appSettings'
+import { handleInteractiveClick } from './lib/haptics'
 import Layout from './components/Layout'
 import { ToastProvider } from './components/ui'
 import ChangePassword from './pages/ChangePassword'
@@ -38,6 +39,14 @@ export default function App() {
   // on the connect screen instead.
   const appMode = isApp()
   const server = getServerConfig()
+
+  // Global tap haptics: every <a>/<button> click vibrates through the native
+  // bridge (web is a no-op). Capture phase, so React stopPropagation can't
+  // swallow it; the delegate skips switches/checkboxes and external anchors.
+  useEffect(() => {
+    document.addEventListener('click', handleInteractiveClick, true)
+    return () => document.removeEventListener('click', handleInteractiveClick, true)
+  }, [])
 
   // Capacitor app only. Deep links (gourl://links …) navigate the SPA; the
   // Android back button closes the top dialog first (dispatching Escape, which
