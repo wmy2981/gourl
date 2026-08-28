@@ -18,10 +18,12 @@ import {
   QrCode,
   RefreshCw,
   Search,
+  Share2,
   Trash2,
 } from 'lucide-react'
 import { api, ApiError, linkUrls, type Link } from '../lib/api'
 import { copyText } from '../lib/clipboard'
+import { shareUrl } from '../lib/share'
 import { Button, Card, Checkbox, Dialog, Input, Select, useToast } from '../components/ui'
 import LinkFormDialog from '../components/LinkFormDialog'
 import QRDialog from '../components/QRDialog'
@@ -180,6 +182,15 @@ export default function Links() {
     }
   }
 
+  const share = async (url: string) => {
+    // Web Share API needs a secure context; on plain http deployments we can
+    // only tell the user (the Android app always reaches the share sheet).
+    const outcome = await shareUrl(url)
+    if (outcome === 'unsupported') toast(t('links.shareUnsupported'), 'error')
+    else if (outcome === 'failed') toast(t('links.shareFailed'), 'error')
+    // 'shared' and 'cancelled' need no feedback.
+  }
+
   const totalPages = data ? Math.max(1, Math.ceil(data.total / PAGE_SIZE)) : 1
 
   return (
@@ -333,6 +344,16 @@ export default function Links() {
                           className="rounded-md p-1 text-muted transition-colors hover:bg-accent-soft hover:text-accent-deep dark:hover:text-accent"
                         >
                           {copied === link.code ? <Check size={15} className="text-success" /> : <Copy size={15} />}
+                        </button>
+                      )}
+                      {current && (
+                        <button
+                          onClick={() => share(current)}
+                          title={t('links.share')}
+                          aria-label={t('links.share')}
+                          className="rounded-md p-1 text-muted transition-colors hover:bg-accent-soft hover:text-accent-deep dark:hover:text-accent"
+                        >
+                          <Share2 size={15} />
                         </button>
                       )}
                     </div>

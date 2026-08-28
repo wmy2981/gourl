@@ -21,6 +21,34 @@ test('creates a multi-level code', async ({ page }) => {
   await expect(page.getByText('guide/part1', { exact: true })).toBeVisible({ timeout: 15_000 })
 })
 
+test('shares the row short url through the Web Share API', async ({ page }) => {
+  // 127.0.0.1 is a secure context, so navigator.share exists and would open
+  // the OS share sheet — stub it before any script runs instead.
+  await page.addInitScript(() => {
+    Object.defineProperty(window.navigator, 'share', {
+      configurable: true,
+      value: (data: { url?: string }) => {
+        ;(window as unknown as { __lastShare?: string }).__lastShare = data.url
+        return Promise.resolve()
+      },
+    })
+  })
+  await createLinkUi(page, 'https://example.com/share-me', 'e2e-share')
+  await expect(page.getByText('e2e-share', { exact: true })).toBeVisible({ timeout: 15_000 })
+  const origin = new URL(page.url()).origin
+  // Exact name match: the base-URL picker's accessible name is the URL text
+  // itself, which contains "/e2e-share" and would match a fuzzy /share/i.
+  // Scope to the row — earlier tests leave other rows (and their share
+  // buttons) on the page.
+  await page
+    .getByRole('row', { name: /e2e-share/ })
+    .getByRole('button', { name: 'Share', exact: true })
+    .click()
+  await expect
+    .poll(async () => page.evaluate(() => (window as unknown as { __lastShare?: string }).__lastShare))
+    .toBe(`${origin}/e2e-share`)
+})
+
 test('rejects a reserved code with a friendly error', async ({ page }) => {
   await page.goto('/admin/links')
   await page.getByRole('button', { name: /new link/i }).click()
