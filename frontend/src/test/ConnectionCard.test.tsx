@@ -52,6 +52,7 @@ describe('ConnectionCard', () => {
 
   afterEach(() => {
     vi.useRealTimers()
+    localStorage.removeItem('gourl-haptics')
   })
 
   it('shows connected, both versions and the refresh button after a successful probe', async () => {
@@ -168,5 +169,22 @@ describe('ConnectionCard', () => {
       await vi.advanceTimersByTimeAsync(10_000)
     })
     expect(vi.mocked(api.authStatus).mock.calls.length).toBe(afterMount + 1)
+  })
+
+  it('renders the haptics toggle defaulting to on', () => {
+    probeOk()
+    renderCard()
+    expect(screen.getByRole('switch', { name: 'Vibration feedback' })).toBeChecked()
+  })
+
+  it('toggles the haptics setting off and back on', async () => {
+    probeOk()
+    renderCard()
+    const user = userEvent.setup()
+    const toggle = screen.getByRole('switch', { name: 'Vibration feedback' })
+    await user.click(toggle)
+    expect(localStorage.getItem('gourl-haptics')).toBe('0')
+    await user.click(toggle)
+    expect(localStorage.getItem('gourl-haptics')).toBeNull()
   })
 })

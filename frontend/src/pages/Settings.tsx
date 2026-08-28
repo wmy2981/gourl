@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { Check, Copy, KeyRound, PlugZap, Plus, RefreshCw, Trash2, Upload } from 'lucide-react'
 import { api, ApiError, getServerConfig, isApp, setServerConfig, type AppConfig, type TokenInfo } from '../lib/api'
 import { apiErrorMessage } from '../lib/apiError'
-import { noSelectEnabled, setNoSelect } from '../lib/appSettings'
+import { hapticsEnabled, noSelectEnabled, setHapticsEnabled, setNoSelect } from '../lib/appSettings'
 import { copyText } from '../lib/clipboard'
 import { Button, Card, Dialog, Input, Label, Select, Switch, Textarea, useToast } from '../components/ui'
 
@@ -425,6 +425,9 @@ export function ConnectionCard() {
   // Device-local app settings mirror the persisted state in React so the
   // switch reflects toggles; the storage write applies the effect live.
   const [noSelect, setNoSelectChecked] = useState(noSelectEnabled())
+  // Haptics default to on (unlike noSelect); the storage write gates the
+  // bridge calls at the source, so the switch takes effect immediately.
+  const [haptics, setHaptics] = useState(hapticsEnabled())
   // Alive flag outside the effects so the refresh button can probe on demand
   // without restarting the mount effect's lifecycle.
   const aliveRef = useRef(true)
@@ -566,6 +569,17 @@ export function ConnectionCard() {
               setNoSelect(v)
             }}
             aria-label={t('settings.noTextSelect')}
+          />
+        </div>
+        <div className="mt-4 flex items-center justify-between gap-3">
+          <span className="text-sm">{t('settings.hapticsFeedback')}</span>
+          <Switch
+            checked={haptics}
+            onChange={(v) => {
+              setHaptics(v)
+              setHapticsEnabled(v)
+            }}
+            aria-label={t('settings.hapticsFeedback')}
           />
         </div>
       </Card>

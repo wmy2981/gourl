@@ -1,9 +1,13 @@
 import { isApp } from './api'
+import { hapticsEnabled } from './appSettings'
 
 // Light key-press feedback for interactive taps (GourlBridge.buttonHaptic):
 // the system's softest haptic through the touch engine, not the vibrator
 // motor, and it honors the system haptic-feedback setting. Web: no-op.
+// Gated by the app's haptics setting (default on) — the connection card's
+// toggle turns every tap feedback off with it.
 export function buttonHaptic() {
+  if (!hapticsEnabled()) return
   if (!isApp()) return
   const bridge = (window as Window & { GourlBridge?: { buttonHaptic?: () => void } }).GourlBridge
   bridge?.buttonHaptic?.()

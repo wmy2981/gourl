@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { AnimatePresence, motion } from 'motion/react'
 import { AlertCircle, Check, CheckCircle2, ChevronDown, X } from 'lucide-react'
 import { isApp } from '../lib/api'
+import { hapticsEnabled } from '../lib/appSettings'
 
 /* ---------- Button ---------- */
 
@@ -97,6 +98,7 @@ export function Checkbox({
 // system's switch haptic through the touch engine — not the vibrator motor,
 // and it honors the system haptic-feedback setting. Web: no-op.
 function switchHaptic(on: boolean) {
+  if (!hapticsEnabled()) return
   if (!isApp()) return
   const bridge = (window as Window & { GourlBridge?: { switchHaptic?: (on: boolean) => void } }).GourlBridge
   bridge?.switchHaptic?.(on)

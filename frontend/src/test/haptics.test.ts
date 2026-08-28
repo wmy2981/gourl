@@ -30,6 +30,7 @@ describe('handleInteractiveClick', () => {
   afterEach(() => {
     cleanup()
     delete (window as unknown as Record<string, unknown>).GourlBridge
+    localStorage.removeItem('gourl-haptics')
     document.body.innerHTML = ''
   })
 
@@ -61,6 +62,12 @@ describe('handleInteractiveClick', () => {
     const div = document.createElement('div')
     document.body.appendChild(div)
     div.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    expect(buttonHaptic).not.toHaveBeenCalled()
+  })
+
+  it('stays silent when the haptics setting is off', () => {
+    localStorage.setItem('gourl-haptics', '0')
+    makeClickable('button').dispatchEvent(new MouseEvent('click', { bubbles: true }))
     expect(buttonHaptic).not.toHaveBeenCalled()
   })
 })

@@ -204,6 +204,7 @@
     "changePassword": "Change admin password",
     "appConnection": "App connection",
     "noTextSelect": "Disable text selection",
+    "hapticsFeedback": "Vibration feedback",
     "connectedTo": "Connected to",
     "disconnectApp": "Disconnect",
     "siteName": "Service name",
