@@ -116,6 +116,13 @@ func TestSPAIndexCarriesSiteMeta(t *testing.T) {
 // TestSPAIndexSkipsEmptyMeta: an unset description produces no meta tag.
 func TestSPAIndexSkipsEmptyMeta(t *testing.T) {
 	s, _ := newTestServer(t)
+	// The default description is non-empty now — force an empty one to
+	// exercise the skip branch.
+	cfg := s.cfg.Get()
+	cfg.Site.Description = ""
+	if err := s.cfg.Update(cfg); err != nil {
+		t.Fatal(err)
+	}
 	rec := get(t, s, "/admin", nil)
 	body := rec.Body.String()
 	if strings.Contains(body, `name="description"`) {
